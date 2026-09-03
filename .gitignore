@@ -1,0 +1,11 @@
+uploads/
+.env
+facturea.db
+instance/
+__pycache__/
+*.pyc
+.DS_Store
+venv/ 
+credentials/ 
+*.rar 
+__pycache__/

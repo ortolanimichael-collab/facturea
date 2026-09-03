@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Comprobantes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
+    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:1800px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .nav-links a{color:var(--muted);text-decoration:none;}
+  .nav-links a:hover{color:var(--ink);}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
+  p.sub{color:var(--muted);font-size:14px;}
+
+  .barra-acciones{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;
+    border:1.5px dashed var(--ink);border-radius:3px;background:var(--paper-2);padding:22px;margin:22px 0;
+  }
+  .upload-box{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .upload-box input[type=file]{font-family:var(--sans);font-size:13px;}
+  .btn{font-family:var(--mono);font-weight:600;font-size:13px;padding:11px 18px;border-radius:3px;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;cursor:pointer;}
+  .btn:disabled{opacity:0.6;cursor:default;}
+  .btn.btn-facturar-todo{border-color:var(--stamp);background:var(--stamp);}
+  .resumen{font-family:var(--mono);font-size:12.5px;color:var(--teal-deep);background:var(--teal-tint);padding:10px 14px;border-radius:3px;margin-bottom:18px;display:none;}
+
+  .tabs-nav{display:flex;gap:8px;margin:22px 0 0;font-family:var(--mono);font-size:13px;}
+  .tab-btn{padding:10px 18px;border:1.5px solid var(--ink);border-bottom:none;border-radius:3px 3px 0 0;background:var(--paper);cursor:pointer;color:var(--muted);}
+  .tab-btn.activa{background:var(--paper-2);color:var(--ink);font-weight:600;}
+  .tab-contenido{display:none;border:1.5px solid var(--ink);border-radius:0 3px 3px 3px;background:var(--paper-2);padding:24px;margin-bottom:28px;}
+  .tab-contenido.activa{display:block;}
+
+  .panel-stats h2{font-family:var(--mono);font-size:15px;margin-bottom:16px;}
+  .panel-stats h3{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:20px 0 12px;text-transform:uppercase;letter-spacing:0.03em;}
+
+  .lista-stats{list-style:none;border-top:1px dashed var(--line);}
+  .lista-stats li{
+    display:flex;justify-content:space-between;align-items:center;padding:10px 4px;
+    border-bottom:1px dashed var(--line);
+  }
+  .lista-stats .stat-label{font-size:13.5px;color:var(--ink);}
+  .lista-stats .stat-num-lista{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--ink);}
+  .lista-stats li.advertencia .stat-num-lista{color:var(--stamp);}
+
+  .herramienta-monto{
+    border:1.5px solid var(--ink);border-radius:3px;background:var(--paper);padding:16px 18px;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:8px;
+  }
+  .herramienta-monto-info{display:flex;flex-direction:column;gap:3px;}
+  .herramienta-monto-info .stat-num-lista{font-size:20px;color:var(--teal-deep);}
+  .herramienta-monto-accion{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .herramienta-monto-accion label{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;}
+  .herramienta-monto-accion input[type=number]{
+    width:130px;font-family:var(--sans);font-size:13px;padding:9px 10px;border-radius:3px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+
+  .comparador-duplicados{display:flex;gap:16px;border:1.5px solid var(--line);border-radius:3px;background:var(--paper);overflow:hidden;min-height:760px;}
+  .lista-duplicados{list-style:none;width:220px;min-width:180px;border-right:1.5px solid var(--line);max-height:760px;overflow-y:auto;flex-shrink:0;}
+  .item-duplicado{padding:10px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px dashed var(--line);word-break:break-all;color:var(--ink);}
+  .item-duplicado:hover{background:var(--teal-tint);}
+  .item-duplicado.seleccionado{background:var(--teal);color:#F7F5EC;font-weight:600;}
+  .visor-duplicado{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .visor-duplicado-topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;
+    border-bottom:1.5px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--muted);
+  }
+  .visor-duplicado-topbar button{
+    font-family:var(--mono);font-size:11.5px;padding:7px 12px;border-radius:3px;border:1.5px solid var(--ink);
+    background:var(--paper-2);cursor:pointer;
+  }
+  .visor-duplicado-imagen{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;min-height:700px;}
+  .visor-duplicado-imagen img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,0.15);}
+  .visor-duplicado-imagen iframe{width:100%;height:82vh;border:none;}
+  .visor-duplicado-imagen .sin-seleccion{font-family:var(--mono);font-size:12.5px;color:var(--muted);}
+
+  .listas-nombres{margin-top:16px;display:flex;flex-direction:column;gap:8px;}
+  .listas-nombres details{
+    background:var(--paper);border:1.5px solid var(--line);border-radius:3px;padding:10px 14px;
+  }
+  .listas-nombres summary{font-family:var(--mono);font-size:12px;cursor:pointer;color:var(--ink);}
+  .listas-nombres ul{margin:10px 0 0 18px;font-size:12.5px;color:var(--muted);}
+  .listas-nombres li{margin-bottom:3px;word-break:break-all;}
+
+  .tip-edicion{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-bottom:14px;}
+
+  .tabla-scroll{overflow-x:auto;border:1.5px solid var(--ink);border-radius:2px;}
+  table{width:max-content;min-width:100%;border-collapse:collapse;background:var(--paper-2);}
+  thead th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1.5px solid var(--ink);white-space:nowrap;}
+  thead th[data-field]{cursor:pointer;}
+  thead th[data-field]:hover{background:var(--teal-tint);color:var(--teal-deep);}
+  thead th[data-field] input, thead th[data-field] select{
+    font-family:var(--sans);font-size:12px;padding:4px 6px;border-radius:3px;
+    border:1.5px solid var(--teal);background:#fff;color:var(--ink);min-width:100px;text-transform:none;
+  }
+  tbody td{padding:10px 12px;font-size:13px;border-bottom:1px dashed var(--line);white-space:nowrap;}
+  .col-fecha-ajustada{color:var(--muted);font-style:italic;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.facturado{opacity:0.7;}
+
+  td[data-field]{cursor:pointer;position:relative;}
+  td[data-field]:hover{background:var(--teal-tint);}
+  td[data-field] input, td[data-field] select{
+    font-family:var(--sans);font-size:13px;padding:4px 6px;border-radius:3px;
+    border:1.5px solid var(--teal);background:#fff;color:var(--ink);min-width:110px;
+  }
+
+  .estado{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:20px;display:inline-block;}
+  .estado.pendiente{background:#F1E6C8;color:#7A5A0A;}
+  .estado.facturado{background:var(--teal-tint);color:var(--teal-deep);}
+  .estado.error{background:#F5DEDE;color:var(--stamp);cursor:help;}
+  .vacio{text-align:center;padding:60px 20px;color:var(--muted);font-family:var(--mono);font-size:13px;}
+
+  .acciones-fila{display:flex;gap:6px;flex-wrap:wrap;}
+  .acciones-fila button{
+    font-family:var(--mono);font-weight:600;font-size:11px;padding:6px 10px;border-radius:3px;
+    cursor:pointer;white-space:nowrap;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);
+  }
+  .btn-facturar{border-color:var(--teal-deep);background:var(--teal);color:#F7F5EC;}
+  .btn-facturar.reintentar{border-color:var(--stamp);background:var(--stamp);color:#fff;}
+  .btn-probar{border-color:var(--ink);background:var(--paper);color:var(--ink);}
+  .btn-eliminar{border-color:var(--stamp);color:var(--stamp);}
+  .acciones-fila button:disabled{opacity:0.6;cursor:default;}
+  .btn.btn-revision{border-color:var(--ink);background:var(--paper);color:var(--ink);}
+  .btn.btn-peligro{border-color:var(--stamp);background:var(--paper);color:var(--stamp);}
+  .btn.btn-peligro:hover{background:var(--stamp);color:#fff;}
+  .acciones-fila .btn-revisar{border-color:var(--teal-deep);color:var(--teal-deep);}
+
+  /* ---------- Revisión manual ---------- */
+  #overlayRevision{
+    display:none;position:fixed;inset:0;background:rgba(20,22,18,0.92);z-index:1000;
+    flex-direction:column;
+  }
+  .revision-topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    padding:14px 24px;border-bottom:1.5px solid rgba(255,255,255,0.15);
+  }
+  .revision-topbar .info-izq{display:flex;align-items:center;gap:14px;font-family:var(--mono);color:#F7F5EC;font-size:13px;}
+  .revision-topbar .nav-revision{display:flex;align-items:center;gap:10px;}
+  .revision-topbar button{
+    font-family:var(--mono);font-weight:600;font-size:13px;padding:9px 16px;border-radius:3px;
+    cursor:pointer;border:1.5px solid var(--teal);background:transparent;color:#F7F5EC;
+  }
+  .revision-topbar button:disabled{opacity:0.35;cursor:default;}
+  .revision-topbar .btn-cerrar{border-color:var(--stamp);color:#F5B8B8;}
+  .revision-tip{font-family:var(--mono);font-size:11px;color:#9AA396;}
+
+  .revision-cuerpo{flex:1;display:flex;overflow:hidden;}
+  .revision-panel-izq{
+    width:400px;min-width:340px;overflow-y:auto;padding:22px;background:var(--paper-2);
+    border-right:1.5px solid rgba(0,0,0,0.2);
+  }
+  .revision-panel-der{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;background:#15170F;}
+  .revision-panel-der img{max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
+  .revision-panel-der iframe{width:100%;height:100%;border:none;background:#fff;border-radius:2px;}
+  .revision-panel-der .sin-archivo{color:#9AA396;font-family:var(--mono);font-size:13px;text-align:center;}
+
+  .campo-revision{margin-bottom:14px;}
+  .campo-revision label{font-family:var(--mono);font-size:11px;color:var(--muted);display:block;margin-bottom:5px;}
+  .campo-revision input, .campo-revision select{
+    width:100%;font-family:var(--sans);font-size:14px;padding:9px 10px;border-radius:3px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+  .campo-revision input:focus, .campo-revision select:focus{outline:none;border-color:var(--teal);}
+  .campo-revision .valor-solo-lectura{
+    font-family:var(--sans);font-size:14px;padding:9px 10px;border-radius:3px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--muted);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <div class="nav-links">
+      <a href="/panel">← Panel</a>
+      <a href="/empresas/{{ empresa.id }}/editar">Editar empresa</a>
+      {% if current_user.es_admin %}<a href="/admin">Panel admin</a>{% endif %}
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </header>
+  {% include '_aviso_membresia.html' %}
+
+  <h1>Comprobantes — {{ empresa.nombre_interno }}</h1>
+  <p class="sub">Subí las capturas de tus transferencias y se arman solas en la tabla de abajo.</p>
+
+  <div class="tabs-nav">
+    <button type="button" class="tab-btn activa" data-tab="tabComprobantes" onclick="mostrarTabComprobantes('tabComprobantes')">Comprobantes</button>
+    <button type="button" class="tab-btn" data-tab="tabEstadisticas" onclick="mostrarTabComprobantes('tabEstadisticas')">Proceso y estadísticas</button>
+  </div>
+
+  <div id="tabComprobantes" class="tab-contenido activa">
+  <div class="barra-acciones">
+    <div class="upload-box">
+      <input type="file" id="archivos" multiple accept="image/png,image/jpeg,application/pdf">
+      <button id="btnSubir" class="btn">Subir y leer</button>
+    </div>
+    <button id="btnFacturarTodo" class="btn btn-facturar-todo">Facturar todo lo pendiente</button>
+    <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
+    <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
+    <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
+  </div>
+
+  <div id="resumen" class="resumen"></div>
+
+  {% set opciones_tipo_comprobante = [
+    "Factura C", "Nota de Débito C", "Nota de Crédito C", "Recibo C",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) C",
+    "Nota de Débito Electrónica MiPyMEs (FCE) C",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) C"
+  ] %}
+  {% set opciones_condicion_iva = [
+    "IVA Responsable Inscripto", "IVA Sujeto Exento", "Consumidor Final",
+    "Responsable Monotributo", "Sujeto No Categorizado", "Proveedor del Exterior",
+    "Cliente del Exterior", "IVA Liberado - Ley Nº 19.640", "Monotributista Social",
+    "IVA No Alcanzado", "Monotributista Trabajador Independiente Promovido"
+  ] %}
+  {% set opciones_tipo_doc = [
+    "CUIT", "CUIL", "CDI", "LE", "LC", "CI Extranjera", "DNI",
+    "Pasaporte", "CI Policía Federal", "Certificado de Migración"
+  ] %}
+  {% set opciones_condicion_venta = [
+    "Contado", "Tarjeta de Débito", "Tarjeta de Crédito", "Cuenta Corriente",
+    "Cheque", "Transferencia Bancaria", "Otra", "Otros medios de pago electrónico"
+  ] %}
+  {% set opciones_medio_pago_detectado = ["Transferencia", "Débito", "Crédito"] %}
+  {% set opciones_tipo_pago = [
+    "Maestro", "Visa Electrón", "Cabal 24 hs", "Mastercard Débito",
+    "American Express", "Visa", "Mastercard", "Credencial", "Carta Franca",
+    "Cabal", "Diners", "Tarjeta Shopping", "Tarjeta Naranja", "Otra"
+  ] %}
+  {% set opciones_unidad_medida = [
+    "kilogramos", "metros", "metros cuadrados", "metros cúbicos", "litros", "1000 kWh",
+    "unidades", "pares", "docenas", "quilates", "millares", "gramos", "milímetros",
+    "mm cúbicos", "kilómetros", "hectolitros", "centímetros", "jgo. pqt. mazo naipes",
+    "cm cúbicos", "toneladas", "dam cúbicos", "hm cúbicos", "km cúbicos", "microgramos",
+    "nanogramos", "picogramos", "miligramos", "mililitros", "curie", "milicurie",
+    "microcurie", "uiacthor", "muiacthor", "kg base", "gruesa", "kg bruto", "uiactant",
+    "muiactant", "uiactig", "muiactig", "kg activo", "gramo activo", "gramo base",
+    "packs", "otras unidades"
+  ] %}
+  {% set conceptos = {"1": "Productos", "2": "Servicios", "3": "Productos y Servicios (Mixto)"} %}
+
+  {% if comprobantes %}
+  <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe.</p>
+  <div class="tabla-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th data-field="punto_venta" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Punto de venta</th>
+          <th data-field="tipo_comprobante" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de factura</th>
+          <th data-field="fecha_comprobante" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Fecha del comprobante</th>
+          <th title="La que realmente va a quedar en ARCA -- puede ser distinta a la fecha real de arriba si esta es más nueva que la fecha de emisión por defecto de la empresa. No se edita acá, se recalcula sola.">Fecha de facturación</th>
+          <th data-field="concepto" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Concepto</th>
+          <th data-field="fecha_desde" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Desde</th>
+          <th data-field="fecha_hasta" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Hasta</th>
+          <th data-field="tipo_documento" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de documento</th>
+          <th data-field="cuit_receptor" data-type="text" title="Doble clic para aplicar un valor a toda la columna">CUIL/CUIT/Documento</th>
+          <th data-field="medio_pago_detectado" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Medio de pago detectado</th>
+          <th data-field="condicion_iva" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Condición de IVA</th>
+          <th data-field="condicion_venta" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Condición de venta</th>
+          <th data-field="tipo_pago" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de tarjeta</th>
+          <th data-field="numero_pago" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Número de tarjeta</th>
+          <th data-field="descripcion" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Descripción</th>
+          <th data-field="cantidad" data-type="number" title="Doble clic para aplicar un valor a toda la columna">Cantidad</th>
+          <th data-field="unidad_medida" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Unidad de medida</th>
+          <th data-field="precio_unitario" data-type="number" title="Doble clic para aplicar un valor a toda la columna">Precio unitario</th>
+          <th data-field="nombre_razon_social" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Recibe</th>
+          <th data-field="id_transaccion" data-type="text" title="Doble clic para aplicar un valor a toda la columna">ID transacción</th>
+          <th>Imagen origen</th>
+          <th>Estado</th>
+          <th>Facturado el</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in comprobantes %}
+        {% set editable = c.estado != "facturado" %}
+        <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }}">
+          <td {% if editable %}data-field="punto_venta" data-type="text" data-value="{{ c.punto_venta or '' }}"{% endif %}>{{ c.punto_venta or "—" }}</td>
+          <td {% if editable %}data-field="tipo_comprobante" data-type="select" data-value="{{ c.tipo_comprobante or '' }}"{% endif %}>{{ c.tipo_comprobante or "—" }}</td>
+          <td {% if editable %}data-field="fecha_comprobante" data-type="date" data-value="{{ c.fecha_comprobante or '' }}"{% endif %}>{{ c.fecha_comprobante or "—" }}</td>
+          <td class="col-fecha-ajustada">{{ c.fecha_facturacion_ajustada or "—" }}</td>
+          <td {% if editable %}data-field="concepto" data-type="select" data-value="{{ c.concepto or '' }}"{% endif %}>{{ conceptos.get(c.concepto, "—") }}</td>
+          <td {% if editable %}data-field="fecha_desde" data-type="date" data-value="{{ c.fecha_desde or '' }}"{% endif %}>{{ c.fecha_desde or "—" }}</td>
+          <td {% if editable %}data-field="fecha_hasta" data-type="date" data-value="{{ c.fecha_hasta or '' }}"{% endif %}>{{ c.fecha_hasta or "—" }}</td>
+          <td {% if editable %}data-field="tipo_documento" data-type="select" data-value="{{ c.tipo_documento or '' }}"{% endif %}>{{ c.tipo_documento or "—" }}</td>
+          <td {% if editable %}data-field="cuit_receptor" data-type="text" data-value="{{ c.cuit_receptor or '' }}"{% endif %}>{{ c.cuit_receptor or "—" }}</td>
+          <td {% if editable %}data-field="medio_pago_detectado" data-type="select" data-value="{{ c.medio_pago_detectado or '' }}"{% endif %}>{{ c.medio_pago_detectado or "—" }}</td>
+          <td {% if editable %}data-field="condicion_iva" data-type="select" data-value="{{ c.condicion_iva or '' }}"{% endif %}>{{ c.condicion_iva or "—" }}</td>
+          <td {% if editable %}data-field="condicion_venta" data-type="select" data-value="{{ c.condicion_venta or '' }}"{% endif %}>{{ c.condicion_venta or "—" }}</td>
+          <td {% if editable %}data-field="tipo_pago" data-type="select" data-value="{{ c.tipo_pago or '' }}"{% endif %}>{{ c.tipo_pago or "—" }}</td>
+          <td {% if editable %}data-field="numero_pago" data-type="text" data-value="{{ c.numero_pago or '' }}"{% endif %}>{{ c.numero_pago or "—" }}</td>
+          <td {% if editable %}data-field="descripcion" data-type="text" data-value="{{ c.descripcion or '' }}"{% endif %}>{{ c.descripcion or "—" }}</td>
+          <td {% if editable %}data-field="cantidad" data-type="number" data-value="{{ c.cantidad or 1 }}"{% endif %}>{{ c.cantidad or 1 }}</td>
+          <td {% if editable %}data-field="unidad_medida" data-type="select" data-value="{{ c.unidad_medida or '' }}"{% endif %}>{{ c.unidad_medida or "—" }}</td>
+          <td {% if editable %}data-field="precio_unitario" data-type="number" data-value="{{ c.precio_unitario or 0 }}"{% endif %}>$ {{ "%.2f"|format(c.precio_unitario or 0) }}</td>
+          <td {% if editable %}data-field="nombre_razon_social" data-type="text" data-value="{{ c.nombre_razon_social or '' }}"{% endif %}>{{ c.nombre_razon_social or "No detectado" }}</td>
+          <td {% if editable %}data-field="id_transaccion" data-type="text" data-value="{{ c.id_transaccion or '' }}"{% endif %}>{{ c.id_transaccion or "—" }}</td>
+          <td>{{ c.archivo_origen or "—" }}</td>
+          <td>
+            <span class="estado {{ c.estado }}" {% if c.estado == "error" and c.error_facturacion %}title="{{ c.error_facturacion }}"{% endif %}>{{ c.estado }}</span>
+          </td>
+          <td>{{ c.facturado_en_ar.strftime("%d/%m/%Y %H:%M") if c.facturado_en_ar else "—" }}</td>
+          <td>
+            <div class="acciones-fila">
+              <button class="btn-revisar" data-id="{{ c.id }}">Revisar</button>
+              {% if editable %}
+              <button class="btn-facturar {{ 'reintentar' if c.estado == 'error' }}" data-id="{{ c.id }}">{{ "Reintentar" if c.estado == "error" else "Facturar" }}</button>
+              <button class="btn-probar" data-id="{{ c.id }}">Probar</button>
+              <button class="btn-editar-fila" data-id="{{ c.id }}">Editar fila</button>
+              <button class="btn-eliminar" data-id="{{ c.id }}">Eliminar</button>
+              {% endif %}
+              <button class="btn-preview-pdf" data-id="{{ c.id }}">Vista previa PDF</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="vacio">Todavía no hay comprobantes. Subí una captura arriba para probarlo.</div>
+  {% endif %}
+  </div>
+
+  <div id="tabEstadisticas" class="tab-contenido">
+  <div class="panel-stats">
+
+    <div class="herramienta-monto">
+      <div class="herramienta-monto-info">
+        <span class="stat-label">Monto pendiente a facturar</span>
+        <span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_pendiente) }}</span>
+      </div>
+      <div class="herramienta-monto-accion">
+        <label for="montoAFacturar">Monto a facturar</label>
+        <input type="number" id="montoAFacturar" placeholder="ej: 50000" min="0" step="0.01">
+        <button id="btnFacturarMontoCargado" class="btn btn-facturar-todo">Facturar el monto cargado</button>
+      </div>
+    </div>
+
+    <ul class="lista-stats">
+      <li><span class="stat-label">Archivos subidos en total</span><span class="stat-num-lista">{{ stats.total_subidos }}</span></li>
+      <li><span class="stat-label">Comprobantes facturados</span><span class="stat-num-lista">{{ stats.facturados }}</span></li>
+      <li><span class="stat-label">Comprobantes pendientes</span><span class="stat-num-lista">{{ stats.pendientes }}</span></li>
+      <li><span class="stat-label">Monto pendiente total de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_pendiente) }}</span></li>
+      <li><span class="stat-label">Monto total facturado de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_facturado_total) }}</span></li>
+    </ul>
+
+    <h3>Lecturas de capturas</h3>
+    <ul class="lista-stats">
+      <li><span class="stat-label">Imágenes subidas</span><span class="stat-num-lista">{{ stats.imagenes }}</span></li>
+      <li><span class="stat-label">PDFs subidos</span><span class="stat-num-lista">{{ stats.pdfs }}</span></li>
+      <li><span class="stat-label">Se cargaron a la tabla</span><span class="stat-num-lista">{{ stats.nuevos }}</span></li>
+      <li class="advertencia"><span class="stat-label">Duplicados (ya estaban)</span><span class="stat-num-lista">{{ stats.duplicados }}</span></li>
+      <li class="advertencia"><span class="stat-label">Bloqueados (no es un archivo válido)</span><span class="stat-num-lista">{{ stats.bloqueados }}</span></li>
+      <li class="advertencia"><span class="stat-label">Con error de lectura</span><span class="stat-num-lista">{{ stats.con_error }}</span></li>
+    </ul>
+
+    {% if stats.duplicados_detalle %}
+    <h3>Comparar duplicados</h3>
+    <p class="tip-edicion">Hacé clic en un archivo de la lista (o usá ↓ ↑) para ver SU PROPIA imagen a la derecha. Con → volvés a esa misma imagen propia, con ← ves el comprobante original con el que se lo comparó.</p>
+    <div class="comparador-duplicados">
+      <ul class="lista-duplicados" id="listaDuplicados">
+        {% for d in stats.duplicados_detalle %}
+        <li class="item-duplicado" data-registro-id="{{ d.registro_id }}" data-comprobante-id="{{ d.comprobante_original_id or '' }}" data-tiene-intento="{{ 'true' if d.tiene_imagen_intento else 'false' }}">
+          {{ d.nombre_archivo }}
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="visor-duplicado">
+        <div class="visor-duplicado-topbar">
+          <span id="visorDuplicadoTitulo">Elegí un archivo de la lista</span>
+          <button type="button" id="btnToggleDuplicado" style="display:none;">Ver imagen duplicada</button>
+        </div>
+        <div class="visor-duplicado-imagen" id="visorDuplicadoImagen">
+          <span class="sin-seleccion">Sin selección</span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if stats.nombres_bloqueados or stats.nombres_error %}
+    <div class="listas-nombres">
+      {% if stats.nombres_bloqueados %}
+      <details>
+        <summary>Ver los {{ stats.nombres_bloqueados|length }} archivo(s) bloqueados</summary>
+        <ul>{% for n in stats.nombres_bloqueados %}<li>{{ n }}</li>{% endfor %}</ul>
+      </details>
+      {% endif %}
+      {% if stats.nombres_error %}
+      <details>
+        <summary>Ver los {{ stats.nombres_error|length }} archivo(s) con error de lectura</summary>
+        <ul>{% for n in stats.nombres_error %}<li>{{ n }}</li>{% endfor %}</ul>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  </div>
+</div>
+
+<div id="overlayRevision">
+  <div class="revision-topbar">
+    <div class="info-izq">
+      <span id="revisionContador">0 / 0</span>
+      <span id="revisionEstado" class="estado"></span>
+      <span class="revision-tip">← → para moverte entre comprobantes · Esc para cerrar</span>
+    </div>
+    <div class="nav-revision">
+      <button id="btnRevisionAnterior" type="button">◀ Anterior</button>
+      <button id="btnRevisionSiguiente" type="button">Siguiente ▶</button>
+      <button id="btnCerrarRevision" type="button" class="btn-cerrar">Cerrar ✕</button>
+    </div>
+  </div>
+  <div class="revision-cuerpo">
+    <div class="revision-panel-izq" id="revisionCampos"></div>
+    <div class="revision-panel-der" id="revisionVisor"></div>
+  </div>
+</div>
+
+<script>
+function mostrarTabComprobantes(idPestaña) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('activa', b.dataset.tab === idPestaña));
+  document.querySelectorAll('.tab-contenido').forEach(c => c.classList.toggle('activa', c.id === idPestaña));
+}
+
+const EMPRESA_ID = {{ empresa.id }};
+const DATOS_REVISION = {{ datos_revision | tojson }};
+const CAMPOS_REVISION = [
+  { campo: 'punto_venta', etiqueta: 'Punto de venta', tipo: 'texto' },
+  { campo: 'tipo_comprobante', etiqueta: 'Tipo de factura', tipo: 'select' },
+  { campo: 'fecha_comprobante', etiqueta: 'Fecha del comprobante', tipo: 'date' },
+  { campo: 'concepto', etiqueta: 'Concepto', tipo: 'select' },
+  { campo: 'fecha_desde', etiqueta: 'Desde', tipo: 'date' },
+  { campo: 'fecha_hasta', etiqueta: 'Hasta', tipo: 'date' },
+  { campo: 'tipo_documento', etiqueta: 'Tipo de documento', tipo: 'select' },
+  { campo: 'cuit_receptor', etiqueta: 'CUIL/CUIT/Documento', tipo: 'texto' },
+  { campo: 'medio_pago_detectado', etiqueta: 'Medio de pago detectado', tipo: 'select' },
+  { campo: 'condicion_iva', etiqueta: 'Condición de IVA', tipo: 'select' },
+  { campo: 'condicion_venta', etiqueta: 'Condición de venta', tipo: 'select' },
+  { campo: 'tipo_pago', etiqueta: 'Tipo de tarjeta', tipo: 'select' },
+  { campo: 'numero_pago', etiqueta: 'Número de tarjeta', tipo: 'texto' },
+  { campo: 'descripcion', etiqueta: 'Descripción', tipo: 'texto' },
+  { campo: 'cantidad', etiqueta: 'Cantidad', tipo: 'numero' },
+  { campo: 'unidad_medida', etiqueta: 'Unidad de medida', tipo: 'select' },
+  { campo: 'precio_unitario', etiqueta: 'Precio unitario', tipo: 'numero' },
+  { campo: 'nombre_razon_social', etiqueta: 'Recibe', tipo: 'texto' },
+  { campo: 'id_transaccion', etiqueta: 'ID transacción', tipo: 'texto' },
+];
+
+const LISTAS = {
+  tipo_comprobante: {{ opciones_tipo_comprobante | tojson }},
+  condicion_iva: {{ opciones_condicion_iva | tojson }},
+  medio_pago_detectado: {{ opciones_medio_pago_detectado | tojson }},
+  tipo_documento: {{ opciones_tipo_doc | tojson }},
+  condicion_venta: {{ opciones_condicion_venta | tojson }},
+  tipo_pago: {{ opciones_tipo_pago | tojson }},
+  unidad_medida: {{ opciones_unidad_medida | tojson }},
+};
+const CONCEPTOS = {{ conceptos | tojson }};
+
+function ddmmyyyyAIso(f) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(f || '');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+function isoADdmmyyyy(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
+function activarEdicion(td) {
+  if (!td.dataset.field || td.querySelector('input,select')) return;
+
+  const campo = td.dataset.field;
+  const tipo = td.dataset.type;
+  const valorActual = td.dataset.value || '';
+  let widget;
+
+  if (tipo === 'select') {
+    widget = document.createElement('select');
+    let opciones;
+    if (campo === 'concepto') {
+      opciones = Object.entries(CONCEPTOS).map(([v, t]) => [v, t]);
+    } else {
+      opciones = (LISTAS[campo] || []).map(v => [v, v]);
+    }
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    widget.appendChild(vacio);
+    opciones.forEach(([valor, texto]) => {
+      const opt = document.createElement('option');
+      opt.value = valor; opt.textContent = texto;
+      if (valor === valorActual) opt.selected = true;
+      widget.appendChild(opt);
+    });
+    widget.addEventListener('change', () => guardarCampo(td, campo, widget.value, widget.options[widget.selectedIndex].textContent));
+  } else if (tipo === 'date') {
+    widget = document.createElement('input');
+    widget.type = 'date';
+    widget.value = ddmmyyyyAIso(valorActual);
+    const confirmarFecha = () => {
+      if (!widget.value) return; // todavía no terminó de tipear una fecha válida
+      const nuevo = isoADdmmyyyy(widget.value);
+      guardarCampo(td, campo, nuevo, nuevo);
+    };
+    widget.addEventListener('blur', confirmarFecha);
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else if (tipo === 'number') {
+    widget = document.createElement('input');
+    widget.type = 'number'; widget.step = '0.01';
+    widget.value = valorActual;
+    const confirmar = () => guardarCampo(td, campo, widget.value, widget.value);
+    widget.addEventListener('blur', confirmar);
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else {
+    widget = document.createElement('input');
+    widget.type = 'text';
+    widget.value = valorActual;
+    const confirmar = () => guardarCampo(td, campo, widget.value, widget.value || '—');
+    widget.addEventListener('blur', confirmar);
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  }
+
+  td.textContent = '';
+  td.appendChild(widget);
+  widget.focus();
+}
+
+async function guardarCampo(td, campo, valor, textoMostrar) {
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${td.closest('tr').dataset.comprobanteId}/editar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campo, valor }),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo guardar: ' + data.error);
+      td.textContent = td.dataset.value || '—';
+      return;
+    }
+    td.dataset.value = valor;
+    td.textContent = (campo === 'precio_unitario') ? `$ ${parseFloat(valor || 0).toFixed(2)}` : (textoMostrar || valor || '—');
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    td.textContent = td.dataset.value || '—';
+  }
+}
+
+document.querySelectorAll('td[data-field]').forEach(td => {
+  td.addEventListener('dblclick', () => activarEdicion(td));
+});
+
+/* ---------- Edición de columna completa (desde el encabezado) ---------- */
+function activarEdicionColumna(th) {
+  if (!th.dataset.field || th.querySelector('input,select')) return;
+
+  const campo = th.dataset.field;
+  const tipo = th.dataset.type;
+  const tituloOriginal = th.textContent;
+  let widget;
+
+  const confirmarYAplicar = (valor, textoMostrar) => {
+    const cantidadFilas = document.querySelectorAll(`td[data-field="${campo}"]`).length;
+    const ok = confirm(`Esto va a poner "${textoMostrar || valor}" en la columna "${tituloOriginal}" de las ${cantidadFilas} filas pendientes. ¿Confirmás?`);
+    if (!ok) {
+      th.textContent = tituloOriginal;
+      return;
+    }
+    guardarColumnaCompleta(th, campo, valor, tituloOriginal);
+  };
+
+  if (tipo === 'select') {
+    widget = document.createElement('select');
+    let opciones;
+    if (campo === 'concepto') {
+      opciones = Object.entries(CONCEPTOS).map(([v, t]) => [v, t]);
+    } else {
+      opciones = (LISTAS[campo] || []).map(v => [v, v]);
+    }
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    widget.appendChild(vacio);
+    opciones.forEach(([valor, texto]) => {
+      const opt = document.createElement('option');
+      opt.value = valor; opt.textContent = texto;
+      widget.appendChild(opt);
+    });
+    widget.addEventListener('change', () => confirmarYAplicar(widget.value, widget.options[widget.selectedIndex].textContent));
+  } else if (tipo === 'date') {
+    widget = document.createElement('input');
+    widget.type = 'date';
+    widget.addEventListener('blur', () => {
+      if (!widget.value) { th.textContent = tituloOriginal; return; } // todavía no terminó de tipear una fecha válida
+      const nuevo = isoADdmmyyyy(widget.value);
+      confirmarYAplicar(nuevo, nuevo);
+    });
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else if (tipo === 'number') {
+    widget = document.createElement('input');
+    widget.type = 'number'; widget.step = '0.01';
+    widget.addEventListener('blur', () => { if (widget.value !== '') confirmarYAplicar(widget.value, widget.value); else th.textContent = tituloOriginal; });
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else {
+    widget = document.createElement('input');
+    widget.type = 'text';
+    widget.addEventListener('blur', () => { if (widget.value !== '') confirmarYAplicar(widget.value, widget.value); else th.textContent = tituloOriginal; });
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  }
+
+  th.textContent = '';
+  th.appendChild(widget);
+  widget.focus();
+}
+
+async function guardarColumnaCompleta(th, campo, valor, tituloOriginal) {
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/editar-columna`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campo, valor }),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo aplicar a la columna: ' + data.error);
+      th.textContent = tituloOriginal;
+      return;
+    }
+    window.location.reload(); // recarga para que todas las filas reflejen el cambio (y recalculen importe si hacía falta)
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    th.textContent = tituloOriginal;
+  }
+}
+
+document.querySelectorAll('thead th[data-field]').forEach(th => {
+  th.addEventListener('dblclick', () => activarEdicionColumna(th));
+});
+
+document.querySelectorAll('.btn-editar-fila').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tr = btn.closest('tr');
+    tr.querySelectorAll('td[data-field]').forEach(td => activarEdicion(td));
+  });
+});
+
+document.querySelectorAll('.btn-eliminar').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!confirm('¿Eliminar este comprobante? No se puede deshacer.')) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/eliminar`, { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        btn.closest('tr').remove();
+      } else {
+        alert('No se pudo eliminar: ' + data.error);
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btn.disabled = false;
+    }
+  });
+});
+
+document.querySelectorAll('.btn-preview-pdf').forEach(btn => {
+  btn.addEventListener('click', () => {
+    window.open(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/vista-previa.pdf`, '_blank');
+  });
+});
+
+document.querySelectorAll('.btn-facturar').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const ok = confirm(
+      'Esto genera una factura REAL en ARCA, con CAE, a nombre de esta empresa. ' +
+      'No se puede deshacer (solo anular con una Nota de Crédito). ¿Confirmás que querés facturar este comprobante?'
+    );
+    if (!ok) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Facturando...';
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/facturar`, { method: 'POST' });
+      const data = await r.json();
+      if (!data.ok) alert('No se pudo facturar: ' + data.error);
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+    }
+    window.location.reload();
+  });
+});
+
+document.querySelectorAll('.btn-probar').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const ok = confirm(
+      'Modo prueba: hace TODO el recorrido real en ARCA (login, empresa, punto de venta, ' +
+      'período, receptor, detalle) hasta la pantalla final de revisión, pero SIN confirmar -- ' +
+      'no se emite ninguna factura ni se genera CAE. Se va a abrir un navegador y quedarse unos ' +
+      '30 segundos en esa pantalla final para que la mires. ¿Arrancamos?'
+    );
+    if (!ok) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Probando...';
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/facturar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo_prueba: true }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        alert('Prueba terminada: llegó bien hasta la pantalla final de ARCA sin emitir nada. El comprobante sigue pendiente.');
+      } else {
+        alert('Se cortó durante la prueba: ' + data.error);
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Probar';
+  });
+});
+
+async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
+  const cantidadPendientes = document.querySelectorAll('.btn-facturar').length;
+  if (!cantidadPendientes) {
+    alert('No hay comprobantes pendientes para facturar.');
+    return;
+  }
+
+  const mensajeLimite = limiteMonto
+    ? ` Se va a detener apenas el acumulado facturado llegue a $${limiteMonto.toLocaleString('es-AR')}.`
+    : '';
+  const ok = confirm(
+    `Esto va a facturar los comprobantes pendientes de esta empresa, UNO POR UNO, contra ARCA real. ` +
+    `Cada uno genera una factura real con CAE. No se puede deshacer.${mensajeLimite} ¿Confirmás?`
+  );
+  if (!ok) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Facturando... no cierres esta pestaña';
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limite_monto: limiteMonto }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      const corte = data.resumen.detenido_por_limite
+        ? `\n\nSe detuvo porque el próximo comprobante superaba el límite de $${limiteMonto.toLocaleString('es-AR')}. Quedaron comprobantes sin facturar.`
+        : '';
+      alert(`Listo. Facturados: ${data.resumen.facturados} · Errores: ${data.resumen.errores} · Monto facturado: $${data.resumen.monto_facturado.toLocaleString('es-AR')}${corte}`);
+    } else {
+      alert('Error: ' + data.error);
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+  window.location.reload();
+}
+
+document.getElementById('btnFacturarTodo').addEventListener('click', () => {
+  facturarTodosConLimite(document.getElementById('btnFacturarTodo'), null);
+});
+
+document.getElementById('btnFacturarMontoCargado').addEventListener('click', () => {
+  const input = document.getElementById('montoAFacturar');
+  const monto = parseFloat(input.value);
+  if (!monto || monto <= 0) {
+    alert('Cargá primero un monto mayor a 0 para poder facturar.');
+    return;
+  }
+  facturarTodosConLimite(document.getElementById('btnFacturarMontoCargado'), monto);
+});
+
+/* ---------- Comparador de duplicados ---------- */
+const itemsDuplicados = Array.from(document.querySelectorAll('.item-duplicado'));
+let indiceDuplicadoActual = -1;
+let mostrandoDuplicadoActual = false;
+
+function renderVisorDuplicado() {
+  if (indiceDuplicadoActual < 0) return;
+  const item = itemsDuplicados[indiceDuplicadoActual];
+  const comprobanteId = item.dataset.comprobanteId;
+  const registroId = item.dataset.registroId;
+  const tieneIntento = item.dataset.tieneIntento === 'true';
+
+  const titulo = document.getElementById('visorDuplicadoTitulo');
+  const toggleBtn = document.getElementById('btnToggleDuplicado');
+  const contenedorImagen = document.getElementById('visorDuplicadoImagen');
+
+  contenedorImagen.innerHTML = '';
+  if (mostrandoDuplicadoActual) {
+    if (!tieneIntento) {
+      titulo.textContent = 'No hay imagen guardada de este intento';
+      contenedorImagen.innerHTML = '<span class="sin-seleccion">No se guardó la imagen de este intento.</span>';
+    } else {
+      titulo.textContent = 'Mostrando: imagen del intento duplicado';
+      const img = document.createElement('img');
+      img.src = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
+      contenedorImagen.appendChild(img);
+    }
+  } else {
+    if (!comprobanteId) {
+      titulo.textContent = 'No encontré el comprobante original';
+      contenedorImagen.innerHTML = '<span class="sin-seleccion">No encontré el comprobante original.</span>';
+    } else {
+      titulo.textContent = 'Mostrando: comprobante ORIGINAL';
+      const img = document.createElement('img');
+      img.src = `/empresas/${EMPRESA_ID}/comprobantes/${comprobanteId}/archivo`;
+      contenedorImagen.appendChild(img);
+    }
+  }
+
+  toggleBtn.style.display = 'inline-block';
+  toggleBtn.textContent = mostrandoDuplicadoActual ? 'Ver comprobante original' : 'Ver imagen duplicada';
+}
+
+function seleccionarDuplicado(indice) {
+  if (indice < 0 || indice >= itemsDuplicados.length) return;
+  indiceDuplicadoActual = indice;
+  mostrandoDuplicadoActual = true; // al cambiar de archivo, arranca mostrando SU PROPIA imagen (no la del original compartido)
+  itemsDuplicados.forEach(i => i.classList.remove('seleccionado'));
+  const item = itemsDuplicados[indice];
+  item.classList.add('seleccionado');
+  renderVisorDuplicado();
+  try {
+    item.scrollIntoView({ block: 'nearest' });
+  } catch (e) {
+    // El scroll automático es solo comodidad visual -- si falla por lo que sea,
+    // no debe impedir que la imagen ya se haya mostrado arriba.
+  }
+}
+
+itemsDuplicados.forEach((item, indice) => {
+  item.addEventListener('click', () => seleccionarDuplicado(indice));
+});
+
+const btnToggleDuplicado = document.getElementById('btnToggleDuplicado');
+if (btnToggleDuplicado) {
+  btnToggleDuplicado.addEventListener('click', () => {
+    mostrandoDuplicadoActual = !mostrandoDuplicadoActual;
+    renderVisorDuplicado();
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (indiceDuplicadoActual < 0) return; // todavía no se eligió ningún archivo, no interferir
+  if (document.getElementById('overlayRevision').style.display === 'flex') return; // el panel de Revisión Manual tiene su propio manejo de flechas
+  const tabEstadisticas = document.getElementById('tabEstadisticas');
+  if (!tabEstadisticas || !tabEstadisticas.classList.contains('activa')) return; // solo mientras esa pestaña está a la vista
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; // no interferir con la edición de campos
+
+  if (e.key === 'ArrowDown') { e.preventDefault(); seleccionarDuplicado(indiceDuplicadoActual + 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); seleccionarDuplicado(indiceDuplicadoActual - 1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); mostrandoDuplicadoActual = true; renderVisorDuplicado(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); mostrandoDuplicadoActual = false; renderVisorDuplicado(); }
+});
+
+document.getElementById('btnSubir').addEventListener('click', async () => {
+  const input = document.getElementById('archivos');
+  const btn = document.getElementById('btnSubir');
+  const resumen = document.getElementById('resumen');
+
+  if (!input.files.length) {
+    resumen.style.display = 'block';
+    resumen.textContent = 'Elegí al menos un archivo primero.';
+    return;
+  }
+
+  const formData = new FormData();
+  for (const f of input.files) formData.append('archivos', f);
+
+  btn.disabled = true;
+  btn.textContent = 'Leyendo...';
+  try {
+    const r = await fetch(`/api/empresas/${EMPRESA_ID}/subir`, { method: 'POST', body: formData });
+    const data = await r.json();
+    resumen.style.display = 'block';
+    if (data.ok) {
+      resumen.textContent = `Nuevos: ${data.resumen.nuevos} · Duplicados: ${data.resumen.duplicados} · Errores: ${data.resumen.errores}`;
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      resumen.textContent = 'Error: ' + data.error;
+    }
+  } catch (e) {
+    resumen.style.display = 'block';
+    resumen.textContent = 'No se pudo conectar con el servidor.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Subir y leer';
+  }
+});
+
+/* ---------- Revisión manual: imagen a la derecha, datos editables a la izquierda ---------- */
+
+let indiceRevision = 0;
+let promesaGuardadoActual = null; // el fetch en curso del último campo editado, si hay uno
+
+function abrirRevision(comprobanteId) {
+  if (!DATOS_REVISION.length) {
+    alert('No hay comprobantes para revisar.');
+    return;
+  }
+  indiceRevision = comprobanteId ? DATOS_REVISION.findIndex(c => c.id === comprobanteId) : 0;
+  if (indiceRevision < 0) indiceRevision = 0;
+  document.getElementById('overlayRevision').style.display = 'flex';
+  renderRevision();
+}
+
+async function forzarGuardadoPendiente() {
+  // Si hay un campo de texto/número enfocado con un cambio sin confirmar, el
+  // blur dispara su guardado -- lo esperamos para no perder ese último cambio.
+  const activo = document.activeElement;
+  if (activo && ['INPUT', 'SELECT'].includes(activo.tagName)) {
+    activo.blur();
+  }
+  if (promesaGuardadoActual) {
+    try { await promesaGuardadoActual; } catch (e) { /* el error ya se avisó en guardarCampoRevision */ }
+    promesaGuardadoActual = null;
+  }
+}
+
+async function cerrarRevision() {
+  await forzarGuardadoPendiente();
+  // Recargar para que la tabla de atrás refleje todo lo editado en el panel.
+  window.location.reload();
+}
+
+async function irARevision(delta) {
+  const nuevo = indiceRevision + delta;
+  if (nuevo < 0 || nuevo >= DATOS_REVISION.length) return;
+  await forzarGuardadoPendiente();
+  indiceRevision = nuevo;
+  renderRevision();
+}
+
+function renderRevision() {
+  const c = DATOS_REVISION[indiceRevision];
+
+  document.getElementById('revisionContador').textContent = `${indiceRevision + 1} / ${DATOS_REVISION.length}`;
+  const badgeEstado = document.getElementById('revisionEstado');
+  badgeEstado.textContent = c.estado;
+  badgeEstado.className = 'estado ' + c.estado;
+
+  // --- Panel derecho: imagen o PDF ---
+  const visor = document.getElementById('revisionVisor');
+  visor.innerHTML = '';
+  if (c.tiene_archivo) {
+    const url = `/empresas/${EMPRESA_ID}/comprobantes/${c.id}/archivo`;
+    if (c.extension === 'pdf') {
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      visor.appendChild(iframe);
+    } else {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Comprobante original';
+      visor.appendChild(img);
+    }
+  } else {
+    const aviso = document.createElement('div');
+    aviso.className = 'sin-archivo';
+    aviso.textContent = 'No se guardó una imagen para este comprobante (se subió antes de esta función).';
+    visor.appendChild(aviso);
+  }
+
+  // --- Panel izquierdo: campos editables ---
+  const cont = document.getElementById('revisionCampos');
+  cont.innerHTML = '';
+  const soloLectura = c.estado === 'facturado';
+
+  CAMPOS_REVISION.forEach(({ campo, etiqueta, tipo }) => {
+    const valor = c.campos[campo] ?? '';
+    const grupo = document.createElement('div');
+    grupo.className = 'campo-revision';
+
+    const label = document.createElement('label');
+    label.textContent = etiqueta;
+    grupo.appendChild(label);
+
+    let widget;
+    if (soloLectura) {
+      widget = document.createElement('div');
+      widget.className = 'valor-solo-lectura';
+      widget.textContent = (valor === '' || valor === null) ? '—' : valor;
+    } else if (tipo === 'select') {
+      widget = document.createElement('select');
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widget.appendChild(vacio);
+      const opciones = campo === 'concepto' ? Object.entries(CONCEPTOS) : (LISTAS[campo] || []).map(v => [v, v]);
+      opciones.forEach(([v, t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === valor) opt.selected = true;
+        widget.appendChild(opt);
+      });
+      widget.addEventListener('change', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+    } else if (tipo === 'date') {
+      widget = document.createElement('input');
+      widget.type = 'date';
+      widget.value = ddmmyyyyAIso(valor);
+      widget.addEventListener('blur', () => {
+        if (!widget.value) return; // todavía no terminó de tipear una fecha válida
+        promesaGuardadoActual = guardarCampoRevision(c, campo, isoADdmmyyyy(widget.value));
+      });
+    } else if (tipo === 'numero') {
+      widget = document.createElement('input');
+      widget.type = 'number'; widget.step = '0.01';
+      widget.value = valor;
+      widget.addEventListener('blur', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+    } else {
+      widget = document.createElement('input');
+      widget.type = 'text';
+      widget.value = valor;
+      widget.addEventListener('blur', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+    }
+    grupo.appendChild(widget);
+    cont.appendChild(grupo);
+  });
+
+  document.getElementById('btnRevisionAnterior').disabled = indiceRevision === 0;
+  document.getElementById('btnRevisionSiguiente').disabled = indiceRevision === DATOS_REVISION.length - 1;
+}
+
+async function guardarCampoRevision(comprobante, campo, valor) {
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${comprobante.id}/editar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campo, valor }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      comprobante.campos[campo] = valor; // así si vuelve para atrás y adelante, ve lo que ya guardó
+    } else {
+      alert('No se pudo guardar: ' + data.error);
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+document.getElementById('btnRevisionManual').addEventListener('click', () => abrirRevision());
+
+async function eliminarEnLote(boton, url, mensajeConfirmacion) {
+  const ok = confirm(mensajeConfirmacion);
+  if (!ok) return;
+
+  boton.disabled = true;
+  boton.textContent = 'Eliminando...';
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      alert(`Listo, se eliminaron ${data.eliminados} comprobante(s).`);
+      window.location.reload();
+    } else {
+      alert('No se pudo eliminar: ' + data.error);
+      boton.disabled = false;
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    boton.disabled = false;
+  }
+}
+
+document.getElementById('btnEliminarFacturados').addEventListener('click', () => {
+  const btn = document.getElementById('btnEliminarFacturados');
+  eliminarEnLote(
+    btn,
+    `/empresas/${EMPRESA_ID}/comprobantes/eliminar-facturados`,
+    'Esto borra de Facturea TODOS los comprobantes ya facturados de esta empresa (no se puede deshacer). ' +
+    'Ojo: esto no anula ni borra las facturas reales que ya emitiste en ARCA, con su CAE -- ' +
+    'solo se borra el registro local acá. ¿Confirmás?'
+  );
+});
+
+document.getElementById('btnEliminarTodos').addEventListener('click', () => {
+  const btn = document.getElementById('btnEliminarTodos');
+  eliminarEnLote(
+    btn,
+    `/empresas/${EMPRESA_ID}/comprobantes/eliminar-todos`,
+    'Esto borra de Facturea TODOS los comprobantes de esta empresa: pendientes, con error, Y también los ya facturados. ' +
+    'No se puede deshacer. Ojo: esto no anula ni borra las facturas reales que ya emitiste en ARCA, con su CAE -- ' +
+    'solo se borra el registro local acá. ¿Confirmás?'
+  );
+});
+document.getElementById('btnCerrarRevision').addEventListener('click', cerrarRevision);
+document.getElementById('btnRevisionAnterior').addEventListener('click', () => irARevision(-1));
+document.getElementById('btnRevisionSiguiente').addEventListener('click', () => irARevision(1));
+document.querySelectorAll('.btn-revisar').forEach(btn => {
+  btn.addEventListener('click', () => abrirRevision(parseInt(btn.dataset.id, 10)));
+});
+
+document.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('overlayRevision');
+  if (overlay.style.display !== 'flex') return; // el panel no está abierto, no hacer nada
+
+  if (e.key === 'Escape') { cerrarRevision(); return; }
+
+  // Si el foco está en un campo de edición, las flechas mueven el cursor/valor,
+  // no deben navegar entre comprobantes.
+  const enCampoDeEdicion = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
+  if (enCampoDeEdicion) return;
+
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); irARevision(1); }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); irARevision(-1); }
+});
+</script>
+</body>
+</html>

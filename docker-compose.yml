@@ -1,0 +1,48 @@
+# Pensado para el VPS (producción). Levanta la app + una base Postgres
+# juntas, con un volumen persistente para que la base y las imágenes
+# subidas (para clientes que NO conectaron Google Drive) no se borren
+# cada vez que se reinicia o actualiza el contenedor.
+#
+# Uso: copiá .env.example a .env, completá los valores, y corré:
+#   docker compose up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: facturea
+      POSTGRES_USER: facturea
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - facturea_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U facturea"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "10000:10000"
+    environment:
+      DATABASE_URL: postgresql://facturea:${POSTGRES_PASSWORD}@db:5432/facturea
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ARCA_BOT_HEADLESS: "true"
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
+    volumes:
+      - facturea_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  facturea_db_data:
+  facturea_uploads:

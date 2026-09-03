@@ -1,0 +1,34 @@
+# "Blueprint" de Render: define de una vez el servicio web + la base de
+# datos, para no tener que cargar cada cosa a mano en el panel.
+# Se usa así: en Render, "New" -> "Blueprint" -> elegís este repo de GitHub.
+databases:
+  - name: facturea-db
+    plan: free  # sirve para probar -- OJO, esta base se borra a los 30 días (ver DEPLOY.md)
+
+services:
+  - type: web
+    name: facturea
+    runtime: docker
+    plan: starter  # el free de Render no alcanza para correr Chromium de forma confiable
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: facturea-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: ARCA_BOT_HEADLESS
+        value: "true"
+      - key: ADMIN_EMAIL
+        sync: false   # lo cargás vos a mano en el panel de Render, no queda en el repo
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false

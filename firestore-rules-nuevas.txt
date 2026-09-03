@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    // negocios/{negocioId} — un doc por dueño registrado (negocioId = su
+    // UID de Firebase Auth). El dueño puede LEER el suyo (para ver si está
+    // activo/vencido) y CREARLO una sola vez al registrarse, pero NUNCA
+    // puede actualizarlo desde el cliente -- si pudiera, cualquiera con
+    // las herramientas de desarrollador del navegador podría extender su
+    // propia prueba para siempre. Las renovaciones/cancelaciones las hace
+    // panel-membresias con el Admin SDK, que salta estas reglas.
+    // ------------------------------------------------------------------
+    match /negocios/{negocioId} {
+      allow read: if request.auth != null && request.auth.uid == negocioId;
+      allow create: if request.auth != null && request.auth.uid == negocioId;
+      allow update: if false;
+      allow delete: if false;
+
+      match /configuracion/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == negocioId;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // cadetes/{cadeteId}
+    // - Lectura abierta: la necesita el login por código de la app del
+    //   cadete, que consulta ANTES de tener ninguna sesión (no usa
+    //   Firebase Authentication, ver login_screen.dart).
+    // - Alta/baja: solo el dueño dueño de ese cadete (negocioId propio).
+    // - Actualización: el dueño puede editar cualquier campo del suyo: LA
+    //   APP DEL CADETE (sin sesión) solo puede tocar sesionDispositivoId y
+    //   sesionIniciadaEn -- nada más. Así un cadete no puede, por ejemplo,
+    //   reactivarse a sí mismo cambiando "activo" a mano.
+    // ------------------------------------------------------------------
+    match /cadetes/{cadeteId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.negocioId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.negocioId == request.auth.uid;
+      allow update: if (request.auth != null && resource.data.negocioId == request.auth.uid)
+                    || (request.auth == null
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['sesionDispositivoId', 'sesionIniciadaEn']));
+    }
+
+    // ------------------------------------------------------------------
+    // pedidos/{pedidoId}
+    // - Lectura abierta: la app del cadete no tiene sesión propia, necesita
+    //   ver sus pedidos + los "disponibles" de su negocio sin auth.
+    // - Alta/baja: solo el dueño (negocioId propio).
+    // - Actualización: el dueño puede editar cualquier campo de los suyos.
+    //   La app del cadete (sin sesión) solo puede tocar los campos que le
+    //   corresponden al avanzar un pedido -- no puede tocar el monto, la
+    //   dirección, ni reasignarlo a otro negocio.
+    // ------------------------------------------------------------------
+    match /pedidos/{pedidoId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.negocioId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.negocioId == request.auth.uid;
+      allow update: if (request.auth != null && resource.data.negocioId == request.auth.uid)
+                    || (request.auth == null
+                        && request.resource.data.negocioId == resource.data.negocioId
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['cadeteId', 'estado', 'aceptadoEn', 'retiradoEn',
+                                     'entregadoEn', 'lat', 'lng', 'prioridadHasta']));
+    }
+
+    // ------------------------------------------------------------------
+    // turnos/{turnoId} — los escribe la app del cadete sin sesión propia
+    // (inicio/fin de turno). El dueño solo puede LEER los de su negocio
+    // (pestaña Historial); no tiene motivo para editarlos a mano.
+    // ------------------------------------------------------------------
+    match /turnos/{turnoId} {
+      allow read: if request.auth != null && resource.data.negocioId == request.auth.uid;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // configuracion/precios (colección VIEJA, global) — se deja de leer
+    // una vez migrado, pero la dejamos legible/escribible un tiempo para
+    // que el botón "Migrar a mi cuenta" del panel pueda copiarla a la
+    // ruta nueva (negocios/{uid}/configuracion/precios) antes de que la
+    // borres a mano desde la consola de Firebase.
+    // ------------------------------------------------------------------
+    match /configuracion/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

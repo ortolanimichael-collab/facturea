@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Acceso a ARCA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
+    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:640px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .nav-links a{color:var(--muted);text-decoration:none;}
+  .nav-links a:hover{color:var(--ink);}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
+  p.sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+
+  .flash-ok{font-family:var(--mono);font-size:12.5px;padding:10px 14px;border-radius:3px;margin-bottom:20px;background:var(--teal-tint);color:var(--teal-deep);}
+
+  section{background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:26px 28px;margin-bottom:22px;}
+  section h2{font-family:var(--mono);font-size:15px;margin-bottom:4px;}
+  section p.desc{color:var(--muted);font-size:13px;margin-bottom:20px;}
+
+  .campo{margin-bottom:16px;}
+  .campo label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;}
+  .campo .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  input{
+    width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+  input:focus{outline:none;border-color:var(--teal);}
+
+  .btn{
+    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 22px;border-radius:3px;
+    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;
+  }
+  .aviso-seguridad{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <div class="nav-links">
+      <a href="/panel">Panel</a>
+      <a href="/empresas">Empresas</a>
+      <a href="/soporte">Soporte</a>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </header>
+  {% include '_aviso_membresia.html' %}
+
+  <h1>Acceso a ARCA</h1>
+  <p class="sub">Tu login de Clave Fiscal es uno solo por cuenta, aunque adentro representes a varias empresas. Los datos de facturación de cada empresa se cargan por separado en "Empresas".</p>
+
+  {% if guardado %}
+  <div class="flash-ok">Datos de acceso guardados correctamente.</div>
+  {% endif %}
+
+  <form method="POST">
+    <section>
+      <h2>Clave Fiscal</h2>
+      <p class="desc">Necesario para que Facturea pueda facturar por vos si no tenés certificado WSFE.</p>
+
+      <div class="campo">
+        <label>CUIL</label>
+        <input type="text" name="cuil_arca" value="{{ usuario.cuil_arca or '' }}" placeholder="ej: 27353876932" required>
+      </div>
+      <div class="campo">
+        <label>Contraseña de tu Clave Fiscal</label>
+        <input type="password" name="password_arca" placeholder="{{ '••••••••' if usuario.password_arca_cifrada else 'Ingresá tu contraseña' }}">
+        <p class="hint">{{ "Ya está guardada. Dejá este campo vacío si no la querés cambiar." if usuario.password_arca_cifrada else "Se guarda cifrada, nunca en texto plano." }}</p>
+      </div>
+    </section>
+
+    <button type="submit" class="btn">Guardar</button>
+    <p class="aviso-seguridad">Tu contraseña de ARCA se guarda cifrada y solo se usa para facturar en tu nombre.</p>
+  </form>
+
+  {% if not usuario.empresas.count() %}
+  <p style="margin-top:20px;"><a href="/empresas" style="color:var(--teal-deep);font-family:var(--mono);font-size:13px;">→ Ahora cargá tu primera empresa</a></p>
+  {% endif %}
+</div>
+</body>
+</html>

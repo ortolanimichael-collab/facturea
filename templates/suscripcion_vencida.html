@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Suscripción vencida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;display:flex;align-items:center;justify-content:center;}
+  .card{max-width:440px;padding:40px;text-align:center;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:16px;margin-bottom:24px;color:var(--muted);}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:12px;}
+  p{color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:8px;}
+  .estado{display:inline-block;margin:16px 0;padding:6px 16px;border-radius:20px;background:rgba(163,45,45,0.1);color:var(--stamp);font-family:var(--mono);font-size:13px;font-weight:600;}
+  a.link{color:var(--teal);text-decoration:none;font-weight:600;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">FACTUREA</div>
+    <h1>Tu acceso está pausado</h1>
+    <div class="estado">{{ 'Suspendido' if not usuario.activo else 'Prueba vencida' }}</div>
+    <p>Tu período de prueba o suscripción terminó el {{ usuario.fecha_vencimiento.strftime('%d/%m/%Y') if usuario.fecha_vencimiento else '—' }}.</p>
+    <p>Para renovar y seguir facturando, escribinos y te reactivamos apenas confirmemos el pago.</p>
+    <p style="margin-top: 24px;"><a class="link" href="{{ url_for('soporte') }}">Ir a soporte</a></p>
+  </div>
+</body>
+</html>

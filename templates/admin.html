@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Panel admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
+    --stamp:#A32D2D; --amber:#F1E6C8; --amber-ink:#7A5A0A; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:14px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .nav-links a{color:var(--muted);text-decoration:none;}
+  h1{font-family:var(--mono);font-size:22px;margin:24px 0 4px;}
+  p.sub{color:var(--muted);font-size:14px;margin-bottom:24px;}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+  @media (max-width:760px){ .stats{grid-template-columns:repeat(2,1fr);} }
+  .stat{background:var(--paper-2);border:1.5px solid var(--line);border-radius:3px;padding:16px 18px;}
+  .stat .n{font-family:var(--mono);font-size:24px;font-weight:700;}
+  .stat .l{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;}
+
+  table{width:100%;border-collapse:collapse;background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;overflow:hidden;}
+  thead th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);text-align:left;padding:12px 14px;border-bottom:1.5px solid var(--ink);}
+  tbody td{padding:12px 14px;font-size:13.5px;border-bottom:1px dashed var(--line);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  .estado{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:20px;display:inline-block;}
+  .estado.activo{background:var(--teal-tint);color:var(--teal-deep);}
+  .estado.vencido{background:var(--amber);color:var(--amber-ink);}
+  .estado.suspendido{background:#F5DEDE;color:var(--stamp);}
+  .btn-mini{font-family:var(--mono);font-size:11.5px;padding:6px 12px;border-radius:3px;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;cursor:pointer;}
+  .metodo-form{display:flex;gap:6px;align-items:center;}
+  .metodo-form input{font-family:var(--mono);font-size:11.5px;padding:6px 8px;border-radius:3px;border:1.5px solid var(--line);width:120px;background:var(--paper);color:var(--ink);}
+  .metodo-form button{font-family:var(--mono);font-size:11px;padding:6px 8px;border-radius:3px;border:1.5px solid var(--line);background:var(--paper-2);cursor:pointer;}
+  .admin-tag{font-family:var(--mono);font-size:10.5px;color:var(--teal-deep);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/" class="logo"><span class="dot"></span>facturea</a>
+    <div class="nav-links">
+      <span>{{ current_user.email }}</span>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </header>
+
+  <h1>Panel de administrador</h1>
+  <p class="sub">Todos los clientes registrados, su plan, y su estado de suscripción.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{{ usuarios|length }}</div><div class="l">Clientes totales</div></div>
+    <div class="stat"><div class="n">{{ usuarios|selectattr("estado", "equalto", "activo")|list|length }}</div><div class="l">Activos</div></div>
+    <div class="stat"><div class="n">{{ usuarios|selectattr("estado", "equalto", "vencido")|list|length }}</div><div class="l">Vencidos</div></div>
+    <div class="stat"><div class="n">{{ usuarios|selectattr("estado", "equalto", "suspendido")|list|length }}</div><div class="l">Suspendidos</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Email</th>
+        <th>Plan</th>
+        <th>Alta</th>
+        <th>Vencimiento</th>
+        <th>Estado</th>
+        <th>Método de pago</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in usuarios %}
+      <tr>
+        <td>{{ u.nombre_razon_social or "—" }} {% if u.es_admin %}<span class="admin-tag">(admin)</span>{% endif %}</td>
+        <td>{{ u.email }}</td>
+        <td>{{ u.plan }}</td>
+        <td>{{ u.fecha_registro.strftime("%d/%m/%Y") if u.fecha_registro else "—" }}</td>
+        <td>{{ u.fecha_vencimiento.strftime("%d/%m/%Y") if u.fecha_vencimiento else "—" }}</td>
+        <td><span class="estado {{ u.estado }}">{{ u.estado }}</span></td>
+        <td>
+          <form class="metodo-form" method="POST" action="/admin/metodo_pago/{{ u.id }}">
+            <input type="text" name="metodo_pago" value="{{ u.metodo_pago or '' }}" placeholder="ej: transferencia">
+            <button type="submit">Guardar</button>
+          </form>
+        </td>
+        <td>
+          <form method="POST" action="/admin/renovar/{{ u.id }}">
+            <button type="submit" class="btn-mini">Renovar 30 días</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
+    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:1000px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .nav-links a{color:var(--muted);text-decoration:none;}
+  .nav-links a:hover{color:var(--ink);}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
+  p.sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+
+  .grid-accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:34px;max-width:640px;}
+  @media (max-width:560px){ .grid-accesos{grid-template-columns:1fr;} }
+  .tarjeta-acceso{
+    background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:20px;
+    text-decoration:none;color:var(--ink);display:block;
+  }
+  .tarjeta-acceso .titulo{font-family:var(--mono);font-weight:600;font-size:14.5px;margin-bottom:6px;}
+  .tarjeta-acceso .desc{font-size:13px;color:var(--muted);}
+
+  h2.seccion{font-family:var(--mono);font-size:15px;margin-bottom:14px;}
+
+  .lista-empresas{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+  .fila-empresa{
+    background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;
+    padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  }
+  .fila-empresa .nombre{font-family:var(--mono);font-weight:600;font-size:14px;}
+  .fila-empresa .estado-config{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:20px;display:inline-block;margin-left:8px;}
+  .estado-config.completa{background:var(--teal-tint);color:var(--teal-deep);}
+  .estado-config.incompleta{background:#F1E6C8;color:#7A5A0A;}
+  .acciones-empresa{display:flex;gap:8px;font-family:var(--mono);font-size:12.5px;}
+  .acciones-empresa a{
+    text-decoration:none;color:var(--ink);border:1.5px solid var(--ink);border-radius:3px;
+    padding:6px 12px;background:var(--paper);
+  }
+  .vacio{text-align:center;padding:40px 20px;color:var(--muted);font-family:var(--mono);font-size:13px;background:var(--paper-2);border:1.5px dashed var(--ink);border-radius:2px;margin-bottom:14px;}
+  .btn{
+    font-family:var(--mono);font-weight:600;font-size:13.5px;padding:11px 18px;border-radius:3px;
+    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;text-decoration:none;display:inline-block;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <div class="nav-links">
+      <span>{{ usuario.nombre_razon_social or usuario.email }}</span>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </header>
+  {% include '_aviso_membresia.html' %}
+
+  <h1>Hola, {{ usuario.nombre_razon_social or usuario.email }}</h1>
+  <p class="sub">Este es tu panel de Facturea. Desde acá gestionás tus empresas (cada una con su propio acceso a ARCA) y podés pedir ayuda si algo no funciona.</p>
+
+  <div class="grid-accesos">
+    <a href="/empresas" class="tarjeta-acceso">
+      <div class="titulo">Empresas</div>
+      <div class="desc">Agregá, editá o eliminá las empresas/clientes que representás, con el CUIL y Clave Fiscal de cada una.</div>
+    </a>
+    <a href="/soporte" class="tarjeta-acceso">
+      <div class="titulo">Soporte</div>
+      <div class="desc">Guías de uso, contacto y pedidos de revisión técnica.</div>
+    </a>
+  </div>
+
+  <h2 class="seccion">Tus empresas</h2>
+
+  {% if empresas %}
+  <div class="lista-empresas">
+    {% for e in empresas %}
+    <div class="fila-empresa">
+      <div>
+        <span class="nombre">{{ e.nombre_interno or "Sin nombre" }}</span>
+        <span class="estado-config {{ 'completa' if e.configuracion_completa() else 'incompleta' }}">
+          {{ "Lista para facturar" if e.configuracion_completa() else "Falta completar" }}
+        </span>
+      </div>
+      <div class="acciones-empresa">
+        {% if e.configuracion_completa() %}
+        <a href="/empresas/{{ e.id }}/comprobantes">Ver comprobantes</a>
+        {% else %}
+        <a href="/empresas/{{ e.id }}/editar">Completar datos</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <a href="/empresas" class="btn">+ Agregar otra empresa</a>
+  {% else %}
+  <div class="vacio">Todavía no cargaste ninguna empresa.</div>
+  <a href="/empresas" class="btn">+ Agregar mi primera empresa</a>
+  {% endif %}
+</div>
+</body>
+</html>

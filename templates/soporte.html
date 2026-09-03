@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Soporte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
+    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:800px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .nav-links a{color:var(--muted);text-decoration:none;}
+  .nav-links a:hover{color:var(--ink);}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
+  p.sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+
+  .tabs{display:flex;gap:8px;margin-bottom:20px;font-family:var(--mono);font-size:13px;flex-wrap:wrap;}
+  .tab{padding:9px 16px;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper-2);cursor:pointer;}
+  .tab.activa{background:var(--teal);color:#F7F5EC;border-color:var(--teal-deep);}
+
+  section.panel-tab{display:none;}
+  section.panel-tab.activa{display:block;}
+
+  .item{background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:18px 20px;margin-bottom:12px;}
+  .item h3{font-family:var(--mono);font-size:14px;margin-bottom:6px;}
+  .item p{font-size:13.5px;color:var(--muted);}
+
+  .campo{margin-bottom:16px;}
+  .campo label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;}
+  input, textarea{
+    width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+  textarea{resize:vertical;min-height:110px;}
+  .btn{
+    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 22px;border-radius:3px;
+    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <div class="nav-links">
+      <a href="/panel">Panel</a>
+      <a href="/empresas">Empresas</a>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </header>
+
+  <h1>Soporte</h1>
+  <p class="sub">Guías de uso, contacto y pedidos de revisión técnica.</p>
+
+  <div class="tabs">
+    <div class="tab activa" data-tab="guias" onclick="mostrarTab('guias')">Guías</div>
+    <div class="tab" data-tab="contacto" onclick="mostrarTab('contacto')">Contacto</div>
+    <div class="tab" data-tab="reporte" onclick="mostrarTab('reporte')">Reportar un problema</div>
+  </div>
+
+  <section class="panel-tab activa" id="tab-guias">
+    <div class="item">
+      <h3>Cómo cargar tu primera empresa</h3>
+      <p>Andá a "Empresas" → "Agregar una empresa nueva" y completá la razón social exacta como figura en ARCA y tus datos de facturación habituales.</p>
+    </div>
+    <div class="item">
+      <h3>Cómo subir comprobantes</h3>
+      <p>Entrá a la empresa desde el panel, andá a "Ver comprobantes" y subí las capturas de tus transferencias. Facturea las lee solas.</p>
+    </div>
+    <div class="item">
+      <h3>Cómo facturar</h3>
+      <p>Una vez que tus comprobantes están cargados y tu empresa tiene la configuración completa, Facturea genera la factura automáticamente ante ARCA.</p>
+    </div>
+  </section>
+
+  <section class="panel-tab" id="tab-contacto">
+    <div class="item">
+      <h3>Hablá con nosotros</h3>
+      <p>Escribinos por WhatsApp o email y te respondemos a la brevedad.</p>
+    </div>
+  </section>
+
+  <section class="panel-tab" id="tab-reporte">
+    <div class="item">
+      <h3>Contanos qué pasó</h3>
+      <p style="margin-bottom:16px;">Describí el problema con el mayor detalle posible; te contactamos para resolverlo.</p>
+      <form>
+        <div class="campo">
+          <label>Empresa afectada (opcional)</label>
+          <input type="text" placeholder="ej: Juan Moya (Kiosco)">
+        </div>
+        <div class="campo">
+          <label>Descripción del problema</label>
+          <textarea placeholder="Contanos qué pasó..."></textarea>
+        </div>
+        <button type="button" class="btn" onclick="alert('Por ahora escribinos directo por los canales de contacto. Este formulario todavía no está conectado.')">Enviar</button>
+      </form>
+    </div>
+  </section>
+</div>
+
+<script>
+function mostrarTab(nombre) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('activa', t.dataset.tab === nombre));
+  document.querySelectorAll('.panel-tab').forEach(p => p.classList.toggle('activa', p.id === 'tab-' + nombre));
+}
+</script>
+</body>
+</html>

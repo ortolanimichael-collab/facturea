@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Crear cuenta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:1120px;margin:0 auto;padding:32px 24px 80px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .card{max-width:420px;margin:60px auto;background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:32px;}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:6px;}
+  p.sub{color:var(--muted);font-size:13.5px;margin-bottom:24px;}
+  label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;margin-top:14px;}
+  input{width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);}
+  input:focus{outline:none;border-color:var(--teal);}
+  .btn{
+    display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 18px;border-radius:3px;
+    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;margin-top:22px;
+  }
+  .link-alt{display:block;text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
+  .link-alt a{color:var(--teal-deep);font-weight:600;text-decoration:none;}
+  .flash{font-family:var(--mono);font-size:12.5px;padding:10px 14px;border-radius:3px;margin-bottom:16px;background:#F5DEDE;color:var(--stamp);}
+  .trial-note{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:18px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="logo"><span class="dot"></span>facturea</a>
+  <div class="card">
+    <h1>Creá tu cuenta</h1>
+    <p class="sub">Empezá a facturar sin tipear un solo dato a mano.</p>
+
+    {% if error %}<div class="flash">{{ error }}</div>{% endif %}
+
+    <form method="POST">
+      <label>Nombre o razón social</label>
+      <input type="text" name="nombre" required>
+
+      <label>Email</label>
+      <input type="email" name="email" required>
+
+      <label>Contraseña</label>
+      <input type="password" name="password" required minlength="6">
+
+      <button type="submit" class="btn">Crear cuenta</button>
+    </form>
+    <p class="trial-note">Arrancás con 15 días de prueba, sin tarjeta.</p>
+    <p class="link-alt">¿Ya tenés cuenta? <a href="/login">Iniciar sesión</a></p>
+  </div>
+</div>
+</body>
+</html>

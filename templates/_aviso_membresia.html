@@ -1,0 +1,18 @@
+{% if membresia_dias_restantes is defined and not membresia_vencida %}
+{% set dias = membresia_dias_restantes %}
+<div style="
+  display:inline-flex; align-items:center; gap:6px;
+  font-family: 'IBM Plex Mono', monospace; font-size:12px; font-weight:600;
+  padding:4px 12px; border-radius:20px; margin-bottom:16px;
+  background: {{ '#FBEAEA' if dias <= 3 else ('#FBF2E1' if dias <= 7 else '#E1F5EE') }};
+  color: {{ '#A32D2D' if dias <= 3 else ('#A6742B' if dias <= 7 else '#0F6E56') }};
+">
+  {% if dias <= 0 %}
+    Vence hoy
+  {% elif dias == 1 %}
+    1 día restante
+  {% else %}
+    {{ dias }} días restantes
+  {% endif %}
+</div>
+{% endif %}

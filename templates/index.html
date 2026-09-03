@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Facturá desde la captura de la transferencia</title>
+<meta name="description" content="Sacás una foto a la transferencia y Facturea arma la factura sola. Sin tipear, sin planillas, sin perder tiempo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2;
+    --paper-2:#F7F5EC;
+    --ink:#21261F;
+    --muted:#66665C;
+    --teal:#0F6E56;
+    --teal-deep:#085041;
+    --teal-tint:#E1F5EE;
+    --stamp:#A32D2D;
+    --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace;
+    --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--teal-deep);
+    font-weight:600;
+  }
+  h1,h2,h3{font-family:var(--mono);font-weight:600;letter-spacing:-0.01em;color:var(--ink);}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:var(--mono);font-weight:600;font-size:14px;
+    padding:13px 22px;border-radius:3px;
+    text-decoration:none;cursor:pointer;border:1.5px solid var(--ink);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{background:var(--teal);border-color:var(--teal-deep);color:#F7F5EC;box-shadow:2px 2px 0 var(--teal-deep);}
+  .btn-primary:hover{box-shadow:3px 3px 0 var(--teal-deep);}
+  .btn-ghost{background:transparent;color:var(--ink);}
+
+  /* ---------- HEADER ---------- */
+  header{
+    position:sticky;top:0;z-index:50;
+    background:rgba(239,237,226,0.92);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;letter-spacing:-0.02em;display:flex;align-items:center;gap:8px;}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;display:inline-block;}
+  .nav-links{display:flex;gap:32px;align-items:center;}
+  .nav-links a{font-family:var(--mono);font-size:13px;text-decoration:none;color:var(--muted);}
+  .nav-links a:hover{color:var(--ink);}
+  @media (max-width:720px){ .nav-links{display:none;} }
+
+  /* ---------- HERO ---------- */
+  .hero{padding:76px 0 40px;}
+  .hero-grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:56px;align-items:center;}
+  @media (max-width:900px){ .hero-grid{grid-template-columns:1fr;gap:44px;} }
+  .hero h1{font-size:44px;line-height:1.12;margin:14px 0 20px;}
+  @media (max-width:520px){ .hero h1{font-size:32px;} }
+  .hero p.lead{font-size:17px;color:var(--muted);max-width:46ch;margin-bottom:28px;}
+  .hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+  .hero-note{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:14px;}
+
+  /* ---------- TICKET (signature element) ---------- */
+  .ticket-stage{position:relative;}
+  .ticket{
+    background:var(--paper-2);
+    border:1.5px solid var(--ink);
+    border-radius:2px;
+    box-shadow:6px 6px 0 rgba(33,38,31,0.10);
+    transform:rotate(-1.4deg);
+    padding:0;
+    overflow:hidden;
+  }
+  .ticket-seg{padding:22px 24px;position:relative;}
+  .ticket-seg + .ticket-seg{
+    border-top:1.5px dashed var(--line);
+  }
+  .ticket-seg::before{
+    content:"";
+    position:absolute;left:-8px;top:-8px;width:16px;height:16px;
+    background:var(--paper);border-radius:50%;
+  }
+  .ticket-seg::after{
+    content:"";
+    position:absolute;right:-8px;top:-8px;width:16px;height:16px;
+    background:var(--paper);border-radius:50%;
+  }
+  .ticket-seg:first-child::before, .ticket-seg:first-child::after{display:none;}
+  .seg-label{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .seg-title{font-family:var(--mono);font-weight:600;font-size:15px;margin-bottom:4px;}
+  .seg-sub{font-size:13px;color:var(--muted);}
+  .seg-1{background:linear-gradient(180deg, rgba(15,110,86,0.05), transparent);}
+  .phone-mock{
+    display:flex;align-items:center;gap:12px;background:var(--ink);color:#F7F5EC;
+    border-radius:12px;padding:12px 14px;margin-top:12px;font-family:var(--mono);font-size:12px;
+  }
+  .phone-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex:none;}
+  .row-mock{
+    display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;
+    font-family:var(--mono);font-size:11px;margin-top:12px;
+  }
+  .row-mock div{background:var(--teal-tint);color:var(--teal-deep);padding:6px 8px;border-radius:2px;}
+  .row-mock .hd{background:transparent;color:var(--muted);padding:0 8px;font-weight:600;}
+  .cae-mock{
+    margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;
+    font-family:var(--mono);
+  }
+  .barcode{display:flex;gap:2px;height:30px;align-items:flex-end;}
+  .barcode span{width:2px;background:var(--ink);}
+  .stamp{
+    position:absolute;right:18px;bottom:14px;
+    font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.06em;
+    color:var(--stamp);border:2px solid var(--stamp);border-radius:4px;
+    padding:4px 8px;transform:rotate(-8deg);opacity:0.9;
+  }
+
+  /* ---------- SECTION SHELL ---------- */
+  section{padding:88px 0;}
+  section.alt{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .section-head{max-width:640px;margin-bottom:52px;}
+  .section-head h2{font-size:30px;margin-top:10px;}
+  .section-head p{color:var(--muted);font-size:16px;margin-top:12px;}
+
+  /* ---------- HOW IT WORKS ---------- */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--ink);border-radius:2px;overflow:hidden;}
+  @media (max-width:820px){ .steps{grid-template-columns:1fr;} }
+  .step{padding:28px 26px;position:relative;background:var(--paper-2);}
+  .step + .step{border-left:1.5px dashed var(--line);}
+  @media (max-width:820px){ .step + .step{border-left:none;border-top:1.5px dashed var(--line);} }
+  .step-num{font-family:var(--mono);font-size:12px;color:var(--teal-deep);font-weight:700;letter-spacing:0.08em;}
+  .step h3{font-size:18px;margin:10px 0 8px;}
+  .step p{color:var(--muted);font-size:14.5px;}
+
+  /* ---------- FOR WHOM ---------- */
+  .for-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:760px){ .for-grid{grid-template-columns:1fr;} }
+  .for-card{border:1.5px solid var(--line);background:var(--paper-2);padding:22px 24px;border-radius:2px;}
+  .for-card.yes{border-color:var(--teal);}
+  .for-card h3{font-family:var(--mono);font-size:14px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;}
+  .for-card.yes h3{color:var(--teal-deep);}
+  .for-card.no h3{color:var(--muted);}
+  .for-card ul{list-style:none;font-size:14.5px;color:var(--ink);}
+  .for-card.no ul{color:var(--muted);}
+  .for-card li{padding:7px 0;border-top:1px dashed var(--line);}
+  .for-card li:first-child{border-top:none;}
+
+  /* ---------- PLANS ---------- */
+  .plans{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;}
+  @media (max-width:760px){ .plans{grid-template-columns:1fr;} }
+  .plan{border:1.5px solid var(--ink);border-radius:2px;background:var(--paper-2);padding:28px 26px;position:relative;}
+  .plan.featured{border-color:var(--teal-deep);box-shadow:5px 5px 0 rgba(15,110,86,0.16);}
+  .plan-tag{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);}
+  .plan.featured .plan-tag{color:var(--teal-deep);}
+  .plan-name{font-family:var(--mono);font-size:20px;font-weight:600;margin:8px 0 4px;}
+  .plan-price{font-family:var(--mono);font-size:30px;font-weight:700;margin:14px 0 2px;}
+  .plan-price span{font-size:13px;font-weight:500;color:var(--muted);}
+  .plan-list{list-style:none;margin-top:20px;font-size:14.5px;}
+  .plan-list li{padding:9px 0;border-top:1px dashed var(--line);display:flex;gap:10px;}
+  .plan-list li:first-child{border-top:none;}
+  .plan-list li::before{content:"—";color:var(--teal-deep);flex:none;}
+  .plan .btn{width:100%;justify-content:center;margin-top:22px;}
+
+  /* ---------- CTA / FORM ---------- */
+  .cta-box{
+    border:1.5px solid var(--ink);border-radius:2px;background:var(--ink);color:var(--paper-2);
+    padding:48px 40px;display:grid;grid-template-columns:1.1fr 0.9fr;gap:32px;align-items:center;
+  }
+  @media (max-width:820px){ .cta-box{grid-template-columns:1fr;padding:34px 24px;} }
+  .cta-box h2{color:var(--paper-2);font-size:26px;}
+  .cta-box p{color:#C7C6BC;margin-top:10px;font-size:14.5px;}
+  .cta-box .btn-primary{background:var(--teal);border-color:var(--teal);box-shadow:none;}
+  .cta-fields{display:flex;flex-direction:column;gap:10px;}
+  .cta-fields input{
+    font-family:var(--sans);font-size:14px;padding:12px 14px;border-radius:3px;
+    border:1.5px solid #454A41;background:#2A2F26;color:var(--paper-2);
+  }
+  .cta-fields input::placeholder{color:#8B8A7E;}
+  .cta-fields .btn{margin-top:4px;}
+  .form-note{font-family:var(--mono);font-size:11px;color:#8B8A7E;margin-top:4px;}
+
+  footer{padding:40px 0;border-top:1px solid var(--line);}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--mono);font-size:12px;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo"><span class="dot"></span>facturea</div>
+    <nav class="nav-links">
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="#para-quien">Para quién es</a>
+      <a href="#planes">Planes</a>
+      <a href="/login">Iniciar sesión</a>
+      <a href="/registro" class="btn btn-ghost" style="padding:8px 16px;">Crear cuenta</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Facturación electrónica · Monotributo</p>
+        <h1>Sacás la foto de la transferencia. La factura sale sola.</h1>
+        <p class="lead">Facturea lee tus comprobantes de Mercado Pago, Ualá y transferencias bancarias, arma la planilla y factura por vos ante ARCA. Sin tipear un solo dato a mano.</p>
+        <div class="hero-cta">
+          <a href="/registro" class="btn btn-primary">Sumarme como piloto</a>
+          <a href="#como-funciona" class="btn btn-ghost">Ver cómo funciona ↓</a>
+        </div>
+        <p class="hero-note">Programa piloto — cupos limitados, sin tarjeta de crédito.</p>
+      </div>
+
+      <div class="ticket-stage">
+        <div class="ticket">
+          <div class="ticket-seg seg-1">
+            <p class="seg-label">01 · Capturás</p>
+            <p class="seg-title">Foto de la transferencia</p>
+            <p class="seg-sub">La subís tal cual la recibiste, sin recortar ni acomodar nada.</p>
+            <div class="phone-mock">
+              <span class="phone-dot"></span>
+              Transferencia recibida — $ 14.500,00
+            </div>
+          </div>
+          <div class="ticket-seg">
+            <p class="seg-label">02 · Facturea lee</p>
+            <p class="seg-title">Se arma la fila en tu planilla</p>
+            <div class="row-mock">
+              <div class="hd">Cliente</div><div class="hd">Monto</div><div class="hd">ID</div>
+              <div>Celeste R.</div><div>$14.500</div><div>OK</div>
+            </div>
+          </div>
+          <div class="ticket-seg">
+            <p class="seg-label">03 · Se factura</p>
+            <p class="seg-title">Sale la factura con CAE</p>
+            <div class="cae-mock">
+              <div>
+                <div style="font-size:11px;color:var(--muted);">CAE</div>
+                <div style="font-weight:600;">75328617817021</div>
+              </div>
+              <div class="barcode" aria-hidden="true">
+                <span style="height:18px;"></span><span style="height:26px;"></span><span style="height:14px;"></span>
+                <span style="height:24px;"></span><span style="height:16px;"></span><span style="height:28px;"></span>
+                <span style="height:12px;"></span><span style="height:22px;"></span><span style="height:18px;"></span>
+                <span style="height:26px;"></span><span style="height:14px;"></span>
+              </div>
+            </div>
+            <div class="stamp">Facturado ✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Cómo funciona</p>
+        <h2>Tres pasos, cero planillas a mano</h2>
+        <p>Todo el trabajo que hoy hacés tipeando en un Excel, o entrando factura por factura a ARCA, lo hace Facturea mientras vos seguís vendiendo.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <p class="step-num">Paso 01</p>
+          <h3>Subís tus capturas</h3>
+          <p>Desde una carpeta de Drive compartida o directo desde la web. Mercado Pago, Ualá, banco — no importa el formato.</p>
+        </div>
+        <div class="step">
+          <p class="step-num">Paso 02</p>
+          <h3>Revisás la planilla</h3>
+          <p>Facturea extrae cliente, monto e ID de cada comprobante y te lo muestra editable, como un Excel, antes de facturar nada.</p>
+        </div>
+        <div class="step">
+          <p class="step-num">Paso 03</p>
+          <h3>Facturás con un click</h3>
+          <p>Con certificado propio, va directo por el servicio oficial de ARCA. Sin certificado, Facturea lo hace por vos, una por una.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="para-quien">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Para quién es</p>
+        <h2>Pensado para monotributistas que cobran por transferencia</h2>
+      </div>
+      <div class="for-grid">
+        <div class="for-card yes">
+          <h3>Te sirve si</h3>
+          <ul>
+            <li>Vendés por Instagram, WhatsApp o feria y cobrás por Mercado Pago o transferencia.</li>
+            <li>Hoy facturás a fin de mes, todo junto, a las apuradas.</li>
+            <li>Sos monotributista y facturás Factura C.</li>
+            <li>Preferís sacar una foto antes que tipear un dato.</li>
+          </ul>
+        </div>
+        <div class="for-card no">
+          <h3>Todavía no, si</h3>
+          <ul>
+            <li>Sos Responsable Inscripto con IVA discriminado (lo estamos sumando).</li>
+            <li>Facturás con controlador fiscal físico en un local.</li>
+            <li>Necesitás integración con un sistema contable existente.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="planes" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Planes</p>
+        <h2>Empezá simple, subí cuando lo necesites</h2>
+        <p>Los dos planes incluyen la lectura de comprobantes ilimitada. La diferencia es cómo se factura.</p>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <p class="plan-tag">Con certificado propio</p>
+          <p class="plan-name">Monotributo Básico</p>
+          <p class="plan-price">$9.000<span>/mes</span></p>
+          <ul class="plan-list">
+            <li>Hasta 40 comprobantes por mes</li>
+            <li>Lectura de capturas ilimitada</li>
+            <li>Facturación directa por ARCA, sin espera</li>
+            <li>Soporte por WhatsApp</li>
+          </ul>
+          <a href="/registro" class="btn btn-ghost">Elegir Básico</a>
+        </div>
+        <div class="plan featured">
+          <p class="plan-tag">Sin certificado</p>
+          <p class="plan-name">Monotributo Full</p>
+          <p class="plan-price">$17.000<span>/mes</span></p>
+          <ul class="plan-list">
+            <li>Hasta 150 comprobantes por mes</li>
+            <li>Lectura de capturas ilimitada</li>
+            <li>Facturea entra a ARCA y factura por vos</li>
+            <li>Soporte prioritario</li>
+          </ul>
+          <a href="/registro" class="btn btn-primary">Elegir Full</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sumarme">
+    <div class="wrap">
+      <div class="cta-box">
+        <div>
+          <h2>Sumate al piloto</h2>
+          <p>Buscamos los primeros 10 monotributistas para probar Facturea antes del lanzamiento. Precio piloto, acompañamiento directo conmigo, y tu opinión define qué se construye después.</p>
+          <a href="/registro" class="btn btn-primary" style="margin-top:20px; display:inline-flex; width:auto;">Crear mi cuenta gratis</a>
+        </div>
+        <form class="cta-fields" onsubmit="return enviarWhatsapp(event)">
+          <p class="form-note" style="margin-bottom:2px;">¿Tenés dudas antes de anotarte? Escribinos:</p>
+          <input type="text" id="nombre" placeholder="Tu nombre" required>
+          <input type="tel" id="whatsapp" placeholder="Tu WhatsApp" required>
+          <button type="submit" class="btn btn-ghost" style="border-color:#F7F5EC; color:#F7F5EC;">Consultar por WhatsApp</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>facturea — facturación para monotributistas · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
+<script>
+function enviarWhatsapp(e){
+  e.preventDefault();
+  const nombre = document.getElementById('nombre').value.trim();
+  const tel = document.getElementById('whatsapp').value.trim();
+  // TODO: reemplazar por el número real del negocio (formato 549XXXXXXXXXX)
+  const numeroNegocio = "5493513000000";
+  const mensaje = encodeURIComponent(`Hola! Soy ${nombre} (WhatsApp: ${tel}). Quiero sumarme al piloto de Facturea.`);
+  window.open(`https://wa.me/${numeroNegocio}?text=${mensaje}`, "_blank");
+  return false;
+}
+</script>
+
+</body>
+</html>
