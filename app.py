@@ -62,6 +62,24 @@ def avisar_registro_al_panel(usuario):
         print(f"[aviso] no se pudo avisar al panel de membresías: {e}")
 
 
+def avisar_checkin_al_panel(email):
+    """
+    Le avisa al panel de membresías que este usuario se logueó ahora mismo,
+    para que "última conexión" en el panel refleje la realidad. No rompe
+    el login si el panel no está configurado o está apagado.
+    """
+    if not PANEL_MEMBRESIAS_URL:
+        return
+    try:
+        requests.get(
+            f"{PANEL_MEMBRESIAS_URL}/api/validar-licencia",
+            params={"producto": "facturea", "email": email, "version": "web"},
+            timeout=5,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"[aviso] no se pudo avisar el check-in al panel de membresías: {e}")
+
+
 def crear_admin_inicial():
     """
     Si no existe ningún administrador todavía y están configuradas las variables
@@ -219,6 +237,7 @@ def login():
             return render_template("login.html", error="Email o contraseña incorrectos.")
 
         login_user(usuario)
+        avisar_checkin_al_panel(usuario.email)
         if usuario.es_admin:
             return redirect(url_for("admin_panel"))
         return redirect(url_for("panel"))
