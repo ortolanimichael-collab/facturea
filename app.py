@@ -124,9 +124,10 @@ def _sync_missing_columns():
     cuando se refactoriza un modelo (ej: se agregó "empresa_id" a
     Comprobante) y la tabla ya existía de antes con datos, así que las
     migraciones de Alembic no la vuelven a crear desde cero.
-    SOLO agrega columnas nuevas (nunca borra ni modifica una existente), y
-    solo si son nullable o tienen un valor por defecto, para no poder
-    romper filas que ya existen.
+    Si la columna nueva es NOT NULL sin default, solo se agrega así cuando
+    la tabla está VACÍA (no hay ninguna fila que pueda violar la
+    restricción); si la tabla ya tiene filas, se salta y avisa, para no
+    romper datos existentes.
     """
     with app.app_context():
         inspector = inspect(db.engine)
@@ -137,12 +138,19 @@ def _sync_missing_columns():
             for col in table.columns:
                 if col.name in existing_cols:
                     continue
-                if not col.nullable and col.default is None:
-                    print(f"[aviso] columna {table.name}.{col.name} es NOT NULL sin default -- no se puede agregar sola.")
-                    continue
+
+                not_null_sin_default = not col.nullable and col.default is None
+                if not_null_sin_default:
+                    with db.engine.connect() as conn:
+                        cantidad_filas = conn.execute(text(f'SELECT COUNT(*) FROM "{table.name}"')).scalar()
+                    if cantidad_filas > 0:
+                        print(f"[aviso] columna {table.name}.{col.name} es NOT NULL sin default y la tabla tiene {cantidad_filas} filas -- no se puede agregar sola.")
+                        continue
+
                 col_type = col.type.compile(db.engine.dialect)
+                sufijo_not_null = " NOT NULL" if not_null_sin_default else ""
                 with db.engine.begin() as conn:
-                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'))
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}{sufijo_not_null}'))
                 print(f"[info] columna agregada automáticamente: {table.name}.{col.name}")
 
 
