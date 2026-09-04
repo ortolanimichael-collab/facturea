@@ -4,6 +4,7 @@ import tempfile
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
+from sqlalchemy import inspect, text
 
 from dotenv import load_dotenv
 load_dotenv()  # lee el .env local si existe (no hace nada si no hay ninguno,
@@ -114,6 +115,38 @@ def crear_admin_inicial():
         admin.fecha_vencimiento = datetime.utcnow() + timedelta(days=3650)
         db.session.add(admin)
         db.session.commit()
+
+
+def _sync_missing_columns():
+    """
+    Agrega automáticamente, al arrancar, cualquier columna que exista en los
+    modelos (models.py) pero todavía no en la base de datos real -- pasa
+    cuando se refactoriza un modelo (ej: se agregó "empresa_id" a
+    Comprobante) y la tabla ya existía de antes con datos, así que las
+    migraciones de Alembic no la vuelven a crear desde cero.
+    SOLO agrega columnas nuevas (nunca borra ni modifica una existente), y
+    solo si son nullable o tienen un valor por defecto, para no poder
+    romper filas que ya existen.
+    """
+    with app.app_context():
+        inspector = inspect(db.engine)
+        for table in db.metadata.tables.values():
+            if not inspector.has_table(table.name):
+                continue
+            existing_cols = {c["name"] for c in inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing_cols:
+                    continue
+                if not col.nullable and col.default is None:
+                    print(f"[aviso] columna {table.name}.{col.name} es NOT NULL sin default -- no se puede agregar sola.")
+                    continue
+                col_type = col.type.compile(db.engine.dialect)
+                with db.engine.begin() as conn:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'))
+                print(f"[info] columna agregada automáticamente: {table.name}.{col.name}")
+
+
+_sync_missing_columns()
 
 
 crear_admin_inicial()
