@@ -83,7 +83,7 @@
   }
   .visor-duplicado-imagen{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;min-height:700px;}
   .visor-duplicado-imagen img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,0.15);}
-  .visor-duplicado-imagen iframe{width:100%;height:82vh;border:none;}
+  .visor-duplicado-imagen canvas{max-width:100%;height:auto;border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,0.15);}
   .visor-duplicado-imagen .sin-seleccion{font-family:var(--mono);font-size:12.5px;color:var(--muted);}
 
   .form-agregar-manual{border-top:1.5px solid var(--line);padding:16px 14px;background:var(--paper-2);}
@@ -300,6 +300,18 @@
       width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;
       border-right:none;border-top:1.5px solid rgba(0,0,0,0.2);
     }
+
+    /* ---- Comparador de duplicados / archivos con error: mismo criterio --
+       la imagen o PDF ocupa la parte grande y fija de la pantalla, y la
+       lista de nombres de archivo (antes al costado, angosta pero alta)
+       pasa a ser una franja compacta y acotada en altura, no en ancho. ---- */
+    .comparador-duplicados{flex-direction:column;min-height:0;}
+    .visor-duplicado{order:1;width:100%;min-width:0;}
+    .lista-duplicados{
+      order:2;width:100%;min-width:0;max-height:130px;
+      border-right:none;border-top:1.5px solid var(--line);
+    }
+    .visor-duplicado-imagen{min-height:0;height:56vh;padding:10px;}
   }
 </style>
 </head>
@@ -1384,9 +1396,14 @@ function renderVisorDuplicado() {
       contenedorImagen.innerHTML = '<span class="sin-seleccion">No se guardó la imagen de este intento.</span>';
     } else {
       titulo.textContent = 'Mostrando: imagen del intento duplicado';
-      const img = document.createElement('img');
-      img.src = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
-      contenedorImagen.appendChild(img);
+      const url = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
+      if (item.textContent.trim().toLowerCase().endsWith('.pdf')) {
+        renderizarPdfEnVisor(url, contenedorImagen);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        contenedorImagen.appendChild(img);
+      }
     }
   } else {
     if (!comprobanteId) {
@@ -1394,9 +1411,14 @@ function renderVisorDuplicado() {
       contenedorImagen.innerHTML = '<span class="sin-seleccion">No encontré el comprobante original.</span>';
     } else {
       titulo.textContent = 'Mostrando: comprobante ORIGINAL';
-      const img = document.createElement('img');
-      img.src = `/empresas/${EMPRESA_ID}/comprobantes/${comprobanteId}/archivo`;
-      contenedorImagen.appendChild(img);
+      const url = `/empresas/${EMPRESA_ID}/comprobantes/${comprobanteId}/archivo`;
+      if (item.textContent.trim().toLowerCase().endsWith('.pdf')) {
+        renderizarPdfEnVisor(url, contenedorImagen);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        contenedorImagen.appendChild(img);
+      }
     }
   }
 
@@ -1469,9 +1491,14 @@ function renderVisorError() {
     btnAgregar.style.display = 'none';
   } else {
     titulo.textContent = 'Mostrando: archivo con error de lectura';
-    const img = document.createElement('img');
-    img.src = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
-    contenedorImagen.appendChild(img);
+    const url = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
+    if (item.textContent.trim().toLowerCase().endsWith('.pdf')) {
+      renderizarPdfEnVisor(url, contenedorImagen);
+    } else {
+      const img = document.createElement('img');
+      img.src = url;
+      contenedorImagen.appendChild(img);
+    }
     btnAgregar.style.display = 'inline-block';
   }
 }
