@@ -26,6 +26,7 @@ from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_factura
 from previsualizacion_pdf import generar_pdf_preview, CONCEPTOS
 from almacenamiento import ruta_absoluta, eliminar_archivo_persistente
 import google_drive_cliente
+import mercadopago_cliente
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "clave-de-desarrollo-cambiar-en-produccion")
@@ -405,7 +406,9 @@ def empresas_editar(empresa_id):
     fecha_emision_default = (datetime.now() - timedelta(days=dias_atras)).strftime("%Y-%m-%d")
     return render_template(
         "empresas.html", usuario=current_user, empresas=lista, empresa=empresa,
-        error_drive=request.args.get("error_drive"), fecha_emision_default=fecha_emision_default,
+        error_drive=request.args.get("error_drive"),
+        error_mercadopago=request.args.get("error_mercadopago"),
+        fecha_emision_default=fecha_emision_default,
     )
 
 
@@ -501,6 +504,63 @@ def empresa_drive_desconectar(empresa_id):
     empresa = current_user.empresas.filter_by(id=empresa_id).first()
     if empresa:
         google_drive_cliente.desconectar(empresa)
+        db.session.commit()
+    return redirect(url_for("empresas_editar", empresa_id=empresa_id))
+
+
+# ---------- Mercado Pago por empresa ----------
+
+@app.route("/empresas/<int:empresa_id>/mercadopago/conectar")
+@login_required
+def empresa_mercadopago_conectar(empresa_id):
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return redirect(url_for("empresas"))
+    if not mercadopago_cliente.esta_configurado():
+        return "Mercado Pago todavía no está configurado en este servidor (faltan las variables de entorno MERCADOPAGO_*).", 400
+    url, state = mercadopago_cliente.generar_url_autorizacion(empresa.id)
+    session["mercadopago_state"] = state
+    return redirect(url)
+
+
+@app.route("/mercadopago/callback")
+@login_required
+def mercadopago_callback():
+    state_recibido = request.args.get("state", "")
+    state_guardado = session.pop("mercadopago_state", None)
+    # El "state" tiene que ser EXACTAMENTE el que se generó al armar el link
+    # de autorización -- si no coincide, alguien está mandando un callback
+    # que no salió de acá, y no hay que procesarlo.
+    if not state_guardado or state_recibido != state_guardado:
+        return redirect(url_for("empresas", error_mercadopago="No se pudo validar el pedido de conexión. Probá de nuevo."))
+
+    empresa_id = state_guardado.split(":", 1)[0]
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return redirect(url_for("empresas"))
+
+    code = request.args.get("code")
+    if not code:
+        return redirect(url_for("empresas_editar", empresa_id=empresa.id, error_mercadopago="Mercado Pago no autorizó la conexión."))
+
+    try:
+        refresh_token, user_id, email = mercadopago_cliente.procesar_callback(code)
+    except Exception as e:
+        return redirect(url_for("empresas_editar", empresa_id=empresa.id, error_mercadopago=str(e)))
+
+    empresa.set_mercadopago_token(refresh_token)
+    empresa.mercadopago_user_id = user_id
+    empresa.mercadopago_email = email
+    db.session.commit()
+    return redirect(url_for("empresas_editar", empresa_id=empresa.id))
+
+
+@app.route("/empresas/<int:empresa_id>/mercadopago/desconectar", methods=["POST"])
+@login_required
+def empresa_mercadopago_desconectar(empresa_id):
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if empresa:
+        mercadopago_cliente.desconectar(empresa)
         db.session.commit()
     return redirect(url_for("empresas_editar", empresa_id=empresa_id))
 

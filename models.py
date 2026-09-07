@@ -148,6 +148,13 @@ class Empresa(db.Model):
     google_drive_email = db.Column(db.String(200))  # solo para mostrar qué cuenta está conectada
     google_drive_carpeta_id = db.Column(db.String(100))  # carpeta "Facturea" creada en el Drive del cliente
 
+    # Igual que Drive, pero para leer el historial de pagos de Mercado Pago
+    # de ESTA empresa (Point, QR, link de pago, transferencias recibidas
+    # dentro de Mercado Pago) -- ver mercadopago_cliente.py.
+    mercadopago_token_cifrado = db.Column(db.LargeBinary)  # refresh token de Mercado Pago, cifrado igual que el de Drive
+    mercadopago_email = db.Column(db.String(200))  # solo para mostrar qué cuenta está conectada
+    mercadopago_user_id = db.Column(db.String(50))  # id de vendedor en Mercado Pago -- lo pide la API para buscar sus pagos
+
     def set_google_drive_token(self, refresh_token):
         self.google_drive_token_cifrado = _fernet().encrypt(refresh_token.encode())
 
@@ -158,6 +165,17 @@ class Empresa(db.Model):
 
     def tiene_drive_conectado(self):
         return bool(self.google_drive_token_cifrado)
+
+    def set_mercadopago_token(self, refresh_token):
+        self.mercadopago_token_cifrado = _fernet().encrypt(refresh_token.encode())
+
+    def get_mercadopago_token(self):
+        if not self.mercadopago_token_cifrado:
+            return None
+        return _fernet().decrypt(self.mercadopago_token_cifrado).decode()
+
+    def tiene_mercadopago_conectado(self):
+        return bool(self.mercadopago_token_cifrado)
 
     def set_password_arca(self, password_plana):
         self.password_arca_cifrada = _fernet().encrypt(password_plana.encode())
