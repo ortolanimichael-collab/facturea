@@ -9,6 +9,125 @@ from almacenamiento import guardar_archivo_persistente
 
 EXTENSIONES_VALIDAS = {"png", "jpg", "jpeg", "pdf"}
 
+# ---------- Mercado Pago: mapa de payment_method_id -> ARCA ----------
+# Cuando no encuentra un código exacto acá, cae a "Otra..." con el nombre
+# que mandó Mercado Pago como detalle -- mismo criterio que ya se usa para
+# las tarjetas que el lector de imágenes no reconoce (ver lector_core.py).
+MAPA_TARJETAS_MERCADOPAGO = {
+    # Débito
+    "debvisa": ("Otra...", "VISA Débito"),  # "Visa" a secas en Débito no es una opción real de ARCA, ver lector_core.py
+    "debmaster": ("Mastercard Débito", None),
+    "maestro": ("Maestro", None),
+    "debcabal": ("Cabal 24 hs", None),
+    # Crédito
+    "visa": ("Visa", None),
+    "master": ("Mastercard", None),
+    "amex": ("American Express", None),
+    "cabal": ("Cabal", None),
+    "naranja": ("Tarjeta Naranja", None),
+    "cencosud": ("Tarjeta Shopping", None),
+    "cordial": ("Credencial", None),
+}
+
+
+def _mapear_medio_pago_mercadopago(pago):
+    """
+    Traduce el payment_method_id/payment_type_id de un pago de Mercado Pago
+    a (medio_pago_detectado, tipo_pago, tipo_pago_detalle) -- el mismo
+    formato que ya usa el lector de imágenes, así el resto del sistema
+    (Revisión Manual, arca_bot.py) no necesita saber de dónde salió el dato.
+    """
+    payment_type_id = pago.get("payment_type_id") or ""
+    payment_method_id = pago.get("payment_method_id") or ""
+
+    if payment_type_id not in ("credit_card", "debit_card", "prepaid_card"):
+        # account_money (transferencia dentro de Mercado Pago), bank_transfer,
+        # ticket, etc. -- para ARCA todos van como "Transferencia Bancaria".
+        return "Transferencia", None, None
+
+    medio_pago = "Débito" if payment_type_id in ("debit_card", "prepaid_card") else "Crédito"
+    tipo_pago, detalle = MAPA_TARJETAS_MERCADOPAGO.get(payment_method_id, (None, None))
+    if tipo_pago is None:
+        # No está en el mapa -- se carga como "Otra..." con el nombre que
+        # mandó Mercado Pago, para no inventar una marca que no es.
+        detalle = (payment_method_id or "Tarjeta").upper()
+        tipo_pago = "Otra..."
+    return medio_pago, tipo_pago, detalle
+
+
+def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
+    """
+    Arma un Comprobante "pendiente" a partir de un pago ya traído de la API
+    de Mercado Pago (ver mercadopago_cliente.buscar_pagos) -- mismos valores
+    por defecto que procesar_archivo(), pero sin imagen: el monto, la fecha
+    y la tarjeta ya vienen exactos de Mercado Pago, sin que el lector tenga
+    que adivinar nada. Devuelve el Comprobante nuevo, o None si ese pago ya
+    se había traído antes (para no duplicarlo).
+    """
+    id_transaccion = f"MP-{pago['id']}"
+    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+        return None
+
+    importe_total = pago.get("transaction_amount") or 0.0
+    cantidad = 1.0
+    medio_pago_detectado, tipo_pago, tipo_pago_detalle = _mapear_medio_pago_mercadopago(pago)
+
+    if medio_pago_detectado == "Débito":
+        condicion_venta_default = "Tarjeta de Débito"
+    elif medio_pago_detectado == "Crédito":
+        condicion_venta_default = "Tarjeta de Crédito"
+    else:
+        condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0]
+
+    dias_atras = empresa.config_dias_atras_fecha_emision or 10
+    fecha_aprobado = pago.get("date_approved") or pago.get("date_created")
+    try:
+        fecha_comprobante = datetime.fromisoformat(fecha_aprobado).strftime("%d/%m/%Y")
+    except (TypeError, ValueError):
+        fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
+
+    if empresa.config_descripcion_aleatoria:
+        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    else:
+        opciones_descripcion = []
+    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+
+    alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
+    if alicuota_elegida is None:
+        alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
+
+    payer = pago.get("payer") or {}
+    nombre_pagador = (
+        f"{payer.get('first_name', '')} {payer.get('last_name', '')}".strip()
+        or payer.get("email") or None
+    )
+
+    fila = Comprobante(
+        usuario_id=usuario_id,
+        empresa_id=empresa.id,
+        id_transaccion=id_transaccion,
+
+        punto_venta=empresa.config_punto_venta,
+        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        descripcion=descripcion_elegida,
+        unidad_medida=empresa.config_unidad_medida,
+        precio_unitario=importe_total / cantidad,
+
+        nombre_remitente=nombre_pagador,
+        fecha_comprobante=fecha_comprobante,
+        medio_pago_detectado=medio_pago_detectado,
+        tipo_pago=tipo_pago,
+        tipo_pago_detalle=tipo_pago_detalle,
+        condicion_iva=empresa.config_condicion_iva,
+        condicion_venta=condicion_venta_default,
+        importe_total=importe_total,
+        cantidad=cantidad,
+        archivo_origen=f"Mercado Pago #{pago['id']}",
+    )
+    db.session.add(fila)
+    return fila
+
 
 def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_interfaz, cuit_propio_cliente="", drive_file_id=None):
     """

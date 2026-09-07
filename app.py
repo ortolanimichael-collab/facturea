@@ -22,6 +22,7 @@ from flask_login import (
 from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, DIAS_PRUEBA_GRATIS
 import drive_sync
 from procesador import procesar_archivo
+import procesador
 from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_facturacion, concepto_efectivo
 from previsualizacion_pdf import generar_pdf_preview, CONCEPTOS
 from almacenamiento import ruta_absoluta, eliminar_archivo_persistente
@@ -563,6 +564,45 @@ def empresa_mercadopago_desconectar(empresa_id):
         mercadopago_cliente.desconectar(empresa)
         db.session.commit()
     return redirect(url_for("empresas_editar", empresa_id=empresa_id))
+
+
+@app.route("/empresas/<int:empresa_id>/mercadopago/traer-movimientos", methods=["POST"])
+@login_required
+def empresa_mercadopago_traer_movimientos(empresa_id):
+    """
+    Trae los pagos aprobados de Mercado Pago de los últimos N días (30 por
+    defecto) y arma un Comprobante "pendiente" por cada uno que todavía no
+    se haya traído -- ver procesador.crear_comprobante_desde_pago_mercadopago.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+    if not empresa.tiene_mercadopago_conectado():
+        return jsonify(ok=False, error="Esta empresa no tiene Mercado Pago conectado."), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        dias = max(1, min(int(data.get("dias", 30)), 90))
+    except (TypeError, ValueError):
+        dias = 30
+
+    ahora = datetime.now()
+    fecha_hasta = ahora.strftime("%Y-%m-%dT23:59:59.000-03:00")
+    fecha_desde = (ahora - timedelta(days=dias)).strftime("%Y-%m-%dT00:00:00.000-03:00")
+
+    try:
+        pagos = mercadopago_cliente.buscar_pagos(empresa, fecha_desde, fecha_hasta)
+    except Exception as e:
+        return jsonify(ok=False, error=f"No se pudo traer los movimientos de Mercado Pago: {e}"), 502
+
+    nuevos = 0
+    for pago in pagos:
+        comprobante = procesador.crear_comprobante_desde_pago_mercadopago(pago, current_user.id, empresa)
+        if comprobante:
+            nuevos += 1
+    db.session.commit()
+
+    return jsonify(ok=True, encontrados=len(pagos), nuevos=nuevos)
 
 
 # ---------- Comprobantes (por empresa) ----------
