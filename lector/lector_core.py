@@ -111,7 +111,7 @@ def detectar_fondo_oscuro(ruta):
 # ARCA para Débito se llama "Visa Electrón" (a secas "Visa" solo existe del
 # lado de Crédito). Confirmado con capturas reales del desplegable de ARCA.
 MAPA_MARCA_DEBITO = {
-    "visa": "Visa Electrón", "visa electron": "Visa Electrón", "visa electrón": "Visa Electrón",
+    "visa electron": "Visa Electrón", "visa electrón": "Visa Electrón",
     "mastercard": "Mastercard Débito", "master": "Mastercard Débito",
     "maestro": "Maestro",
     "cabal": "Cabal 24 hs",
@@ -133,13 +133,28 @@ def _normalizar_marca_tarjeta(marca_cruda, medio_pago):
     """
     Traduce lo que dice el comprobante (ej: "Visa") a la opción EXACTA que
     tiene ARCA en el desplegable de Tipo, que depende de si es Débito o
-    Crédito. Si la marca no está en el mapa (una que todavía no vimos en
-    ningún ejemplo real), cae en "Otra" -- es una opción válida en los dos
-    desplegables, así que la factura igual se puede hacer; el usuario puede
-    corregir la marca exacta a mano en la tabla si la conoce.
+    Crédito. Devuelve (marca, detalle):
+    - "marca" es siempre una opción real del desplegable (incluye "Otra...").
+    - "detalle" es el texto libre a cargar en la casilla que aparece al
+      elegir "Otra...", o None si la marca ya es una opción directa.
+
+    Caso especial: "Visa" a secas en DÉBITO (el caso más común en la
+    práctica, confirmado con comprobantes reales de Mercado Pago Point y
+    POS) NO es una opción real de ARCA para Débito -- ahí solo existe
+    "Visa Electrón", que es un producto distinto. Antes esto se mapeaba mal
+    a "Visa Electrón"; ahora se carga como "Otra..." con "VISA Débito" en
+    el detalle, para no declarar una marca de tarjeta que no es la real.
+    Solo se mapea a "Visa Electrón" cuando el texto trae explícitamente
+    las dos palabras juntas ("visa electron"/"visa electrón", caso raro);
+    si solo dice "Visa" a secas, siempre cae en el caso especial de arriba.
     """
+    clave = marca_cruda.strip().lower()
+    if medio_pago == "Débito" and clave == "visa":
+        return "Otra...", "VISA Débito"
     mapa = MAPA_MARCA_DEBITO if medio_pago == "Débito" else MAPA_MARCA_CREDITO
-    return mapa.get(marca_cruda.strip().lower(), "Otra")
+    if clave in mapa:
+        return mapa[clave], None
+    return "Otra...", None
 
 
 def _detectar_medio_pago(texto):
@@ -150,10 +165,12 @@ def _detectar_medio_pago(texto):
     terminada en 2450". Si esa frase no aparece, se asume que es una
     transferencia (que es lo único que el lector reconocía hasta ahora).
 
-    Devuelve (medio_pago, tipo_pago, numero_pago). tipo_pago y numero_pago
-    quedan en None si es una transferencia (no aplica) o si no se pudo leer.
-    tipo_pago ya viene traducido a la opción exacta que espera ARCA (ver
-    _normalizar_marca_tarjeta).
+    Devuelve (medio_pago, tipo_pago, numero_pago, tipo_pago_detalle).
+    tipo_pago, numero_pago y tipo_pago_detalle quedan en None si es una
+    transferencia (no aplica) o si no se pudo leer. tipo_pago ya viene
+    traducido a la opción exacta que espera ARCA (ver
+    _normalizar_marca_tarjeta); tipo_pago_detalle solo trae texto cuando
+    tipo_pago es "Otra...".
 
     El "numero_pago" que se puede sacar de un comprobante real son SOLO los
     últimos dígitos que muestra el comprobante (nunca el número completo de
@@ -163,17 +180,40 @@ def _detectar_medio_pago(texto):
         r'([A-Za-záéíóúüñÁÉÍÓÚÜÑ]+)\s+(d[eé]bito|cr[eé]dito)\s+terminada\s+en\s+(\d+)',
         texto, re.IGNORECASE,
     )
-    if not patron:
-        return "Transferencia", None, None
+    if patron:
+        marca_cruda = patron.group(1).strip()
+        tipo_encontrado = patron.group(2).lower()
+        numero = patron.group(3).strip()
 
-    marca_cruda = patron.group(1).strip()
-    tipo_encontrado = patron.group(2).lower()
-    numero = patron.group(3).strip()
+        medio_pago = "Débito" if tipo_encontrado.startswith("d") else "Crédito"
+        marca, detalle = _normalizar_marca_tarjeta(marca_cruda, medio_pago)
 
-    medio_pago = "Débito" if tipo_encontrado.startswith("d") else "Crédito"
-    marca = _normalizar_marca_tarjeta(marca_cruda, medio_pago)
+        return medio_pago, marca, numero, detalle
 
-    return medio_pago, marca, numero
+    # Formato "SmartPos" / lectores de tarjeta tipo POS (confirmado con un
+    # comprobante real): "Tarjeta Visa débito Débito **3453" -- la marca y
+    # el tipo aparecen juntos (a veces repetidos: "débito" en minúscula
+    # como parte del nombre del producto de la tarjeta, y de nuevo
+    # "Débito" como etiqueta del tipo de pago), y el número que se ve son
+    # los últimos dígitos detrás de un enmascarado con asteriscos, no la
+    # frase "terminada en X".
+    patron_pos = re.search(
+        r'Tarjeta\s+([A-Za-záéíóúüñÁÉÍÓÚÜÑ]+)\s+(d[eé]bito|cr[eé]dito)\b'
+        r'(?:\s+(?:d[eé]bito|cr[eé]dito))?'
+        r'\s*\*{1,2}\s*(\d{3,6})\b',
+        texto, re.IGNORECASE,
+    )
+    if patron_pos:
+        marca_cruda = patron_pos.group(1).strip()
+        tipo_encontrado = patron_pos.group(2).lower()
+        numero = patron_pos.group(3).strip()
+
+        medio_pago = "Débito" if tipo_encontrado.startswith("d") else "Crédito"
+        marca, detalle = _normalizar_marca_tarjeta(marca_cruda, medio_pago)
+
+        return medio_pago, marca, numero, detalle
+
+    return "Transferencia", None, None, None
 
 
 def limpiar_nombre(texto):
@@ -338,6 +378,15 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                     print(f"  🟢 [DEBUG-BRUBANK-PDF] CUIT destino: {cuit}")
                     break
 
+            # Otro CUIT/CUIL encontrado en el PDF (probablemente el emisor),
+            # para ofrecer como alternativa en Revisión Manual.
+            cuit_alternativo = "0"
+            for c_raw in todos_cuits_bru:
+                c_limpio = re.sub(r'\D', '', c_raw)
+                if c_limpio != cuit and c_limpio != cuit_propio_cliente and len(c_limpio) == 11:
+                    cuit_alternativo = c_limpio
+                    break
+
             # --- FECHA ---
             # "09 de mayo de 2026 - 22:26"  o  "O9 de mayo de 2026" (OCR: 0→O)
             fecha_servicio = datetime.now().strftime('%d/%m/%Y')
@@ -374,13 +423,15 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
 
             # --- RETORNO ---
             cuit_valido = cuit if cuit != "0" else ""
+            cuit_alternativo_valido = cuit_alternativo if cuit_alternativo != "0" else ""
             tipo_doc = "CUIT" if cuit_valido else "DNI"
             fecha_emision_final = fecha_servicio  # la fecha real detectada, sin "pisar" con hoy (ver nota en _fecha_emision_efectiva más arriba)
-            medio_pago, tipo_pago_detectado, numero_pago_detectado = _detectar_medio_pago(texto_raw)
+            medio_pago, tipo_pago_detectado, numero_pago_detectado, tipo_pago_detalle_detectado = _detectar_medio_pago(texto_raw)
             condicion_venta_detectada = {"Débito": "Tarjeta de Débito", "Crédito": "Tarjeta de Crédito"}.get(medio_pago)  # None si es Transferencia -> deja que gane la config de la empresa, no se fuerza "Contado"
             return {
                 "Tipo Documento": tipo_doc,
                 "CUIT Receptor": cuit_valido,
+                "CUIT Alternativo": cuit_alternativo_valido,
                 "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
                 "Nombre Remitente": "No detectado",  # TODO: extracción de remitente pendiente para este formato PDF
                 "Fecha del Comprobante": fecha_emision_final,
@@ -388,6 +439,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 "Condicion Venta": condicion_venta_detectada,
                 "Medio Pago": medio_pago,
                 "Tipo Pago": tipo_pago_detectado,
+                "Tipo Pago Detalle": tipo_pago_detalle_detectado,
                 "Numero Pago": numero_pago_detectado,
                 "Fecha Desde": fecha_servicio,
                 "Fecha Hasta": fecha_servicio,
@@ -448,8 +500,25 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                         cuit = c
                         print(f"  🟡 [DEBUG-UALÁ] CUIT por fallback regex: {cuit}")
                         break
+
+            # Otro CUIT/CUIL encontrado en la imagen (probablemente el emisor),
+            # para ofrecer como alternativa en Revisión Manual -- se calcula
+            # ANTES de descartar el propio, así si el elegido resulta ser el
+            # de la empresa, hay un candidato listo para poner en su lugar
+            # en vez de dejar el campo vacío sin necesidad.
+            cuit_alternativo = "0"
+            for c in cuits_limpios:
+                if c != cuit and c != cuit_propio_cliente:
+                    cuit_alternativo = c
+                    break
+
             if cuit_propio_cliente and cuit == cuit_propio_cliente:
-                cuit = "0"
+                # El elegido era el CUIT propio de la empresa (el emisor, no
+                # el receptor) -- se usa el otro que se haya encontrado en
+                # su lugar; si no hay otro, queda vacío (Tipo Documento =
+                # DNI más abajo, vía cuit_valido).
+                cuit = cuit_alternativo
+                cuit_alternativo = "0"
             print(f"  🟢 [DEBUG-UALÁ] CUIT final: {cuit}")
 
             # --- FECHA ---
@@ -530,14 +599,16 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                     print(f"  🔴 [DEBUG-UALÁ] ID NO encontrado. Líneas con 'id' o 'op': {lineas_id_op}")
 
             cuit_valido = cuit if cuit != "0" else ""
+            cuit_alternativo_valido = cuit_alternativo if cuit_alternativo != "0" else ""
             tipo_doc = "CUIT" if cuit_valido else "DNI"
             fecha_emision_final = fecha_servicio  # la fecha real detectada, sin "pisar" con hoy (ver nota en _fecha_emision_efectiva más arriba)
-            medio_pago, tipo_pago_detectado, numero_pago_detectado = _detectar_medio_pago(texto_raw)
+            medio_pago, tipo_pago_detectado, numero_pago_detectado, tipo_pago_detalle_detectado = _detectar_medio_pago(texto_raw)
             condicion_venta_detectada = {"Débito": "Tarjeta de Débito", "Crédito": "Tarjeta de Crédito"}.get(medio_pago)  # None si es Transferencia -> deja que gane la config de la empresa, no se fuerza "Contado"
             print(f"  💳 [Ualá {'Fmt1' if es_uala_fmt1 else 'Fmt2'}] {nombre_razon_social[:20]} | ${monto_total_texto} | ID: {nro_movimiento[:15]}")
             return {
                 "Tipo Documento": tipo_doc,
                 "CUIT Receptor": cuit_valido,
+                "CUIT Alternativo": cuit_alternativo_valido,
                 "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
                 "Nombre Remitente": "No detectado",  # TODO: extracción de remitente pendiente para este formato PDF
                 "Fecha del Comprobante": fecha_emision_final,
@@ -545,6 +616,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 "Condicion Venta": condicion_venta_detectada,
                 "Medio Pago": medio_pago,
                 "Tipo Pago": tipo_pago_detectado,
+                "Tipo Pago Detalle": tipo_pago_detalle_detectado,
                 "Numero Pago": numero_pago_detectado,
                 "Fecha Desde": fecha_servicio,
                 "Fecha Hasta": fecha_servicio,
@@ -616,9 +688,21 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                     cuit = c
                     break
 
-        # Si el CUIT encontrado es el propio del cliente → ignorar
+        # Si el lector encontró más de un CUIT/CUIL en la imagen (lo normal:
+        # uno es el emisor y el otro el receptor), se guarda el otro como
+        # alternativa -- en Revisión Manual se puede elegir ese en vez del
+        # que se tomó acá, por si el lector se equivocó de cuál es cuál.
+        cuit_alternativo = "0"
+        for c in cuits_limpios:
+            if c != cuit and c != cuit_propio_cliente:
+                cuit_alternativo = c
+                break
+
+        # Si el CUIT encontrado es el propio del cliente → se usa el otro
+        # que se haya encontrado en su lugar; si no hay otro, queda vacío.
         if cuit_propio_cliente and cuit == cuit_propio_cliente:
-            cuit = "0"
+            cuit = cuit_alternativo
+            cuit_alternativo = "0"
 
         # ── FECHA ─────────────────────────────────────────────────────────────
         fecha_servicio = datetime.now().strftime('%d/%m/%Y')
@@ -771,14 +855,16 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
 
         # ── RESULTADO ─────────────────────────────────────────────────────────
         cuit_valido = cuit if cuit != "0" else ""
+        cuit_alternativo_valido = cuit_alternativo if cuit_alternativo != "0" else ""
         tipo_doc = "CUIT" if cuit_valido else "DNI"
 
         fecha_emision_final = fecha_servicio  # la fecha real detectada, sin "pisar" con hoy (ver nota en _fecha_emision_efectiva más arriba)
-        medio_pago, tipo_pago_detectado, numero_pago_detectado = _detectar_medio_pago(texto_raw)
+        medio_pago, tipo_pago_detectado, numero_pago_detectado, tipo_pago_detalle_detectado = _detectar_medio_pago(texto_raw)
         condicion_venta_detectada = {"Débito": "Tarjeta de Débito", "Crédito": "Tarjeta de Crédito"}.get(medio_pago)  # None si es Transferencia -> deja que gane la config de la empresa, no se fuerza "Contado"
         return {
             "Tipo Documento": tipo_doc,
             "CUIT Receptor": cuit_valido,
+            "CUIT Alternativo": cuit_alternativo_valido,
             "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
             "Nombre Remitente": "No detectado",  # TODO: extracción de remitente pendiente para este formato PDF
             "Fecha del Comprobante": fecha_emision_final,
@@ -786,6 +872,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
             "Condicion Venta": condicion_venta_detectada,
             "Medio Pago": medio_pago,
             "Tipo Pago": tipo_pago_detectado,
+            "Tipo Pago Detalle": tipo_pago_detalle_detectado,
             "Numero Pago": numero_pago_detectado,
             "Fecha Desde": fecha_servicio,
             "Fecha Hasta": fecha_servicio,
@@ -946,13 +1033,22 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                         "CONTRASENA", "CONFIRMACION", "COMPROBANTE", "MERCADOPAGO",
                         "DESCONOCIDO", "INGRESANDO", "INMEDIATO", "PERSONAS",
                         "BANCARIAS", "CONSULTAR", "MODULO", "TRANSFERENCIAS",
-                        "TRANSFERENCIA", "COMPROBANTES", "ACREDITACION"
+                        "TRANSFERENCIA", "COMPROBANTES", "ACREDITACION",
+                        "TRANSFERISTE", "TRANSFERIR", "TRANSFIRIENDO", "TRANSFIRIO",
                     }
-                    # Filtrar para asegurarse de que no es un CBU ocultado, palabra falsa, o algo muy corto/largo
+                    # Filtrar para asegurarse de que no es un CBU ocultado, palabra falsa, o algo muy corto/largo.
+                    # IMPORTANTE: también exigimos que tenga al menos un dígito -- ningún ID real de
+                    # los que reconoce el sistema (Coelsa, Ualá, Brubank GUID, etc.) es puro texto sin
+                    # números, así que una cadena solo de letras es casi siempre una palabra del título
+                    # o del cuerpo de la pantalla (como "TRANSFERISTE") que el OCR devolvió pegada sin
+                    # espacios, no un número de operación real -- confiar en ella causaba que CUALQUIER
+                    # captura con esa misma palabra (sin importar monto ni fecha) se marcara como
+                    # duplicado de cualquier otra.
                     candidatos_validos = [
                         m.upper() for m in matches_alfanumericos
                         if m != "[CBU_OCULTADO]" and 10 <= len(m) <= 40
                         and m.upper() not in PALABRAS_FALSAS
+                        and re.search(r'\d', m)
                     ]
 
                     if candidatos_validos:
@@ -1095,8 +1191,13 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                         break
 
         # ── BUSQUEDA DE CUIT ─────────────────────────────────────────────────
+        # OJO: el patrón tiene un grupo de captura, así que se usa finditer
+        # (no findall) para quedarse con el match COMPLETO de cada CUIT
+        # encontrado, no solo el prefijo de 2 dígitos.
         patron_cuit = r'\b(20|23|24|27|30|33|34)-?\d{8}-?\d{1}\b'
-        cuit_match = re.search(patron_cuit, texto)
+        matches_cuit = list(re.finditer(patron_cuit, texto))
+        cuit_match = matches_cuit[0] if matches_cuit else None
+        cuits_limpios_img = [m.group().replace("-", "").replace(".", "").strip() for m in matches_cuit]
 
         # ── BANCO SIN NOMBRE: el CUIT está en la línea de "Movimiento" ─────────
         # Formato: "NOMBRE APELLIDO\n20XXXXXXXXX" (11 dígitos sin guiones)
@@ -1128,6 +1229,16 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
         # cercano a él).
         if cuit == "0" and cuit_match:
             cuit = str(cuit_match.group().replace("-", "").replace(".", "").strip())
+
+        # Otro CUIT/CUIL encontrado en la imagen (probablemente el emisor, ya
+        # que el primero del documento casi siempre lo es -- ver comentario
+        # arriba), para ofrecer como alternativa en Revisión Manual, por si
+        # el lector se equivocó de cuál de los dos es el receptor.
+        cuit_alternativo = "0"
+        for c in cuits_limpios_img:
+            if c != cuit and c != cuit_propio_cliente:
+                cuit_alternativo = c
+                break
 
         # --- BÚSQUEDA DE NOMBRE DE QUIEN TRANSFIERE (remitente) ---
         # Se reconocen las etiquetas más habituales para identificar al emisor
@@ -1357,13 +1468,19 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
 
         # Si no se detectó CUIT válido, Tipo = DNI y número en blanco
         cuit_valido = cuit if cuit != "0" else ""
+        cuit_alternativo_valido = cuit_alternativo if cuit_alternativo != "0" else ""
 
         # --- DETECCIÓN DE CUIT PROPIO (REMITENTE) ---
         # Si el CUIT encontrado en la imagen es el del cliente activo,
-        # significa que es el que ENVÍA, no el destinatario → tratarlo como DNI sin número
+        # significa que es el que ENVÍA, no el destinatario -- se usa el
+        # otro CUIT/CUIL que se haya encontrado en su lugar (si lo hay); si
+        # no hay otro, queda vacío y se trata como DNI sin número.
         if cuit_valido and cuit_propio_cliente and cuit_valido == cuit_propio_cliente:
-            print(f"  ⚠️  CUIT {cuit_valido} es el del remitente (cliente activo) → se omite")
-            cuit_valido = ""
+            print(f"  ⚠️  CUIT {cuit_valido} es el del remitente (cliente activo) → se reemplaza por el otro detectado")
+            cuit_valido = cuit_alternativo_valido if cuit_alternativo_valido != cuit_propio_cliente else ""
+            cuit_alternativo_valido = ""
+        if cuit_alternativo_valido and cuit_propio_cliente and cuit_alternativo_valido == cuit_propio_cliente:
+            cuit_alternativo_valido = ""
 
         tipo_doc = "CUIT" if cuit_valido else "DNI"
 
@@ -1454,12 +1571,45 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                 nro_movimiento = f"DET-{datetime.now().strftime('%d%m%y%H%M%S%f')}"
                 print(f"  🔑 [Detalle-SinBanco] ID fallback: {nro_movimiento} ({e_id})")
 
+        # --- FALLBACK GENERAL: cualquier otro formato sin ID visible ───────────
+        # Pantallas de confirmación simples (ej. Mercado Pago "Transferiste $X"
+        # sin entrar a "Mostrar comprobante") no muestran ningún número de
+        # operación. Hasta acá, todas esas capturas quedaban con
+        # id_transaccion = "Desconocido" -- literal, la misma palabra siempre --
+        # y como la detección de duplicados compara ese texto tal cual, CUALQUIER
+        # transferencia nueva de este tipo (de cualquier monto, cualquier fecha,
+        # a cualquier destinatario) chocaba contra la primera que se hubiera
+        # guardado alguna vez con esa palabra para esa empresa, marcándose como
+        # duplicado sin serlo. Se arma un ID con los mismos datos que ya se
+        # extrajeron (fecha + monto + nombre + cuit), igual que el fallback de
+        # Detalle-Coelsa de arriba -- dos transferencias distintas casi nunca
+        # comparten los cuatro datos a la vez.
+        if nro_movimiento == "Desconocido":
+            try:
+                if fecha_servicio and "/" in fecha_servicio:
+                    f_partes = fecha_servicio.split("/")
+                    parte_fecha = f_partes[0] + f_partes[1] + f_partes[2][2:]
+                else:
+                    parte_fecha = datetime.now().strftime("%d%m%y")
+
+                parte_monto = str(int(importe_encontrado)) if importe_encontrado > 0 else "0"
+                nombre_completo_id = re.sub(r'[^A-Z]', '', nombre_razon_social.upper())
+                cuit_para_id = cuit_valido if cuit_valido else cuit
+                cuit_completo_id = re.sub(r'\D', '', str(cuit_para_id)) if cuit_para_id and cuit_para_id != "0" else "SINCUIT"
+
+                nro_movimiento = f"GEN-{parte_fecha}-{parte_monto}-{nombre_completo_id}-{cuit_completo_id}"
+                print(f"  🔑 [Fallback general] Sin ID visible, ID por datos completos: {nro_movimiento}")
+            except Exception as e_id:
+                nro_movimiento = f"GEN-{datetime.now().strftime('%d%m%y%H%M%S%f')}"
+                print(f"  🔑 [Fallback general] ID fallback: {nro_movimiento} ({e_id})")
+
         fecha_emision_final = fecha_servicio  # la fecha real detectada, sin "pisar" con hoy (ver nota en _fecha_emision_efectiva más arriba)
-        medio_pago, tipo_pago_detectado, numero_pago_detectado = _detectar_medio_pago(texto)
+        medio_pago, tipo_pago_detectado, numero_pago_detectado, tipo_pago_detalle_detectado = _detectar_medio_pago(texto)
         condicion_venta_detectada = {"Débito": "Tarjeta de Débito", "Crédito": "Tarjeta de Crédito"}.get(medio_pago)  # None si es Transferencia -> deja que gane la config de la empresa, no se fuerza "Contado"
         return {
             "Tipo Documento": tipo_doc,
             "CUIT Receptor": cuit_valido,
+            "CUIT Alternativo": cuit_alternativo_valido,
             "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
             "Nombre Remitente": nombre_remitente,  # Quien TRANSFIERE el dinero (si se pudo detectar)
             "Fecha del Comprobante": fecha_emision_final,
@@ -1467,6 +1617,7 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
             "Condicion Venta": condicion_venta_detectada,
             "Medio Pago": medio_pago,
             "Tipo Pago": tipo_pago_detectado,
+            "Tipo Pago Detalle": tipo_pago_detalle_detectado,
             "Numero Pago": numero_pago_detectado,
             "Fecha Desde": fecha_servicio,
             "Fecha Hasta": fecha_servicio,

@@ -86,6 +86,23 @@
   .visor-duplicado-imagen iframe{width:100%;height:82vh;border:none;}
   .visor-duplicado-imagen .sin-seleccion{font-family:var(--mono);font-size:12.5px;color:var(--muted);}
 
+  .form-agregar-manual{border-top:1.5px solid var(--line);padding:16px 14px;background:var(--paper-2);}
+  .form-agregar-manual .fila{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  .form-agregar-manual .fila > div{flex:1;min-width:160px;}
+  .form-agregar-manual label{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:5px;}
+  .form-agregar-manual input{
+    width:100%;font-family:var(--sans);font-size:13px;padding:9px 10px;border-radius:3px;
+    border:1.5px solid var(--line);background:#fff;color:var(--ink);
+  }
+  .form-agregar-manual .acciones{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .form-agregar-manual .btn-cancelar{
+    font-family:var(--mono);font-size:12.5px;color:var(--muted);background:none;border:none;
+    cursor:pointer;text-decoration:underline;
+  }
+  .form-agregar-manual .msg{font-family:var(--mono);font-size:12px;}
+  .form-agregar-manual .msg.error{color:var(--stamp);}
+  .form-agregar-manual .msg.success{color:var(--teal-deep);}
+
   .listas-nombres{margin-top:16px;display:flex;flex-direction:column;gap:8px;}
   .listas-nombres details{
     background:var(--paper);border:1.5px solid var(--line);border-radius:3px;padding:10px 14px;
@@ -97,6 +114,18 @@
   .tip-edicion{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-bottom:14px;}
 
   .tabla-scroll{overflow-x:auto;border:1.5px solid var(--ink);border-radius:2px;}
+
+  /* Barra de scroll horizontal "fantasma": se pega abajo de la ventana
+     mientras la tabla está a la vista, para no tener que bajar hasta el
+     final de todas las filas solo para desplazarse a los costados. Se
+     muestra por JS únicamente si la tabla realmente desborda a los lados. */
+  .scroll-fantasma-wrap{
+    display:none; position:sticky; bottom:0; z-index:20;
+    overflow-x:auto; overflow-y:hidden; height:14px;
+    background:var(--paper); border:1.5px solid var(--ink); border-top:none;
+    border-radius:0 0 2px 2px;
+  }
+  .scroll-fantasma{height:1px;}
   table{width:max-content;min-width:100%;border-collapse:collapse;background:var(--paper-2);}
   thead th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1.5px solid var(--ink);white-space:nowrap;}
   thead th[data-field]{cursor:pointer;}
@@ -162,21 +191,115 @@
     width:400px;min-width:340px;overflow-y:auto;padding:22px;background:var(--paper-2);
     border-right:1.5px solid rgba(0,0,0,0.2);
   }
-  .revision-panel-der{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;background:#15170F;}
+  .revision-panel-der{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;overflow:auto;background:#15170F;gap:10px;}
   .revision-panel-der img{max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
-  .revision-panel-der iframe{width:100%;height:100%;border:none;background:#fff;border-radius:2px;}
+  .revision-panel-der canvas{max-width:100%;height:auto;display:block;border-radius:2px;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
   .revision-panel-der .sin-archivo{color:#9AA396;font-family:var(--mono);font-size:13px;text-align:center;}
 
   .campo-revision{margin-bottom:14px;}
+
+  .widget-descripcion{display:flex;flex-direction:column;gap:4px;}
+  .btn-volver-lista{
+    align-self:flex-start;background:none;border:none;color:var(--muted);
+    font-family:var(--mono);font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline;
+  }
+  .btn-volver-lista:hover{color:var(--ink);}
+
+  .seccion-lineas-extra{
+    margin-top:20px;padding-top:16px;border-top:1.5px dashed var(--line);
+  }
+  .seccion-lineas-extra h3{font-family:var(--mono);font-size:13px;margin:0 0 12px;}
+  .linea-extra{
+    background:var(--paper-2);border:1.5px solid var(--line);border-radius:3px;
+    padding:14px;margin-bottom:14px;
+  }
+  .linea-extra-encabezado{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px;
+  }
+  .btn-eliminar-linea{
+    background:none;border:1.5px solid var(--stamp);color:var(--stamp);border-radius:3px;
+    padding:3px 10px;font-family:var(--mono);font-size:11px;cursor:pointer;
+  }
+  .btn-eliminar-linea:hover{background:var(--stamp);color:var(--paper);}
+  .btn-agregar-linea{
+    display:block;width:100%;background:var(--paper-2);border:1.5px dashed var(--ink);
+    border-radius:3px;padding:10px;font-family:var(--mono);font-size:13px;cursor:pointer;
+  }
+  .btn-agregar-linea:hover{background:var(--teal-tint);}
+  .btn-agregar-linea:disabled{opacity:0.6;cursor:default;}
   .campo-revision label{font-family:var(--mono);font-size:11px;color:var(--muted);display:block;margin-bottom:5px;}
   .campo-revision input, .campo-revision select{
     width:100%;font-family:var(--sans);font-size:14px;padding:9px 10px;border-radius:3px;
     border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
   }
   .campo-revision input:focus, .campo-revision select:focus{outline:none;border-color:var(--teal);}
+  .btn-usar-otro-cuit{
+    display:block;width:100%;margin-top:6px;background:none;border:none;cursor:pointer;
+    font-family:var(--mono);font-size:11px;color:var(--teal-deep);text-decoration:underline;
+    text-align:left;padding:0;
+  }
+  .btn-usar-otro-cuit:hover{color:var(--stamp);}
+
+  tr.fila-monto-bajo{background:rgba(184,58,42,0.06);}
+  td.celda-monto{white-space:nowrap;}
+  td.monto-revisar{color:var(--stamp);font-weight:700;}
+  .badge-revisar{
+    display:inline-block;margin-left:8px;padding:2px 7px;border-radius:3px;
+    background:var(--stamp);color:#fff;font-family:var(--mono);font-size:10px;
+    font-weight:700;letter-spacing:0.4px;vertical-align:middle;
+  }
+  .badge-revisar-bloque{display:block;margin:6px 0 0;width:fit-content;}
   .campo-revision .valor-solo-lectura{
     font-family:var(--sans);font-size:14px;padding:9px 10px;border-radius:3px;
     border:1.5px solid var(--line);background:var(--paper);color:var(--muted);
+  }
+
+  /* ==================================================================
+     MÓVIL — todo lo de acá abajo solo aplica en pantallas angostas.
+     La regla general: los botones se achican, y la Revisión Manual pasa
+     de "imagen al lado de los datos" (dos columnas fijas, pensado para
+     escritorio) a "imagen arriba, datos abajo" con todo en un solo
+     scroll vertical -- las dos columnas fijas de 400px+ no entran en el
+     ancho de un celular ni por asomo.
+     ================================================================== */
+  @media (max-width:820px){
+    .wrap{padding:18px 14px 60px;}
+    header{margin-bottom:18px;gap:10px;}
+    .logo{font-size:16px;}
+    .nav-links{gap:12px;font-size:12px;flex-wrap:wrap;}
+    h1{font-size:18px;}
+    p.sub{font-size:13px;}
+
+    .barra-acciones{padding:14px;gap:10px;margin:14px 0;}
+    .upload-box{gap:10px;width:100%;}
+    .upload-box input[type=file]{font-size:12px;max-width:100%;}
+    .btn{font-size:12px;padding:8px 12px;}
+    .tabs-nav{gap:6px;}
+    .tab-btn{padding:8px 12px;font-size:12px;}
+    .tab-contenido{padding:14px;}
+
+    .acciones-fila{gap:4px;}
+    .acciones-fila button{font-size:10px;padding:5px 8px;}
+
+    /* ---- Revisión manual: apilada, con un solo scroll ---- */
+    .revision-topbar{padding:10px 12px;gap:8px;}
+    .revision-topbar .info-izq{font-size:11px;gap:8px;}
+    .revision-topbar button{font-size:11px;padding:7px 10px;}
+    .revision-tip{display:none;} /* el tip de teclado (↓ ↑ ← →) no aplica tocando la pantalla */
+
+    .revision-cuerpo{flex-direction:column;overflow:hidden;}
+    .revision-panel-der{
+      order:-1; /* la imagen/PDF va primero: mirás el comprobante antes de revisar los datos */
+      flex:0 0 60vh; /* tamaño FIJO -- ocupa la mayor parte de la pantalla y no se mueve ni se achica al scrollear los datos de abajo */
+      width:100%;padding:10px;overflow:auto; /* overflow:auto solo por si un PDF de varias páginas no entra entero */
+      min-height:0;
+    }
+    .revision-panel-izq{
+      flex:1 1 auto;min-width:0;min-height:0; /* ocupa el resto -- es la ÚNICA parte que se scrollea */
+      width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;
+      border-right:none;border-top:1.5px solid rgba(0,0,0,0.2);
+    }
   }
 </style>
 </head>
@@ -208,6 +331,7 @@
       <button id="btnSubir" class="btn">Subir y leer</button>
     </div>
     <button id="btnFacturarTodo" class="btn btn-facturar-todo">Facturar todo lo pendiente</button>
+    <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
     <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
     <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
     <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
@@ -215,12 +339,39 @@
 
   <div id="resumen" class="resumen"></div>
 
-  {% set opciones_tipo_comprobante = [
+  {% set opciones_tipo_comprobante_ri = [
+    "Factura A", "Nota de Débito A", "Nota de Crédito A", "Recibo A",
+    "Factura B", "Nota de Débito B", "Nota de Crédito B", "Recibo B",
+    "Factura T", "Nota de Débito T", "Nota de Crédito T",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) A",
+    "Nota de Débito Electrónica MiPyMEs (FCE) A",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) A",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) B",
+    "Nota de Débito Electrónica MiPyMEs (FCE) B",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) B"
+  ] %}
+  {% set opciones_tipo_comprobante_monotributo = [
     "Factura C", "Nota de Débito C", "Nota de Crédito C", "Recibo C",
     "Factura de Crédito Electrónica MiPyMEs (FCE) C",
     "Nota de Débito Electrónica MiPyMEs (FCE) C",
     "Nota de Crédito Electrónica MiPyMEs (FCE) C"
   ] %}
+  {% set opciones_tipo_comprobante = opciones_tipo_comprobante_ri if empresa.tipo_contribuyente == "Responsable Inscripto" else opciones_tipo_comprobante_monotributo %}
+  {# Los 8 valores reales del desplegable "Alícuota IVA" de ARCA, confirmados
+     con una captura real -- No Gravado, Exento y 0% son TRES conceptos
+     legalmente distintos, no una sola opción "0" como había antes acá. #}
+  {% set opciones_alicuota_iva = [
+    ("NO_GRAVADO", "No Gravado"), ("EXENTO", "Exento"), ("0", "0%"),
+    ("2.5", "2,5%"), ("5", "5%"), ("10.5", "10,5%"), ("21", "21%"), ("27", "27%")
+  ] %}
+  {% set mapa_alicuota_etiquetas = dict(opciones_alicuota_iva) %}
+  {% set desc_list = (empresa.descripciones_disponibles or "").split(",") | select | list %}
+  {% set alic_list = (empresa.descripciones_alicuotas or "").split(",") %}
+  {% set descripciones_con_alicuota = [] %}
+  {% for d in desc_list %}
+    {% set alic = alic_list[loop.index0] if loop.index0 < alic_list|length else "" %}
+    {% set _ = descripciones_con_alicuota.append([d, alic]) %}
+  {% endfor %}
   {% set opciones_condicion_iva = [
     "IVA Responsable Inscripto", "IVA Sujeto Exento", "Consumidor Final",
     "Responsable Monotributo", "Sujeto No Categorizado", "Proveedor del Exterior",
@@ -236,10 +387,10 @@
     "Cheque", "Transferencia Bancaria", "Otra", "Otros medios de pago electrónico"
   ] %}
   {% set opciones_medio_pago_detectado = ["Transferencia", "Débito", "Crédito"] %}
-  {% set opciones_tipo_pago = [
-    "Maestro", "Visa Electrón", "Cabal 24 hs", "Mastercard Débito",
+  {% set opciones_tipo_pago_debito = ["Maestro", "Visa Electrón", "Cabal 24 hs", "Mastercard Débito", "Otra..."] %}
+  {% set opciones_tipo_pago_credito = [
     "American Express", "Visa", "Mastercard", "Credencial", "Carta Franca",
-    "Cabal", "Diners", "Tarjeta Shopping", "Tarjeta Naranja", "Otra"
+    "Cabal", "Diners", "Tarjeta Shopping", "Tarjeta Naranja", "Otra..."
   ] %}
   {% set opciones_unidad_medida = [
     "kilogramos", "metros", "metros cuadrados", "metros cúbicos", "litros", "1000 kWh",
@@ -255,8 +406,8 @@
 
   {% if comprobantes %}
   <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe.</p>
-  <div class="tabla-scroll">
-    <table>
+  <div class="tabla-scroll" id="tablaScroll">
+    <table id="tablaComprobantes">
       <thead>
         <tr>
           <th data-field="punto_venta" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Punto de venta</th>
@@ -273,10 +424,11 @@
           <th data-field="condicion_venta" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Condición de venta</th>
           <th data-field="tipo_pago" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de tarjeta</th>
           <th data-field="numero_pago" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Número de tarjeta</th>
-          <th data-field="descripcion" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Descripción</th>
+          <th data-field="descripcion" data-type="{{ 'select' if empresa.tipo_contribuyente == 'Responsable Inscripto' else 'text' }}" title="Doble clic para aplicar un valor a toda la columna">Descripción</th>
           <th data-field="cantidad" data-type="number" title="Doble clic para aplicar un valor a toda la columna">Cantidad</th>
           <th data-field="unidad_medida" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Unidad de medida</th>
           <th data-field="precio_unitario" data-type="number" title="Doble clic para aplicar un valor a toda la columna">Precio unitario</th>
+          <th data-field="alicuota_iva" data-type="select" title="Solo aplica a Responsable Inscripto. Doble clic para aplicar un valor a toda la columna">Alícuota de IVA</th>
           <th data-field="nombre_razon_social" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Recibe</th>
           <th data-field="id_transaccion" data-type="text" title="Doble clic para aplicar un valor a toda la columna">ID transacción</th>
           <th>Imagen origen</th>
@@ -288,7 +440,9 @@
       <tbody>
         {% for c in comprobantes %}
         {% set editable = c.estado != "facturado" %}
-        <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }}">
+        {% set monto_bajo = (c.precio_unitario or 0) < 100 %}
+        {% set falta_cuit_a = ((c.tipo_comprobante or "").strip().endswith(" A") or (c.tipo_documento or "").strip().upper() in ("CUIT", "CUIL")) and not c.cuit_receptor %}
+        <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a) }}">
           <td {% if editable %}data-field="punto_venta" data-type="text" data-value="{{ c.punto_venta or '' }}"{% endif %}>{{ c.punto_venta or "—" }}</td>
           <td {% if editable %}data-field="tipo_comprobante" data-type="select" data-value="{{ c.tipo_comprobante or '' }}"{% endif %}>{{ c.tipo_comprobante or "—" }}</td>
           <td {% if editable %}data-field="fecha_comprobante" data-type="date" data-value="{{ c.fecha_comprobante or '' }}"{% endif %}>{{ c.fecha_comprobante or "—" }}</td>
@@ -297,16 +451,23 @@
           <td {% if editable %}data-field="fecha_desde" data-type="date" data-value="{{ c.fecha_desde or '' }}"{% endif %}>{{ c.fecha_desde or "—" }}</td>
           <td {% if editable %}data-field="fecha_hasta" data-type="date" data-value="{{ c.fecha_hasta or '' }}"{% endif %}>{{ c.fecha_hasta or "—" }}</td>
           <td {% if editable %}data-field="tipo_documento" data-type="select" data-value="{{ c.tipo_documento or '' }}"{% endif %}>{{ c.tipo_documento or "—" }}</td>
-          <td {% if editable %}data-field="cuit_receptor" data-type="text" data-value="{{ c.cuit_receptor or '' }}"{% endif %}>{{ c.cuit_receptor or "—" }}</td>
+          <td {% if editable %}data-field="cuit_receptor" data-type="text" data-value="{{ c.cuit_receptor or '' }}"{% endif %} class="{{ 'monto-revisar' if falta_cuit_a }}">
+            {{ c.cuit_receptor or "—" }}
+            {% if falta_cuit_a %}<span class="badge-revisar" title="Este tipo de comprobante (clase A) exige CUIT del receptor -- corregilo antes de facturar.">REVISAR</span>{% endif %}
+          </td>
           <td {% if editable %}data-field="medio_pago_detectado" data-type="select" data-value="{{ c.medio_pago_detectado or '' }}"{% endif %}>{{ c.medio_pago_detectado or "—" }}</td>
           <td {% if editable %}data-field="condicion_iva" data-type="select" data-value="{{ c.condicion_iva or '' }}"{% endif %}>{{ c.condicion_iva or "—" }}</td>
           <td {% if editable %}data-field="condicion_venta" data-type="select" data-value="{{ c.condicion_venta or '' }}"{% endif %}>{{ c.condicion_venta or "—" }}</td>
           <td {% if editable %}data-field="tipo_pago" data-type="select" data-value="{{ c.tipo_pago or '' }}"{% endif %}>{{ c.tipo_pago or "—" }}</td>
           <td {% if editable %}data-field="numero_pago" data-type="text" data-value="{{ c.numero_pago or '' }}"{% endif %}>{{ c.numero_pago or "—" }}</td>
-          <td {% if editable %}data-field="descripcion" data-type="text" data-value="{{ c.descripcion or '' }}"{% endif %}>{{ c.descripcion or "—" }}</td>
+          <td {% if editable %}data-field="descripcion" data-type="{{ 'select' if empresa.tipo_contribuyente == 'Responsable Inscripto' else 'text' }}" data-value="{{ c.descripcion or '' }}"{% endif %}>{{ c.descripcion or "—" }}</td>
           <td {% if editable %}data-field="cantidad" data-type="number" data-value="{{ c.cantidad or 1 }}"{% endif %}>{{ c.cantidad or 1 }}</td>
           <td {% if editable %}data-field="unidad_medida" data-type="select" data-value="{{ c.unidad_medida or '' }}"{% endif %}>{{ c.unidad_medida or "—" }}</td>
-          <td {% if editable %}data-field="precio_unitario" data-type="number" data-value="{{ c.precio_unitario or 0 }}"{% endif %}>$ {{ "%.2f"|format(c.precio_unitario or 0) }}</td>
+          <td {% if editable %}data-field="precio_unitario" data-type="number" data-value="{{ c.precio_unitario or 0 }}"{% endif %} class="celda-monto{{ ' monto-revisar' if monto_bajo }}">
+            $ {{ "%.2f"|format(c.precio_unitario or 0) }}
+            {% if monto_bajo %}<span class="badge-revisar" title="Un comprobante con este monto no se puede facturar -- corregilo antes.">REVISAR</span>{% endif %}
+          </td>
+          <td {% if editable %}data-field="alicuota_iva" data-type="select" data-value="{{ c.alicuota_iva or '' }}"{% endif %}>{{ mapa_alicuota_etiquetas.get(c.alicuota_iva, c.alicuota_iva) if c.alicuota_iva else "—" }}</td>
           <td {% if editable %}data-field="nombre_razon_social" data-type="text" data-value="{{ c.nombre_razon_social or '' }}"{% endif %}>{{ c.nombre_razon_social or "No detectado" }}</td>
           <td {% if editable %}data-field="id_transaccion" data-type="text" data-value="{{ c.id_transaccion or '' }}"{% endif %}>{{ c.id_transaccion or "—" }}</td>
           <td>{{ c.archivo_origen or "—" }}</td>
@@ -318,8 +479,8 @@
             <div class="acciones-fila">
               <button class="btn-revisar" data-id="{{ c.id }}">Revisar</button>
               {% if editable %}
-              <button class="btn-facturar {{ 'reintentar' if c.estado == 'error' }}" data-id="{{ c.id }}">{{ "Reintentar" if c.estado == "error" else "Facturar" }}</button>
-              <button class="btn-probar" data-id="{{ c.id }}">Probar</button>
+              <button class="btn-facturar {{ 'reintentar' if c.estado == 'error' }}" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de facturar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>{{ "Reintentar" if c.estado == "error" else "Facturar" }}</button>
+              <button class="btn-probar" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de probar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>Probar</button>
               <button class="btn-editar-fila" data-id="{{ c.id }}">Editar fila</button>
               <button class="btn-eliminar" data-id="{{ c.id }}">Eliminar</button>
               {% endif %}
@@ -330,6 +491,9 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+  <div class="scroll-fantasma-wrap" id="scrollFantasmaWrap">
+    <div class="scroll-fantasma" id="scrollFantasma"></div>
   </div>
   {% else %}
   <div class="vacio">Todavía no hay comprobantes. Subí una captura arriba para probarlo.</div>
@@ -392,20 +556,36 @@
     </div>
     {% endif %}
 
-    {% if stats.nombres_bloqueados or stats.nombres_error %}
+    {% if stats.errores_detalle %}
+    <h3>Archivos con error de lectura</h3>
+    <p class="tip-edicion">Hacé clic en un archivo para verlo. Si podés leer los datos a simple vista, cargalo a mano con "Agregar a la tabla" -- no hace falta volver a subir la imagen.</p>
+    <div class="comparador-duplicados">
+      <ul class="lista-duplicados" id="listaErrores">
+        {% for er in stats.errores_detalle %}
+        <li class="item-duplicado" data-registro-id="{{ er.registro_id }}" data-tiene-imagen="{{ 'true' if er.tiene_imagen else 'false' }}">
+          {{ er.nombre_archivo }}
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="visor-duplicado">
+        <div class="visor-duplicado-topbar">
+          <span id="visorErrorTitulo">Elegí un archivo de la lista</span>
+          <button type="button" id="btnAgregarManualError" style="display:none;">Agregar y editar</button>
+        </div>
+        <div class="visor-duplicado-imagen" id="visorErrorImagen">
+          <span class="sin-seleccion">Sin selección</span>
+        </div>
+        <span class="msg" id="emFormMsg" style="display:block;padding:8px 14px;"></span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if stats.nombres_bloqueados %}
     <div class="listas-nombres">
-      {% if stats.nombres_bloqueados %}
       <details>
         <summary>Ver los {{ stats.nombres_bloqueados|length }} archivo(s) bloqueados</summary>
         <ul>{% for n in stats.nombres_bloqueados %}<li>{{ n }}</li>{% endfor %}</ul>
       </details>
-      {% endif %}
-      {% if stats.nombres_error %}
-      <details>
-        <summary>Ver los {{ stats.nombres_error|length }} archivo(s) con error de lectura</summary>
-        <ul>{% for n in stats.nombres_error %}<li>{{ n }}</li>{% endfor %}</ul>
-      </details>
-      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -431,6 +611,17 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  // Renderiza el PDF nosotros mismos con canvas, en vez de un <iframe> --
+  // el visor nativo de PDF del navegador (del que depende un iframe) anda
+  // bien en la mayoría de las PCs, pero en el celular (sobre todo Safari
+  // de iPhone, y a veces Chrome de Android) no lo muestra adentro de la
+  // página y en cambio manda a abrirlo aparte. Con pdf.js dibujado en un
+  // <canvas> se ve exactamente igual en cualquier navegador, celular
+  // incluido.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
 <script>
 function mostrarTabComprobantes(idPestaña) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('activa', b.dataset.tab === idPestaña));
@@ -440,25 +631,30 @@ function mostrarTabComprobantes(idPestaña) {
 const EMPRESA_ID = {{ empresa.id }};
 const DATOS_REVISION = {{ datos_revision | tojson }};
 const CAMPOS_REVISION = [
-  { campo: 'punto_venta', etiqueta: 'Punto de venta', tipo: 'texto' },
+  { campo: 'precio_unitario', etiqueta: 'Monto', tipo: 'numero' },
+  { campo: 'fecha_facturacion_manual', etiqueta: 'Fecha de facturación', tipo: 'date' },
+  {% if empresa.tipo_contribuyente == "Responsable Inscripto" %}
+  { campo: 'alicuota_iva', etiqueta: 'Alícuota de IVA', tipo: 'select' },
+  {% endif %}
   { campo: 'tipo_comprobante', etiqueta: 'Tipo de factura', tipo: 'select' },
   { campo: 'fecha_comprobante', etiqueta: 'Fecha del comprobante', tipo: 'date' },
   { campo: 'concepto', etiqueta: 'Concepto', tipo: 'select' },
   { campo: 'fecha_desde', etiqueta: 'Desde', tipo: 'date' },
   { campo: 'fecha_hasta', etiqueta: 'Hasta', tipo: 'date' },
-  { campo: 'tipo_documento', etiqueta: 'Tipo de documento', tipo: 'select' },
   { campo: 'cuit_receptor', etiqueta: 'CUIL/CUIT/Documento', tipo: 'texto' },
+  { campo: 'tipo_documento', etiqueta: 'Tipo de documento', tipo: 'select' },
   { campo: 'medio_pago_detectado', etiqueta: 'Medio de pago detectado', tipo: 'select' },
   { campo: 'condicion_iva', etiqueta: 'Condición de IVA', tipo: 'select' },
   { campo: 'condicion_venta', etiqueta: 'Condición de venta', tipo: 'select' },
   { campo: 'tipo_pago', etiqueta: 'Tipo de tarjeta', tipo: 'select' },
+  { campo: 'tipo_pago_detalle', etiqueta: 'Detalle (si elegiste "Otra...")', tipo: 'texto' },
   { campo: 'numero_pago', etiqueta: 'Número de tarjeta', tipo: 'texto' },
-  { campo: 'descripcion', etiqueta: 'Descripción', tipo: 'texto' },
+  { campo: 'descripcion', etiqueta: 'Descripción', tipo: '{{ "select" if empresa.tipo_contribuyente == "Responsable Inscripto" else "texto" }}' },
   { campo: 'cantidad', etiqueta: 'Cantidad', tipo: 'numero' },
   { campo: 'unidad_medida', etiqueta: 'Unidad de medida', tipo: 'select' },
-  { campo: 'precio_unitario', etiqueta: 'Precio unitario', tipo: 'numero' },
   { campo: 'nombre_razon_social', etiqueta: 'Recibe', tipo: 'texto' },
   { campo: 'id_transaccion', etiqueta: 'ID transacción', tipo: 'texto' },
+  { campo: 'punto_venta', etiqueta: 'Punto de venta', tipo: 'texto' },
 ];
 
 const LISTAS = {
@@ -467,10 +663,224 @@ const LISTAS = {
   medio_pago_detectado: {{ opciones_medio_pago_detectado | tojson }},
   tipo_documento: {{ opciones_tipo_doc | tojson }},
   condicion_venta: {{ opciones_condicion_venta | tojson }},
-  tipo_pago: {{ opciones_tipo_pago | tojson }},
+  tipo_pago_debito: {{ opciones_tipo_pago_debito | tojson }},
+  tipo_pago_credito: {{ opciones_tipo_pago_credito | tojson }},
   unidad_medida: {{ opciones_unidad_medida | tojson }},
+  alicuota_iva: ["NO_GRAVADO", "EXENTO", "0", "2.5", "5", "10.5", "21", "27"],
 };
+const MAPA_ALICUOTA_ETIQUETAS = {{ dict(opciones_alicuota_iva) | tojson }};
 const CONCEPTOS = {{ conceptos | tojson }};
+const ES_RESPONSABLE_INSCRIPTO = {{ (empresa.tipo_contribuyente == "Responsable Inscripto") | tojson }};
+const DESCRIPCIONES_ALICUOTA = {{ descripciones_con_alicuota | tojson }};
+
+function opcionesDescripcionPara() {
+  // Cada opción muestra "Descripción (alícuota%)" para elegir a simple
+  // vista, pero el VALOR que se guarda es solo la descripción tal cual --
+  // el mismo texto que después usa alicuota_para_descripcion() del lado
+  // del servidor para reconocerla y aplicar la alícuota sola.
+  return DESCRIPCIONES_ALICUOTA.map(([d, a]) => [d, a ? `${d} (${MAPA_ALICUOTA_ETIQUETAS[a] || a})` : d]);
+}
+
+function opcionesAlicuotaPara() {
+  return LISTAS.alicuota_iva.map(v => [v, MAPA_ALICUOTA_ETIQUETAS[v] || v]);
+}
+
+function opcionesTipoPagoPara(medioPago) {
+  const lista = medioPago === 'Crédito' ? LISTAS.tipo_pago_credito : LISTAS.tipo_pago_debito;
+  return lista.map(v => [v, v]);
+}
+
+function etiquetaAlicuota(valor) {
+  return valor ? (MAPA_ALICUOTA_ETIQUETAS[valor] || valor) : '—';
+}
+
+// Widget reutilizable para "Descripción": un desplegable con las opciones
+// precargadas de la empresa, más una opción para escribir un texto libre a
+// mano -- se usa tanto en el campo principal del comprobante como en cada
+// línea extra. `onGuardar(valorNuevo)` se llama al confirmar un cambio,
+// sea por el desplegable o por el texto escrito a mano.
+function crearWidgetDescripcion(valorActual, onGuardar) {
+  const contenedor = document.createElement('div');
+  contenedor.className = 'widget-descripcion';
+
+  function mostrarTexto(valorInicial) {
+    contenedor.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valorInicial;
+    input.placeholder = 'Escribí la descripción...';
+    input.addEventListener('blur', () => onGuardar(input.value));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    contenedor.appendChild(input);
+
+    const volver = document.createElement('button');
+    volver.type = 'button';
+    volver.className = 'btn-volver-lista';
+    volver.textContent = '▾ elegir de la lista';
+    volver.addEventListener('click', mostrarSelect);
+    contenedor.appendChild(volver);
+    input.focus();
+  }
+
+  function mostrarSelect() {
+    contenedor.innerHTML = '';
+    const select = document.createElement('select');
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    select.appendChild(vacio);
+    opcionesDescripcionPara().forEach(([v, t]) => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = t;
+      if (v === valorActual) opt.selected = true;
+      select.appendChild(opt);
+    });
+    const optManual = document.createElement('option');
+    optManual.value = '__MANUAL__';
+    optManual.textContent = '✏️ Escribir manualmente...';
+    select.appendChild(optManual);
+    select.addEventListener('change', () => {
+      if (select.value === '__MANUAL__') {
+        mostrarTexto('');
+      } else {
+        onGuardar(select.value);
+      }
+    });
+    contenedor.appendChild(select);
+  }
+
+  // Si ya tenía cargado un texto que no coincide con ninguna opción
+  // precargada (lo escribieron a mano antes, o el lector detectó algo
+  // distinto), arranca directo en modo texto en vez de mostrar el
+  // desplegable con nada seleccionado.
+  const coincideConOpcion = DESCRIPCIONES_ALICUOTA.some(([d]) => d === valorActual);
+  if (valorActual && !coincideConOpcion) {
+    mostrarTexto(valorActual);
+  } else {
+    mostrarSelect();
+  }
+
+  return contenedor;
+}
+
+// Widget reutilizable para el "Detalle" de Tipo de tarjeta cuando se elige
+// "Otra...": mismo mecanismo que crearWidgetDescripcion (desplegable con
+// opciones precargadas + opción para escribir a mano), pero con la lista
+// fija de marcas que no son una opción real de ARCA -- hoy solo
+// "VISA Débito" (Visa a secas en Débito, distinto de "Visa Electrón").
+const OPCIONES_DETALLE_TARJETA_OTRA = ["VISA Débito"];
+function crearWidgetDetalleTarjeta(valorActual, onGuardar) {
+  const contenedor = document.createElement('div');
+  contenedor.className = 'widget-descripcion';
+
+  function mostrarTexto(valorInicial) {
+    contenedor.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valorInicial;
+    input.placeholder = 'Escribí el detalle...';
+    input.addEventListener('blur', () => onGuardar(input.value));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    contenedor.appendChild(input);
+
+    const volver = document.createElement('button');
+    volver.type = 'button';
+    volver.className = 'btn-volver-lista';
+    volver.textContent = '▾ elegir de la lista';
+    volver.addEventListener('click', mostrarSelect);
+    contenedor.appendChild(volver);
+    input.focus();
+  }
+
+  function mostrarSelect() {
+    contenedor.innerHTML = '';
+    const select = document.createElement('select');
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    select.appendChild(vacio);
+    OPCIONES_DETALLE_TARJETA_OTRA.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      if (v === valorActual) opt.selected = true;
+      select.appendChild(opt);
+    });
+    const optManual = document.createElement('option');
+    optManual.value = '__MANUAL__';
+    optManual.textContent = '✏️ Escribir manualmente...';
+    select.appendChild(optManual);
+    select.addEventListener('change', () => {
+      if (select.value === '__MANUAL__') {
+        mostrarTexto('');
+      } else {
+        onGuardar(select.value);
+      }
+    });
+    contenedor.appendChild(select);
+  }
+
+  const coincideConOpcion = OPCIONES_DETALLE_TARJETA_OTRA.includes(valorActual);
+  if (valorActual && !coincideConOpcion) {
+    mostrarTexto(valorActual);
+  } else {
+    mostrarSelect();
+  }
+
+  return contenedor;
+}
+
+// Qué "Condición de IVA" del receptor puede elegirse depende de qué Tipo de
+// comprobante se va a emitir -- confirmado con capturas reales de ARCA:
+// Factura A solo puede ir a alguien inscripto/monotributo (no a Consumidor
+// Final ni Exento); Factura B es al revés, para todos los demás. Cualquier
+// otro tipo (C, T, etc.) usa la lista completa de siempre.
+const CONDICION_IVA_FACTURA_A = [
+  "IVA Responsable Inscripto", "Responsable Monotributo",
+  "Monotributista Social", "Monotributista Trabajador Independiente Promovido",
+];
+const CONDICION_IVA_FACTURA_B = [
+  "IVA Sujeto Exento", "Consumidor Final", "Sujeto No Categorizado",
+  "Proveedor del Exterior", "Cliente del Exterior",
+  "IVA Liberado - Ley Nº 19.640", "IVA No Alcanzado",
+];
+function opcionesCondicionIvaPara(tipoComprobante) {
+  const tipo = (tipoComprobante || '').trim();
+  if (tipo.endsWith(' A')) return CONDICION_IVA_FACTURA_A;
+  if (tipo.endsWith(' B')) return CONDICION_IVA_FACTURA_B;
+  return LISTAS.condicion_iva;
+}
+
+/* ---------- Barra de scroll horizontal "fantasma" ---------- */
+(function () {
+  const tablaScroll = document.getElementById('tablaScroll');
+  const tabla = document.getElementById('tablaComprobantes');
+  const wrap = document.getElementById('scrollFantasmaWrap');
+  const fantasma = document.getElementById('scrollFantasma');
+  if (!tablaScroll || !tabla || !wrap || !fantasma) return; // no hay comprobantes cargados, no hay tabla
+
+  let sincronizando = false;
+
+  function actualizar() {
+    fantasma.style.width = tabla.scrollWidth + 'px';
+    // Solo se muestra si la tabla realmente desborda a los costados -- si
+    // entra completa en la pantalla, no hace falta ninguna barra extra.
+    wrap.style.display = (tabla.scrollWidth > tablaScroll.clientWidth) ? 'block' : 'none';
+  }
+
+  tablaScroll.addEventListener('scroll', () => {
+    if (sincronizando) return;
+    sincronizando = true;
+    wrap.scrollLeft = tablaScroll.scrollLeft;
+    sincronizando = false;
+  });
+  wrap.addEventListener('scroll', () => {
+    if (sincronizando) return;
+    sincronizando = true;
+    tablaScroll.scrollLeft = wrap.scrollLeft;
+    sincronizando = false;
+  });
+
+  window.addEventListener('resize', actualizar);
+  actualizar();
+})();
 
 function ddmmyyyyAIso(f) {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(f || '');
@@ -494,6 +904,16 @@ function activarEdicion(td) {
     let opciones;
     if (campo === 'concepto') {
       opciones = Object.entries(CONCEPTOS).map(([v, t]) => [v, t]);
+    } else if (campo === 'condicion_iva') {
+      const tdTipoComprobante = td.closest('tr').querySelector('td[data-field="tipo_comprobante"]');
+      opciones = opcionesCondicionIvaPara(tdTipoComprobante ? tdTipoComprobante.dataset.value : '').map(v => [v, v]);
+    } else if (campo === 'descripcion') {
+      opciones = opcionesDescripcionPara();
+    } else if (campo === 'alicuota_iva') {
+      opciones = opcionesAlicuotaPara();
+    } else if (campo === 'tipo_pago') {
+      const tdMedioPago = td.closest('tr').querySelector('td[data-field="medio_pago_detectado"]');
+      opciones = opcionesTipoPagoPara(tdMedioPago ? tdMedioPago.dataset.value : '');
     } else {
       opciones = (LISTAS[campo] || []).map(v => [v, v]);
     }
@@ -506,7 +926,10 @@ function activarEdicion(td) {
       if (valor === valorActual) opt.selected = true;
       widget.appendChild(opt);
     });
-    widget.addEventListener('change', () => guardarCampo(td, campo, widget.value, widget.options[widget.selectedIndex].textContent));
+    widget.addEventListener('change', () => {
+      const textoMostrar = (campo === 'descripcion') ? widget.value : widget.options[widget.selectedIndex].textContent;
+      guardarCampo(td, campo, widget.value, textoMostrar);
+    });
   } else if (tipo === 'date') {
     widget = document.createElement('input');
     widget.type = 'date';
@@ -539,6 +962,55 @@ function activarEdicion(td) {
   widget.focus();
 }
 
+function actualizarBotonesFacturarProbar(fila) {
+  const tdMonto = fila.querySelector('td[data-field="precio_unitario"]');
+  const tdTipo = fila.querySelector('td[data-field="tipo_comprobante"]');
+  const tdTipoDoc = fila.querySelector('td[data-field="tipo_documento"]');
+  const tdCuit = fila.querySelector('td[data-field="cuit_receptor"]');
+  const montoBajo = tdMonto ? (parseFloat(tdMonto.dataset.value) || 0) < 100 : false;
+  const tipoComprobante = tdTipo ? (tdTipo.dataset.value || '').trim() : '';
+  const tipoDocumento = tdTipoDoc ? (tdTipoDoc.dataset.value || '').trim().toUpperCase() : '';
+  const cuit = tdCuit ? (tdCuit.dataset.value || '').trim() : '';
+  const exigeCuit = tipoComprobante.endsWith(' A') || tipoDocumento === 'CUIT' || tipoDocumento === 'CUIL';
+  const faltaCuit = exigeCuit && !cuit;
+
+  fila.classList.toggle('fila-monto-bajo', montoBajo || faltaCuit);
+  let titulo = '';
+  if (montoBajo) titulo = 'Monto inválido -- corregilo antes de facturar';
+  else if (faltaCuit) titulo = 'Falta el número de documento -- obligatorio para este tipo de comprobante/documento';
+  [fila.querySelector('.btn-facturar'), fila.querySelector('.btn-probar')].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = montoBajo || faltaCuit;
+    btn.title = titulo;
+  });
+}
+
+function actualizarAvisoCuitFacturaA(fila) {
+  const tdTipo = fila.querySelector('td[data-field="tipo_comprobante"]');
+  const tdTipoDoc = fila.querySelector('td[data-field="tipo_documento"]');
+  const tdCuit = fila.querySelector('td[data-field="cuit_receptor"]');
+  if (!tdCuit) return;
+  const tipoComprobante = tdTipo ? (tdTipo.dataset.value || '').trim() : '';
+  const tipoDocumento = tdTipoDoc ? (tdTipoDoc.dataset.value || '').trim().toUpperCase() : '';
+  const cuit = (tdCuit.dataset.value || '').trim();
+  const exigeCuit = tipoComprobante.endsWith(' A') || tipoDocumento === 'CUIT' || tipoDocumento === 'CUIL';
+  const faltaCuit = exigeCuit && !cuit;
+
+  tdCuit.classList.toggle('monto-revisar', faltaCuit);
+  let badge = tdCuit.querySelector('.badge-revisar');
+  if (faltaCuit && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'badge-revisar';
+    badge.title = 'Este tipo de comprobante o de documento exige el número -- corregilo antes de facturar.';
+    badge.textContent = 'REVISAR';
+    tdCuit.appendChild(badge);
+  } else if (!faltaCuit && badge) {
+    badge.remove();
+  }
+
+  actualizarBotonesFacturarProbar(fila);
+}
+
 async function guardarCampo(td, campo, valor, textoMostrar) {
   try {
     const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${td.closest('tr').dataset.comprobanteId}/editar`, {
@@ -553,7 +1025,65 @@ async function guardarCampo(td, campo, valor, textoMostrar) {
       return;
     }
     td.dataset.value = valor;
-    td.textContent = (campo === 'precio_unitario') ? `$ ${parseFloat(valor || 0).toFixed(2)}` : (textoMostrar || valor || '—');
+    if (campo === 'precio_unitario') {
+      const montoNum = parseFloat(valor) || 0;
+      const montoBajo = montoNum < 100;
+      td.className = 'celda-monto' + (montoBajo ? ' monto-revisar' : '');
+      td.textContent = `$ ${montoNum.toFixed(2)}`;
+      if (montoBajo) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-revisar';
+        badge.title = 'Un comprobante con este monto no se puede facturar -- corregilo antes.';
+        badge.textContent = 'REVISAR';
+        td.appendChild(badge);
+      }
+      actualizarBotonesFacturarProbar(td.closest('tr'));
+    } else {
+      td.textContent = textoMostrar || valor || '—';
+    }
+
+    // El servidor ya recalculó Desde, Hasta y la fecha de facturación a
+    // partir de esta fecha nueva -- se refleja acá sin repetir esa cuenta.
+    if (campo === 'fecha_comprobante') {
+      const fila = td.closest('tr');
+      ['fecha_desde', 'fecha_hasta'].forEach(campoDependiente => {
+        if (!data[campoDependiente]) return;
+        const tdDependiente = fila.querySelector(`td[data-field="${campoDependiente}"]`);
+        if (tdDependiente) {
+          tdDependiente.dataset.value = data[campoDependiente];
+          tdDependiente.textContent = data[campoDependiente];
+        }
+      });
+      if (data.fecha_facturacion_manual) {
+        const tdFacturacion = fila.querySelector('.col-fecha-ajustada');
+        if (tdFacturacion) tdFacturacion.textContent = data.fecha_facturacion_manual;
+      }
+      if (data.concepto) {
+        const tdConcepto = fila.querySelector('td[data-field="concepto"]');
+        if (tdConcepto) {
+          tdConcepto.dataset.value = data.concepto;
+          tdConcepto.textContent = CONCEPTOS[data.concepto] || '—';
+        }
+      }
+    }
+
+    // Si esta descripción tiene una alícuota propia cargada para la
+    // empresa, el servidor ya la aplicó sola -- se refleja acá.
+    if (campo === 'descripcion' && data.alicuota_iva) {
+      const fila = td.closest('tr');
+      const tdAlicuota = fila.querySelector('td[data-field="alicuota_iva"]');
+      if (tdAlicuota) {
+        tdAlicuota.dataset.value = data.alicuota_iva;
+        tdAlicuota.textContent = etiquetaAlicuota(data.alicuota_iva);
+      }
+    }
+
+    // Factura A (y variantes: Nota de Débito/Crédito A, Recibo A, FCE A)
+    // exige CUIT del receptor siempre -- si se tocó cualquiera de los dos
+    // campos involucrados, se recalcula el aviso.
+    if (campo === 'tipo_comprobante' || campo === 'cuit_receptor' || campo === 'tipo_documento') {
+      actualizarAvisoCuitFacturaA(td.closest('tr'));
+    }
   } catch (e) {
     alert('No se pudo conectar con el servidor.');
     td.textContent = td.dataset.value || '—';
@@ -588,6 +1118,15 @@ function activarEdicionColumna(th) {
     let opciones;
     if (campo === 'concepto') {
       opciones = Object.entries(CONCEPTOS).map(([v, t]) => [v, t]);
+    } else if (campo === 'descripcion') {
+      opciones = opcionesDescripcionPara();
+    } else if (campo === 'alicuota_iva') {
+      opciones = opcionesAlicuotaPara();
+    } else if (campo === 'tipo_pago') {
+      // Acá se aplica el mismo valor a TODAS las filas pendientes de
+      // golpe, sin una fila puntual de la que sacar el medio de pago -- se
+      // ofrecen débito y crédito juntas nada más para este caso particular.
+      opciones = [...LISTAS.tipo_pago_debito, ...LISTAS.tipo_pago_credito].map(v => [v, v]);
     } else {
       opciones = (LISTAS[campo] || []).map(v => [v, v]);
     }
@@ -599,7 +1138,10 @@ function activarEdicionColumna(th) {
       opt.value = valor; opt.textContent = texto;
       widget.appendChild(opt);
     });
-    widget.addEventListener('change', () => confirmarYAplicar(widget.value, widget.options[widget.selectedIndex].textContent));
+    widget.addEventListener('change', () => {
+      const textoMostrar = (campo === 'descripcion') ? widget.value : widget.options[widget.selectedIndex].textContent;
+      confirmarYAplicar(widget.value, textoMostrar);
+    });
   } else if (tipo === 'date') {
     widget = document.createElement('input');
     widget.type = 'date';
@@ -752,8 +1294,12 @@ async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
   );
   if (!ok) return;
 
+  const btnDetener = document.getElementById('btnDetenerFacturacion');
   btn.disabled = true;
   btn.textContent = 'Facturando... no cierres esta pestaña';
+  btnDetener.style.display = 'inline-block';
+  btnDetener.disabled = false;
+  btnDetener.textContent = 'Detener';
   try {
     const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos`, {
       method: 'POST',
@@ -764,6 +1310,8 @@ async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
     if (data.ok) {
       const corte = data.resumen.detenido_por_limite
         ? `\n\nSe detuvo porque el próximo comprobante superaba el límite de $${limiteMonto.toLocaleString('es-AR')}. Quedaron comprobantes sin facturar.`
+        : data.resumen.detenido_manualmente
+        ? `\n\nSe detuvo porque tocaste "Detener". Quedaron comprobantes sin facturar.`
         : '';
       alert(`Listo. Facturados: ${data.resumen.facturados} · Errores: ${data.resumen.errores} · Monto facturado: $${data.resumen.monto_facturado.toLocaleString('es-AR')}${corte}`);
     } else {
@@ -772,8 +1320,32 @@ async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
   } catch (e) {
     alert('No se pudo conectar con el servidor.');
   }
+  btnDetener.style.display = 'none';
   window.location.reload();
 }
+
+document.getElementById('btnDetenerFacturacion').addEventListener('click', async () => {
+  const btnDetener = document.getElementById('btnDetenerFacturacion');
+  btnDetener.disabled = true;
+  btnDetener.textContent = 'Deteniendo...';
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/detener-facturacion`, { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo detener: ' + data.error);
+      btnDetener.disabled = false;
+      btnDetener.textContent = 'Detener';
+    }
+    // Si salió bien, se deja deshabilitado con "Deteniendo..." -- se va a
+    // terminar de ocultar solo cuando la facturación en curso responda
+    // (después de terminar el comprobante que esté procesando en ese
+    // momento, no corta a mitad de uno).
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    btnDetener.disabled = false;
+    btnDetener.textContent = 'Detener';
+  }
+});
 
 document.getElementById('btnFacturarTodo').addEventListener('click', () => {
   facturarTodosConLimite(document.getElementById('btnFacturarTodo'), null);
@@ -873,6 +1445,98 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowLeft') { e.preventDefault(); mostrandoDuplicadoActual = false; renderVisorDuplicado(); }
 });
 
+/* ---------- Visor de archivos con error de lectura ---------- */
+const itemsErrores = Array.from(document.querySelectorAll('#listaErrores .item-duplicado'));
+let indiceErrorActual = -1;
+
+function renderVisorError() {
+  if (indiceErrorActual < 0) return;
+  const item = itemsErrores[indiceErrorActual];
+  const registroId = item.dataset.registroId;
+  const tieneImagen = item.dataset.tieneImagen === 'true';
+
+  const titulo = document.getElementById('visorErrorTitulo');
+  const btnAgregar = document.getElementById('btnAgregarManualError');
+  const contenedorImagen = document.getElementById('visorErrorImagen');
+  const msg = document.getElementById('emFormMsg');
+  msg.textContent = '';
+  msg.className = 'msg';
+
+  contenedorImagen.innerHTML = '';
+  if (!tieneImagen) {
+    titulo.textContent = 'No hay imagen guardada de este archivo';
+    contenedorImagen.innerHTML = '<span class="sin-seleccion">No se guardó la imagen (se subió antes de este arreglo).</span>';
+    btnAgregar.style.display = 'none';
+  } else {
+    titulo.textContent = 'Mostrando: archivo con error de lectura';
+    const img = document.createElement('img');
+    img.src = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
+    contenedorImagen.appendChild(img);
+    btnAgregar.style.display = 'inline-block';
+  }
+}
+
+function seleccionarError(indice) {
+  if (indice < 0 || indice >= itemsErrores.length) return;
+  indiceErrorActual = indice;
+  itemsErrores.forEach(i => i.classList.remove('seleccionado'));
+  const item = itemsErrores[indice];
+  item.classList.add('seleccionado');
+  renderVisorError();
+  try {
+    item.scrollIntoView({ block: 'nearest' });
+  } catch (e) {
+    // Comodidad visual nomás -- si falla, la imagen ya se mostró arriba igual.
+  }
+}
+
+itemsErrores.forEach((item, indice) => {
+  item.addEventListener('click', () => seleccionarError(indice));
+});
+
+const emFormMsg = document.getElementById('emFormMsg');
+
+const btnAgregarManualError = document.getElementById('btnAgregarManualError');
+if (btnAgregarManualError) {
+  btnAgregarManualError.addEventListener('click', async () => {
+    const item = itemsErrores[indiceErrorActual];
+    if (!item) return;
+    const registroId = item.dataset.registroId;
+
+    emFormMsg.textContent = '';
+    emFormMsg.className = 'msg';
+    btnAgregarManualError.disabled = true;
+    btnAgregarManualError.textContent = 'Agregando...';
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/registros/${registroId}/agregar-manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        // Se guarda para, apenas recargue la página, abrir Revisión Manual
+        // directo en este comprobante -- así se completa entero (monto,
+        // fecha, concepto, CUIT, todo) con el mismo editor de siempre, sin
+        // tener que ir a buscarlo entre los pendientes.
+        sessionStorage.setItem('abrirRevisionComprobanteId', String(data.comprobante_id));
+        window.location.reload();
+      } else {
+        emFormMsg.textContent = data.error || 'No se pudo agregar.';
+        emFormMsg.className = 'msg error';
+        btnAgregarManualError.disabled = false;
+        btnAgregarManualError.textContent = 'Agregar y editar';
+      }
+    } catch (err) {
+      emFormMsg.textContent = 'No se pudo conectar con el servidor.';
+      emFormMsg.className = 'msg error';
+      btnAgregarManualError.disabled = false;
+      btnAgregarManualError.textContent = 'Agregar y editar';
+    }
+  });
+}
+
 document.getElementById('btnSubir').addEventListener('click', async () => {
   const input = document.getElementById('archivos');
   const btn = document.getElementById('btnSubir');
@@ -951,6 +1615,71 @@ async function irARevision(delta) {
   renderRevision();
 }
 
+async function renderizarPdfEnVisor(url, contenedor) {
+  // Dibuja cada página del PDF en su propio <canvas>, en vez de confiar en
+  // que el navegador lo sepa mostrar solo dentro de un <iframe> -- ver el
+  // comentario de arriba de todo, junto a la carga de pdf.js.
+  contenedor.dataset.cargando = url;
+  contenedor.innerHTML = '<p class="sin-archivo">Cargando PDF...</p>';
+
+  try {
+    const pdf = await pdfjsLib.getDocument(url).promise;
+    if (contenedor.dataset.cargando !== url) return; // se pasó a otro comprobante mientras cargaba
+
+    contenedor.innerHTML = '';
+    const anchoDisponible = contenedor.clientWidth || 600;
+    // En el celular (ver breakpoint de 820px en el CSS), el visor tiene una
+    // altura FIJA -- ahí hay que ajustar la página por ancho Y por alto a
+    // la vez (como "contain" en una imagen), para que se vea SIEMPRE
+    // completa sin cortarse ni necesitar scroll. En la PC, el visor no
+    // tiene una altura fija (ocupa lo que haga falta con scroll propio si
+    // hace falta) -- ahí se sigue ajustando solo por ancho, como siempre.
+    const esMobile = window.innerWidth <= 820;
+    const altoDisponible = contenedor.clientHeight || 800;
+
+    for (let numPagina = 1; numPagina <= pdf.numPages; numPagina++) {
+      const pagina = await pdf.getPage(numPagina);
+      if (contenedor.dataset.cargando !== url) return;
+
+      const viewportBase = pagina.getViewport({ scale: 1 });
+      // "escalaMostrar" es el tamaño real que ocupa en pantalla (en píxeles
+      // CSS); "factorNitidez" solo agranda la resolución INTERNA del canvas
+      // para que no se vea pixelado en pantallas de alta densidad -- sin
+      // tocar el tamaño visual. Si se mezclaran los dos en una sola escala,
+      // el navegador termina reacomodando el tamaño visual solo (por el
+      // max-width:100% del CSS) y se pierde el ajuste por alto que se
+      // calculó acá.
+      let escalaMostrar;
+      if (esMobile) {
+        const escalaAncho = anchoDisponible / viewportBase.width;
+        const escalaAlto = altoDisponible / viewportBase.height;
+        escalaMostrar = Math.min(escalaAncho, escalaAlto);
+      } else {
+        escalaMostrar = anchoDisponible / viewportBase.width;
+      }
+      const factorNitidez = Math.min(window.devicePixelRatio || 1, 2);
+      const viewportMostrar = pagina.getViewport({ scale: escalaMostrar });
+      const viewportBuffer = pagina.getViewport({ scale: escalaMostrar * factorNitidez });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewportBuffer.width;
+      canvas.height = viewportBuffer.height;
+      canvas.style.width = viewportMostrar.width + 'px';
+      canvas.style.height = viewportMostrar.height + 'px';
+      contenedor.appendChild(canvas);
+
+      await pagina.render({ canvasContext: canvas.getContext('2d'), viewport: viewportBuffer }).promise;
+    }
+  } catch (err) {
+    if (contenedor.dataset.cargando !== url) return;
+    console.error('Error mostrando PDF con pdf.js:', err);
+    contenedor.innerHTML = `
+      <p class="sin-archivo">No se pudo mostrar el PDF acá.<br><span style="opacity:0.7;">Detalle: ${(err && err.message) || err}</span></p>
+      <a href="${url}" target="_blank" rel="noopener" style="color:#7FD1C0;font-family:var(--mono);font-size:13px;">Abrir el PDF en otra pestaña</a>
+    `;
+  }
+}
+
 function renderRevision() {
   const c = DATOS_REVISION[indiceRevision];
 
@@ -965,9 +1694,7 @@ function renderRevision() {
   if (c.tiene_archivo) {
     const url = `/empresas/${EMPRESA_ID}/comprobantes/${c.id}/archivo`;
     if (c.extension === 'pdf') {
-      const iframe = document.createElement('iframe');
-      iframe.src = url;
-      visor.appendChild(iframe);
+      renderizarPdfEnVisor(url, visor);
     } else {
       const img = document.createElement('img');
       img.src = url;
@@ -985,6 +1712,7 @@ function renderRevision() {
   const cont = document.getElementById('revisionCampos');
   cont.innerHTML = '';
   const soloLectura = c.estado === 'facturado';
+  const widgetsPorCampo = {}; // para poder tocar otro campo desde el handler de uno (ver fecha_comprobante y cuit_receptor)
 
   CAMPOS_REVISION.forEach(({ campo, etiqueta, tipo }) => {
     const valor = c.campos[campo] ?? '';
@@ -1000,44 +1728,437 @@ function renderRevision() {
       widget = document.createElement('div');
       widget.className = 'valor-solo-lectura';
       widget.textContent = (valor === '' || valor === null) ? '—' : valor;
+    } else if (campo === 'descripcion' && tipo === 'select') {
+      widget = crearWidgetDescripcion(valor, (nuevoValor) => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, nuevoValor).then(data => {
+          if (!data.ok || !data.alicuota_iva) return;
+          // Esta descripción tiene una alícuota propia cargada para la
+          // empresa -- el servidor ya la aplicó sola, se refleja acá.
+          const widgetAlicuota = widgetsPorCampo['alicuota_iva'];
+          if (widgetAlicuota) {
+            widgetAlicuota.value = data.alicuota_iva;
+            c.campos.alicuota_iva = data.alicuota_iva;
+          }
+        });
+      });
     } else if (tipo === 'select') {
       widget = document.createElement('select');
       const vacio = document.createElement('option');
       vacio.value = ''; vacio.textContent = 'seleccionar...';
       widget.appendChild(vacio);
-      const opciones = campo === 'concepto' ? Object.entries(CONCEPTOS) : (LISTAS[campo] || []).map(v => [v, v]);
+      const opciones = campo === 'concepto'
+        ? Object.entries(CONCEPTOS)
+        : campo === 'condicion_iva'
+        ? opcionesCondicionIvaPara(widgetsPorCampo['tipo_comprobante'] ? widgetsPorCampo['tipo_comprobante'].value : '').map(v => [v, v])
+        : campo === 'descripcion'
+        ? opcionesDescripcionPara()
+        : campo === 'alicuota_iva'
+        ? opcionesAlicuotaPara()
+        : campo === 'tipo_pago'
+        ? opcionesTipoPagoPara(widgetsPorCampo['medio_pago_detectado'] ? widgetsPorCampo['medio_pago_detectado'].value : '')
+        : (LISTAS[campo] || []).map(v => [v, v]);
       opciones.forEach(([v, t]) => {
         const opt = document.createElement('option');
         opt.value = v; opt.textContent = t;
         if (v === valor) opt.selected = true;
         widget.appendChild(opt);
       });
-      widget.addEventListener('change', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+      widget.addEventListener('change', () => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value).then(data => {
+          if (!data.ok || campo !== 'descripcion' || !data.alicuota_iva) return;
+          // Esta descripción tiene una alícuota propia cargada para la
+          // empresa -- el servidor ya la aplicó sola, se refleja acá.
+          const widgetAlicuota = widgetsPorCampo['alicuota_iva'];
+          if (widgetAlicuota) {
+            widgetAlicuota.value = data.alicuota_iva;
+            c.campos.alicuota_iva = data.alicuota_iva;
+          }
+        });
+      });
     } else if (tipo === 'date') {
       widget = document.createElement('input');
       widget.type = 'date';
       widget.value = ddmmyyyyAIso(valor);
       widget.addEventListener('blur', () => {
         if (!widget.value) return; // todavía no terminó de tipear una fecha válida
-        promesaGuardadoActual = guardarCampoRevision(c, campo, isoADdmmyyyy(widget.value));
+        const valorDdmmyyyy = isoADdmmyyyy(widget.value);
+
+        promesaGuardadoActual = guardarCampoRevision(c, campo, valorDdmmyyyy).then(data => {
+          if (!data.ok || campo !== 'fecha_comprobante') return;
+
+          // El servidor ya recalculó Desde, Hasta y la fecha de facturación
+          // (mismo criterio de siempre: hoy-10 días salvo que el comprobante
+          // sea más reciente) a partir de esta fecha nueva -- acá solo se
+          // refleja lo que ya quedó guardado, sin repetir esa cuenta en JS.
+          ['fecha_desde', 'fecha_hasta'].forEach(campoDependiente => {
+            const widgetDependiente = widgetsPorCampo[campoDependiente];
+            if (widgetDependiente && data[campoDependiente]) {
+              widgetDependiente.value = ddmmyyyyAIso(data[campoDependiente]);
+              c.campos[campoDependiente] = data[campoDependiente];
+            }
+          });
+          const widgetFacturacion = widgetsPorCampo['fecha_facturacion_manual'];
+          if (widgetFacturacion && data.fecha_facturacion_manual) {
+            widgetFacturacion.value = ddmmyyyyAIso(data.fecha_facturacion_manual);
+            c.campos.fecha_facturacion_manual = data.fecha_facturacion_manual;
+          }
+          const widgetConcepto = widgetsPorCampo['concepto'];
+          if (widgetConcepto && data.concepto) {
+            widgetConcepto.value = data.concepto;
+            c.campos.concepto = data.concepto;
+          }
+        });
       });
     } else if (tipo === 'numero') {
       widget = document.createElement('input');
       widget.type = 'number'; widget.step = '0.01';
       widget.value = valor;
       widget.addEventListener('blur', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+    } else if (campo === 'tipo_pago_detalle') {
+      widget = crearWidgetDetalleTarjeta(valor, (nuevoValor) => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, nuevoValor);
+      });
     } else {
       widget = document.createElement('input');
       widget.type = 'text';
       widget.value = valor;
-      widget.addEventListener('blur', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+      widget.addEventListener('blur', () => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value).then(data => {
+          if (!data.ok || campo !== 'descripcion' || !data.alicuota_iva) return;
+          // Esta descripción tiene una alícuota propia cargada para la
+          // empresa -- el servidor ya la aplicó sola, se refleja acá.
+          const widgetAlicuota = widgetsPorCampo['alicuota_iva'];
+          if (widgetAlicuota) {
+            widgetAlicuota.value = data.alicuota_iva;
+            c.campos.alicuota_iva = data.alicuota_iva;
+          }
+        });
+      });
     }
+    widgetsPorCampo[campo] = widget;
     grupo.appendChild(widget);
+
+    // Un comprobante con $0 (o un monto irrisorio) es señal de que el lector
+    // no pudo leer bien la imagen -- se avisa acá y el backend además
+    // rechaza facturarlo así hasta que se corrija.
+    if (campo === 'precio_unitario' && !soloLectura) {
+      const badgeMonto = document.createElement('span');
+      badgeMonto.className = 'badge-revisar badge-revisar-bloque';
+      badgeMonto.textContent = 'REVISAR: no se puede facturar con este monto';
+      grupo.appendChild(badgeMonto);
+      const actualizarBadgeMonto = () => {
+        badgeMonto.style.display = (parseFloat(widget.value) || 0) < 100 ? 'inline-block' : 'none';
+      };
+      actualizarBadgeMonto();
+      widget.addEventListener('input', actualizarBadgeMonto);
+    }
+
+    // El lector suele encontrar 2 CUIL/CUIT en el comprobante (emisor y
+    // receptor) y ya elige el que le parece correcto -- acá se ofrece
+    // cambiar al otro sin tener que tipearlo a mano, por si se equivocó.
+    if (campo === 'cuit_receptor' && !soloLectura && c.campos.cuit_alternativo) {
+      const botonOtroCuit = document.createElement('button');
+      botonOtroCuit.type = 'button';
+      botonOtroCuit.className = 'btn-usar-otro-cuit';
+      botonOtroCuit.textContent = `Usar el otro CUIT/CUIL detectado: ${c.campos.cuit_alternativo}`;
+      botonOtroCuit.addEventListener('click', () => {
+        const actual = widget.value;
+        const otro = c.campos.cuit_alternativo;
+        widget.value = otro;
+        promesaGuardadoActual = guardarCampoRevision(c, 'cuit_receptor', otro)
+          .then(() => guardarCampoRevision(c, 'cuit_alternativo', actual));
+        c.campos.cuit_alternativo = actual; // se guarda el que se sacó, para poder volver a cambiarlo
+        botonOtroCuit.textContent = `Usar el otro CUIT/CUIL detectado: ${actual}`;
+      });
+      grupo.appendChild(botonOtroCuit);
+    }
+
     cont.appendChild(grupo);
   });
 
+  // Factura A (y variantes) exige CUIT/CUIL siempre; cualquier otro tipo de
+  // comprobante también lo exige si el Tipo de documento elegido es CUIT o
+  // CUIL (con DNI puede quedar vacío). Se arma DESPUÉS del loop de arriba
+  // porque necesita el widget de "tipo_documento", que en CAMPOS_REVISION
+  // está declarado después de "cuit_receptor" -- todavía no existiría si
+  // se armara adentro del mismo loop.
+  const widgetCuit = widgetsPorCampo['cuit_receptor'];
+  if (widgetCuit && !soloLectura) {
+    const grupoCuit = widgetCuit.closest('.campo-revision');
+    const badgeCuitA = document.createElement('span');
+    badgeCuitA.className = 'badge-revisar badge-revisar-bloque';
+    badgeCuitA.textContent = 'REVISAR: falta el número de documento para este tipo de comprobante/documento';
+    grupoCuit.appendChild(badgeCuitA);
+
+    const actualizarBadgeCuitA = () => {
+      const widgetTipo = widgetsPorCampo['tipo_comprobante'];
+      const widgetTipoDoc = widgetsPorCampo['tipo_documento'];
+      const tipoComprobante = widgetTipo ? widgetTipo.value.trim() : '';
+      const tipoDocumento = widgetTipoDoc ? widgetTipoDoc.value.trim().toUpperCase() : '';
+      const exigeCuit = tipoComprobante.endsWith(' A') || tipoDocumento === 'CUIT' || tipoDocumento === 'CUIL';
+      badgeCuitA.style.display = (exigeCuit && !widgetCuit.value.trim()) ? 'inline-block' : 'none';
+    };
+    actualizarBadgeCuitA();
+    widgetCuit.addEventListener('input', actualizarBadgeCuitA);
+    if (widgetsPorCampo['tipo_comprobante']) widgetsPorCampo['tipo_comprobante'].addEventListener('change', actualizarBadgeCuitA);
+    if (widgetsPorCampo['tipo_documento']) widgetsPorCampo['tipo_documento'].addEventListener('change', actualizarBadgeCuitA);
+  }
+
+  // Si se cambia el Tipo de comprobante estando parado en el mismo
+  // comprobante (sin cerrar y reabrir Revisión Manual), las opciones de
+  // Condición de IVA disponibles se recalculan solas -- si no, quedarían
+  // mostrando la lista vieja hasta la próxima vez que se abra este panel.
+  const widgetTipoParaCondicionIva = widgetsPorCampo['tipo_comprobante'];
+  const widgetCondicionIva = widgetsPorCampo['condicion_iva'];
+  if (widgetTipoParaCondicionIva && widgetCondicionIva && widgetCondicionIva.tagName === 'SELECT') {
+    widgetTipoParaCondicionIva.addEventListener('change', () => {
+      const valorPrevio = widgetCondicionIva.value;
+      const nuevasOpciones = opcionesCondicionIvaPara(widgetTipoParaCondicionIva.value);
+      widgetCondicionIva.innerHTML = '';
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widgetCondicionIva.appendChild(vacio);
+      nuevasOpciones.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        if (v === valorPrevio) opt.selected = true;
+        widgetCondicionIva.appendChild(opt);
+      });
+      // Si la que ya estaba elegida no entra en la lista nueva, queda en
+      // blanco -- no se fuerza ningún valor a lo loco, que el usuario elija.
+    });
+  }
+
+  // Mismo mecanismo para Tipo de tarjeta: si se cambia el Medio de pago
+  // detectado (de Débito a Crédito o viceversa) estando en el mismo
+  // comprobante, las marcas ofrecidas se recalculan solas.
+  const widgetMedioPago = widgetsPorCampo['medio_pago_detectado'];
+  const widgetTipoPago = widgetsPorCampo['tipo_pago'];
+  if (widgetMedioPago && widgetTipoPago && widgetTipoPago.tagName === 'SELECT') {
+    widgetMedioPago.addEventListener('change', () => {
+      const valorPrevio = widgetTipoPago.value;
+      const nuevasOpciones = opcionesTipoPagoPara(widgetMedioPago.value);
+      widgetTipoPago.innerHTML = '';
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widgetTipoPago.appendChild(vacio);
+      nuevasOpciones.forEach(([v, t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === valorPrevio) opt.selected = true;
+        widgetTipoPago.appendChild(opt);
+      });
+    });
+  }
+
+  // La casilla de "Detalle" solo tiene sentido si el Tipo de tarjeta
+  // elegido es justamente "Otra..." (ej. el lector detectó "VISA" en
+  // Débito, que no es una opción real de ARCA -- ahí solo existe
+  // "Visa Electrón", un producto distinto). Se muestra/oculta sola según
+  // ese valor, sin tener que cerrar y reabrir Revisión Manual.
+  const widgetTipoPagoDetalle = widgetsPorCampo['tipo_pago_detalle'];
+  if (widgetTipoPago && widgetTipoPagoDetalle) {
+    const grupoDetalle = widgetTipoPagoDetalle.closest('.campo-revision');
+    const actualizarVisibilidadDetalleTarjeta = () => {
+      grupoDetalle.style.display = widgetTipoPago.value === 'Otra...' ? '' : 'none';
+    };
+    actualizarVisibilidadDetalleTarjeta();
+    widgetTipoPago.addEventListener('change', actualizarVisibilidadDetalleTarjeta);
+    if (widgetMedioPago) widgetMedioPago.addEventListener('change', actualizarVisibilidadDetalleTarjeta);
+  }
+
+  renderLineasExtra(c, cont, soloLectura);
+
   document.getElementById('btnRevisionAnterior').disabled = indiceRevision === 0;
   document.getElementById('btnRevisionSiguiente').disabled = indiceRevision === DATOS_REVISION.length - 1;
+}
+
+// "Líneas de producto/servicio extra" -- solo aplica a Responsable
+// Inscripto (Monotributo no tiene esta función en ARCA). La línea
+// principal sigue siendo los campos de siempre del comprobante; esto
+// solo agrega la 2ª en adelante, cada una con su propia descripción,
+// cantidad, unidad de medida, precio y alícuota.
+function renderLineasExtra(c, cont, soloLectura) {
+  if (!ES_RESPONSABLE_INSCRIPTO) return;
+
+  const seccion = document.createElement('div');
+  seccion.className = 'seccion-lineas-extra';
+  const titulo = document.createElement('h3');
+  titulo.textContent = 'Líneas de producto/servicio extra';
+  seccion.appendChild(titulo);
+
+  c.campos.lineas_extra = c.campos.lineas_extra || [];
+  c.campos.lineas_extra.forEach(linea => {
+    seccion.appendChild(renderUnaLineaExtra(c, linea, soloLectura));
+  });
+
+  if (!soloLectura) {
+    const btnAgregar = document.createElement('button');
+    btnAgregar.type = 'button';
+    btnAgregar.className = 'btn-agregar-linea';
+    btnAgregar.textContent = '+ Agregar línea de descripción';
+    btnAgregar.addEventListener('click', async () => {
+      btnAgregar.disabled = true;
+      btnAgregar.textContent = 'Agregando...';
+      try {
+        const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${c.id}/lineas`, { method: 'POST' });
+        const data = await r.json();
+        if (data.ok) {
+          c.campos.lineas_extra.push(data.linea);
+          renderRevision(); // re-arma el panel entero con la línea nueva ya adentro
+        } else {
+          alert('No se pudo agregar la línea: ' + data.error);
+          btnAgregar.disabled = false;
+          btnAgregar.textContent = '+ Agregar línea de descripción';
+        }
+      } catch (e) {
+        alert('No se pudo conectar con el servidor.');
+        btnAgregar.disabled = false;
+        btnAgregar.textContent = '+ Agregar línea de descripción';
+      }
+    });
+    seccion.appendChild(btnAgregar);
+  }
+
+  cont.appendChild(seccion);
+}
+
+function renderUnaLineaExtra(c, linea, soloLectura) {
+  const bloque = document.createElement('div');
+  bloque.className = 'linea-extra';
+
+  const encabezado = document.createElement('div');
+  encabezado.className = 'linea-extra-encabezado';
+  const numero = document.createElement('span');
+  numero.textContent = `Línea ${linea.id ? '' : ''}`.trim() || 'Línea extra';
+  encabezado.appendChild(numero);
+
+  if (!soloLectura) {
+    const btnEliminar = document.createElement('button');
+    btnEliminar.type = 'button';
+    btnEliminar.className = 'btn-eliminar-linea';
+    btnEliminar.textContent = '× Quitar';
+    btnEliminar.addEventListener('click', async () => {
+      const ok = confirm('¿Quitar esta línea del comprobante?');
+      if (!ok) return;
+      btnEliminar.disabled = true;
+      try {
+        const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${c.id}/lineas/${linea.id}/eliminar`, { method: 'POST' });
+        const data = await r.json();
+        if (data.ok) {
+          c.campos.lineas_extra = c.campos.lineas_extra.filter(l => l.id !== linea.id);
+          c.campos.importe_total = data.importe_total;
+          renderRevision();
+        } else {
+          alert('No se pudo quitar la línea: ' + data.error);
+          btnEliminar.disabled = false;
+        }
+      } catch (e) {
+        alert('No se pudo conectar con el servidor.');
+        btnEliminar.disabled = false;
+      }
+    });
+    encabezado.appendChild(btnEliminar);
+  }
+  bloque.appendChild(encabezado);
+
+  const guardarCampoLinea = async (campo, valor) => {
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${c.id}/lineas/${linea.id}/editar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campo, valor }),
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        alert('No se pudo guardar: ' + data.error);
+        return data;
+      }
+      linea[campo] = valor;
+      return data;
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      return { ok: false };
+    }
+  };
+
+  // Descripción -- mismo widget con opción de escribir manualmente que el
+  // campo principal.
+  const grupoDesc = document.createElement('div');
+  grupoDesc.className = 'campo-revision';
+  const labelDesc = document.createElement('label');
+  labelDesc.textContent = 'Descripción';
+  grupoDesc.appendChild(labelDesc);
+  if (soloLectura) {
+    const solo = document.createElement('div');
+    solo.className = 'valor-solo-lectura';
+    solo.textContent = linea.descripcion || '—';
+    grupoDesc.appendChild(solo);
+  } else {
+    const widgetDesc = crearWidgetDescripcion(linea.descripcion || '', (nuevoValor) => {
+      guardarCampoLinea('descripcion', nuevoValor).then(data => {
+        if (data.ok && data.alicuota_iva) {
+          linea.alicuota_iva = data.alicuota_iva;
+          if (widgetAlicuotaLinea) widgetAlicuotaLinea.value = data.alicuota_iva;
+        }
+      });
+    });
+    grupoDesc.appendChild(widgetDesc);
+  }
+  bloque.appendChild(grupoDesc);
+
+  // Cantidad, Unidad de medida, Precio unitario, Alícuota -- campos
+  // simples, mismo patrón de guardado al perder foco / al cambiar.
+  let widgetAlicuotaLinea = null;
+
+  const camposSimples = [
+    { campo: 'cantidad', etiqueta: 'Cantidad', tipo: 'numero', valor: linea.cantidad ?? 1 },
+    { campo: 'unidad_medida', etiqueta: 'Unidad de medida', tipo: 'select', opciones: LISTAS.unidad_medida.map(v => [v, v]), valor: linea.unidad_medida || '' },
+    { campo: 'precio_unitario', etiqueta: 'Monto', tipo: 'numero', valor: linea.precio_unitario ?? 0 },
+    { campo: 'alicuota_iva', etiqueta: 'Alícuota de IVA', tipo: 'select', opciones: opcionesAlicuotaPara(), valor: linea.alicuota_iva || '' },
+  ];
+
+  camposSimples.forEach(({ campo, etiqueta, tipo, opciones, valor }) => {
+    const grupo = document.createElement('div');
+    grupo.className = 'campo-revision';
+    const label = document.createElement('label');
+    label.textContent = etiqueta;
+    grupo.appendChild(label);
+
+    if (soloLectura) {
+      const solo = document.createElement('div');
+      solo.className = 'valor-solo-lectura';
+      solo.textContent = campo === 'alicuota_iva' ? etiquetaAlicuota(valor) : (valor || '—');
+      grupo.appendChild(solo);
+      bloque.appendChild(grupo);
+      return;
+    }
+
+    let widget;
+    if (tipo === 'select') {
+      widget = document.createElement('select');
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widget.appendChild(vacio);
+      opciones.forEach(([v, t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === valor) opt.selected = true;
+        widget.appendChild(opt);
+      });
+      widget.addEventListener('change', () => guardarCampoLinea(campo, widget.value));
+    } else {
+      widget = document.createElement('input');
+      widget.type = 'number'; widget.step = '0.01';
+      widget.value = valor;
+      widget.addEventListener('blur', () => guardarCampoLinea(campo, widget.value));
+    }
+    if (campo === 'alicuota_iva') widgetAlicuotaLinea = widget;
+    grupo.appendChild(widget);
+    bloque.appendChild(grupo);
+  });
+
+  return bloque;
 }
 
 async function guardarCampoRevision(comprobante, campo, valor) {
@@ -1053,8 +2174,10 @@ async function guardarCampoRevision(comprobante, campo, valor) {
     } else {
       alert('No se pudo guardar: ' + data.error);
     }
+    return data;
   } catch (e) {
     alert('No se pudo conectar con el servidor.');
+    return { ok: false };
   }
 }
 
@@ -1124,6 +2247,13 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); irARevision(1); }
   if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); irARevision(-1); }
 });
+
+(function () {
+  const idPendiente = sessionStorage.getItem('abrirRevisionComprobanteId');
+  if (!idPendiente) return;
+  sessionStorage.removeItem('abrirRevisionComprobanteId');
+  abrirRevision(parseInt(idPendiente, 10));
+})();
 </script>
 </body>
 </html>

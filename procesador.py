@@ -2,6 +2,7 @@ import os
 import random
 from datetime import datetime, timedelta
 
+from automatizacion.arca_bot import concepto_efectivo
 from lector import lector_core
 from models import db, Comprobante, Empresa
 from almacenamiento import guardar_archivo_persistente
@@ -18,10 +19,12 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
       - comprobante_relacionado: si es "nuevo", el comprobante recién creado;
         si es "duplicado", el comprobante ORIGINAL ya existente al que corresponde
         (para poder comparar las dos imágenes); si no, None.
-      - info_archivo_intento: solo para "duplicado" -- una tupla
+      - info_archivo_intento: para "duplicado" y "error" -- una tupla
         (archivo_ruta, archivo_drive_id) de DÓNDE quedó guardada la imagen de
-        ESTE intento (distinta de la del original), para poder mostrar las
-        dos una al lado de la otra. (None, None) en los demás casos.
+        ESTE intento (distinta de la del original, para "duplicado"), para
+        poder mostrarla o cargar el comprobante a mano después. (None, None)
+        en los demás casos ("nuevo" ya tiene su propio archivo_ruta en el
+        comprobante creado; "ignorado" nunca se guarda).
 
     Los campos de facturación (tipo de comprobante, condición de IVA, etc.)
     arrancan con el valor configurado en la Empresa, pero quedan grabados en
@@ -32,15 +35,20 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
     if ext not in EXTENSIONES_VALIDAS:
         return "ignorado", None, (None, None)
 
+    empresa = Empresa.query.get(empresa_id)
+
     if ext == "pdf":
         datos = lector_core.extraer_datos_de_pdf(ruta_local, fecha_interfaz, cuit_propio_cliente)
     else:
         datos = lector_core.extraer_datos_de_imagen(ruta_local, fecha_interfaz, cuit_propio_cliente)
 
     if not datos:
-        return "error", None, (None, None)
-
-    empresa = Empresa.query.get(empresa_id)
+        # Antes esto no guardaba la imagen en ningún lado -- el archivo se
+        # perdía apenas terminaba la subida y no había forma de verlo ni de
+        # cargar el comprobante a mano después. Se guarda igual que un
+        # duplicado, para poder mostrarlo en "Archivos con error de lectura".
+        archivo_ruta_intento, archivo_drive_id_intento = guardar_archivo_persistente(ruta_local, nombre_original, empresa)
+        return "error", None, (archivo_ruta_intento, archivo_drive_id_intento)
 
     duplicado = Comprobante.query.filter_by(
         id_transaccion=datos.get("ID_Transaccion"), empresa_id=empresa_id
@@ -88,6 +96,16 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
         opciones_descripcion = []
     descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else (empresa.config_producto_servicio if empresa else None)
 
+    # Si esa descripción tiene una alícuota propia cargada (ej. "Embutidos"
+    # -> 10.5%, para un Responsable Inscripto que vende cosas con distinta
+    # alícuota), se usa esa -- si no, se cae al default general de la
+    # empresa (la primera de la lista que haya marcado).
+    alicuota_elegida = None
+    if empresa:
+        alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
+        if alicuota_elegida is None:
+            alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
+
     fila = Comprobante(
         usuario_id=usuario_id,
         empresa_id=empresa_id,
@@ -95,19 +113,25 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
         id_transaccion=datos.get("ID_Transaccion"),
 
         punto_venta=empresa.config_punto_venta if empresa else None,
-        tipo_comprobante=empresa.config_tipo_comprobante if empresa else None,
-        concepto=empresa.config_concepto if empresa else None,
+        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0] if empresa else None,
+        concepto=(
+            concepto_efectivo(fecha_comprobante_detectada, empresa.config_concepto, dias_atras)
+            if empresa else None
+        ),
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida if empresa else None,
         precio_unitario=importe_total / cantidad,
 
         tipo_documento=datos.get("Tipo Documento"),
         cuit_receptor=str(datos.get("CUIT Receptor") or ""),
+        cuit_alternativo=str(datos.get("CUIT Alternativo") or "") or None,
+        alicuota_iva=alicuota_elegida,
         nombre_razon_social=datos.get("Nombre / Razón Social"),
         nombre_remitente=datos.get("Nombre Remitente"),
         fecha_comprobante=fecha_comprobante_detectada,
         medio_pago_detectado=medio_pago_detectado,
         tipo_pago=datos.get("Tipo Pago"),
+        tipo_pago_detalle=datos.get("Tipo Pago Detalle"),
         numero_pago=datos.get("Numero Pago"),
         condicion_iva=datos.get("Condicion IVA") or (empresa.config_condicion_iva if empresa else None),
         condicion_venta=datos.get("Condicion Venta") or condicion_venta_default,

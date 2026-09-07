@@ -101,11 +101,19 @@ class Empresa(db.Model):
     nombre_interno = db.Column(db.String(200))  # cómo la identifica el usuario dentro de Facturea (puede ser cualquier cosa)
     razon_social_arca = db.Column(db.String(200))  # el texto EXACTO que aparece en ARCA al elegir "Empresa a representar"
 
+    # "Monotributo" (factura C, sin IVA) o "Responsable Inscripto" (factura
+    # A/B, con IVA discriminado). Todavía no hay automatización de ARCA
+    # armada para Responsable Inscripto -- facturar_comprobante() lo corta
+    # con un aviso claro hasta que se grabe esa pantalla real y se arme el
+    # flujo (es una pantalla distinta a la de Monotributo, con más campos).
+    tipo_contribuyente = db.Column(db.String(30), default="Monotributo")
+    config_alicuota_iva = db.Column(db.String(50))  # solo aplica a Responsable Inscripto -- lista separada por coma (ej. "21,10.5"), la PRIMERA es la que se usa por defecto al cargar un comprobante nuevo
+
     # --- Acceso a ARCA de ESTA empresa (Grupo B: sin certificado WSFE, factura vía Clave Fiscal) ---
     cuil_arca = db.Column(db.String(20))
     password_arca_cifrada = db.Column(db.LargeBinary)
 
-    config_tipo_comprobante = db.Column(db.String(80))
+    config_tipo_comprobante = db.Column(db.String(600))  # lista separada por coma (mismo patrón que config_condicion_venta) -- la PRIMERA es la que se usa por defecto al cargar un comprobante nuevo
     puntos_venta_disponibles = db.Column(db.String(200))
     config_punto_venta = db.Column(db.String(10))
     config_concepto = db.Column(db.String(10))
@@ -114,6 +122,12 @@ class Empresa(db.Model):
     config_condicion_venta = db.Column(db.String(300))
     config_producto_servicio = db.Column(db.String(300))  # descripción por defecto (la primera de descripciones_disponibles)
     descripciones_disponibles = db.Column(db.String(600))  # lista separada por comas de todas las descripciones cargadas
+    # Solo aplica a Responsable Inscripto -- alícuota de cada descripción de
+    # arriba, EN EL MISMO ORDEN Y CANTIDAD que descripciones_disponibles
+    # (posición i de una lista corresponde a la posición i de la otra).
+    # Ej: descripciones_disponibles="Carne,Embutidos" y
+    # descripciones_alicuotas="21,10.5" -> "Carne" es 21%, "Embutidos" 10.5%.
+    descripciones_alicuotas = db.Column(db.String(300))
     config_descripcion_aleatoria = db.Column(db.Boolean, default=False)  # si hay varias, elegir una al azar por comprobante en vez de usar siempre la primera
     config_unidad_medida = db.Column(db.String(80))
 
@@ -162,6 +176,31 @@ class Empresa(db.Model):
         ]
         return all(campos)
 
+    def alicuota_para_descripcion(self, descripcion):
+        """
+        Busca, entre las descripciones cargadas para esta empresa, la que
+        coincide EXACTO con `descripcion` y devuelve la alícuota que se le
+        asignó (por posición: descripciones_disponibles[i] <->
+        descripciones_alicuotas[i]). None si no hay coincidencia, si la
+        empresa no es Responsable Inscripto, o si esa posición no tiene
+        alícuota cargada (las dos listas no siempre miden lo mismo si se
+        cargó una descripción sin elegirle alícuota).
+        """
+        if self.tipo_contribuyente != "Responsable Inscripto":
+            return None
+        if not descripcion or not self.descripciones_disponibles:
+            return None
+
+        descripciones = [d.strip() for d in self.descripciones_disponibles.split(",")]
+        alicuotas = (self.descripciones_alicuotas or "").split(",")
+        try:
+            indice = descripciones.index(descripcion.strip())
+        except ValueError:
+            return None
+        if indice >= len(alicuotas):
+            return None
+        return alicuotas[indice].strip() or None
+
 
 class Comprobante(db.Model):
     __tablename__ = "comprobantes"
@@ -188,13 +227,25 @@ class Comprobante(db.Model):
 
     tipo_documento = db.Column(db.String(30))
     cuit_receptor = db.Column(db.String(20))
+    # El OTRO CUIT/CUIL que el lector encontró en la imagen (normalmente el
+    # del emisor) -- se ofrece como alternativa en Revisión Manual, por si
+    # el lector eligió mal cuál de los dos es el receptor.
+    cuit_alternativo = db.Column(db.String(20), nullable=True)
+    # Solo se usa (y se muestra) para empresas Responsable Inscripto -- el
+    # % de IVA de este comprobante puntual. En Monotributo queda vacío.
+    alicuota_iva = db.Column(db.String(10), nullable=True)
     nombre_razon_social = db.Column(db.String(200))
     nombre_remitente = db.Column(db.String(200))
     fecha_comprobante = db.Column(db.String(20))
+    # Si el usuario la edita a mano en Revisión Manual, se guarda acá y tiene
+    # prioridad sobre la que calcula calcular_fecha_facturacion(). Si queda
+    # vacía (caso normal), se sigue calculando sola como siempre.
+    fecha_facturacion_manual = db.Column(db.String(20), nullable=True)
     medio_pago_detectado = db.Column(db.String(20), default="Transferencia")  # "Transferencia" | "Débito" | "Crédito" -- lo que el OCR reconoció en la imagen; decide qué rama sigue el bot en ARCA
     condicion_iva = db.Column(db.String(80))
     condicion_venta = db.Column(db.String(80))
-    tipo_pago = db.Column(db.String(80))  # ej: "Visa", "Mastercard Débito" -- solo aplica si condicion_venta es una tarjeta
+    tipo_pago = db.Column(db.String(80))  # ej: "Visa", "Mastercard Débito", "Otra..." -- solo aplica si condicion_venta es una tarjeta
+    tipo_pago_detalle = db.Column(db.String(80))  # texto libre cuando tipo_pago es "Otra..." -- ej. "VISA" para Visa Débito, que no es una opción real del desplegable de ARCA (ahí solo existe "Visa Electrón")
     numero_pago = db.Column(db.String(80))  # número de tarjeta que pide ARCA en ese caso
     fecha_desde = db.Column(db.String(20))
     fecha_hasta = db.Column(db.String(20))
@@ -210,7 +261,40 @@ class Comprobante(db.Model):
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
 
     def recalcular_importe(self):
-        self.importe_total = (self.precio_unitario or 0.0) * (self.cantidad or 1.0)
+        total = (self.precio_unitario or 0.0) * (self.cantidad or 1.0)
+        for linea in self.lineas_extra:
+            total += (linea.precio_unitario or 0.0) * (linea.cantidad or 1.0)
+        self.importe_total = total
+
+
+class ComprobanteLinea(db.Model):
+    """
+    Línea EXTRA de producto/servicio de un comprobante -- Responsable
+    Inscripto puede facturar varios productos con distinta descripción y
+    alícuota en un mismo comprobante (ej. "cortes de carne" al 21% y
+    "chacinado" al 10.5% juntos, repartiendo entre las dos el monto que
+    efectivamente se cobró). La PRIMERA línea sigue siendo los campos de
+    siempre en Comprobante (descripcion, cantidad, unidad_medida,
+    precio_unitario, alicuota_iva) -- esta tabla solo guarda la 2ª en
+    adelante, así ningún comprobante existente ni el lector/procesador
+    necesitan cambiar nada.
+    """
+    __tablename__ = "comprobante_lineas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    comprobante_id = db.Column(db.Integer, db.ForeignKey("comprobantes.id"), nullable=False, index=True)
+    orden = db.Column(db.Integer, nullable=False, default=2)  # 2, 3, 4... (la 1 es el propio Comprobante)
+
+    descripcion = db.Column(db.String(300))
+    cantidad = db.Column(db.Float, default=1.0)
+    unidad_medida = db.Column(db.String(80))
+    precio_unitario = db.Column(db.Float, default=0.0)  # TOTAL cobrado por esta línea (con IVA incluido, mismo criterio que el de Comprobante)
+    alicuota_iva = db.Column(db.String(10))
+
+    comprobante = db.relationship(
+        "Comprobante",
+        backref=db.backref("lineas_extra", cascade="all, delete-orphan", order_by="ComprobanteLinea.orden"),
+    )
 
 
 class RegistroSubida(db.Model):

@@ -69,6 +69,10 @@
   .nav-links a{font-family:var(--mono);font-size:13px;text-decoration:none;color:var(--muted);}
   .nav-links a:hover{color:var(--ink);}
   @media (max-width:720px){ .nav-links{display:none;} }
+  .nav-auth{display:flex;gap:16px;align-items:center;}
+  .nav-auth a:not(.btn){font-family:var(--mono);font-size:13px;text-decoration:none;color:var(--muted);}
+  .nav-auth a:not(.btn):hover{color:var(--ink);}
+  @media (max-width:400px){ .nav-auth{gap:10px;} .nav-auth a:not(.btn){font-size:12px;} }
 
   /* ---------- HERO ---------- */
   .hero{padding:76px 0 40px;}
@@ -212,6 +216,8 @@
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#para-quien">Para quién es</a>
       <a href="#planes">Planes</a>
+    </nav>
+    <nav class="nav-auth">
       <a href="/login">Iniciar sesión</a>
       <a href="/registro" class="btn btn-ghost" style="padding:8px 16px;">Crear cuenta</a>
     </nav>

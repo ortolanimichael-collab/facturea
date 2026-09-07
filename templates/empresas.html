@@ -73,6 +73,8 @@
     font-family:var(--mono);font-size:13px;line-height:1;padding:2px;
   }
   .agregar-punto{display:flex;gap:8px;}
+  .agregar-punto input[type=text]{flex:1;min-width:0;}
+  .agregar-descripcion .campo-alicuota-descripcion{flex:0 0 auto;width:150px;}
   .agregar-punto input{flex:1;}
   .agregar-punto button{
     font-family:var(--mono);font-size:12.5px;padding:0 16px;border-radius:3px;border:1.5px solid var(--ink);
@@ -130,7 +132,18 @@
   <div class="vacio">Todavía no cargaste ninguna empresa. Completá el formulario de abajo para agregar la primera.</div>
   {% endif %}
 
-  {% set opciones_tipo_comprobante = [
+  {% set opciones_tipo_comprobante_ri = [
+    "Factura A", "Nota de Débito A", "Nota de Crédito A", "Recibo A",
+    "Factura B", "Nota de Débito B", "Nota de Crédito B", "Recibo B",
+    "Factura T", "Nota de Débito T", "Nota de Crédito T",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) A",
+    "Nota de Débito Electrónica MiPyMEs (FCE) A",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) A",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) B",
+    "Nota de Débito Electrónica MiPyMEs (FCE) B",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) B"
+  ] %}
+  {% set opciones_tipo_comprobante_monotributo = [
     "Factura C", "Nota de Débito C", "Nota de Crédito C", "Recibo C",
     "Factura de Crédito Electrónica MiPyMEs (FCE) C",
     "Nota de Débito Electrónica MiPyMEs (FCE) C",
@@ -161,8 +174,20 @@
     "packs", "otras unidades"
   ] %}
   {% set condiciones_venta_actuales = ((empresa.config_condicion_venta if empresa else "") or "").split(",") %}
+  {% set tipos_comprobante_actuales = ((empresa.config_tipo_comprobante if empresa else "") or "").split(",") %}
+  {% set alicuotas_iva_actuales = ((empresa.config_alicuota_iva if empresa else "") or "").split(",") %}
+  {# Los 8 valores reales del desplegable "Alícuota IVA" de ARCA, confirmados
+     con una captura real de la pantalla -- No Gravado, Exento y 0% son TRES
+     conceptos legalmente distintos en ARCA, no una sola opción "0" como
+     había antes acá. #}
+  {% set opciones_alicuota_iva = [
+    ("NO_GRAVADO", "No Gravado"), ("EXENTO", "Exento"), ("0", "0%"),
+    ("2.5", "2,5%"), ("5", "5%"), ("10.5", "10,5%"), ("21", "21%"), ("27", "27%")
+  ] %}
+  {% set mapa_alicuota_etiquetas = dict(opciones_alicuota_iva) %}
   {% set puntos_actuales = ((empresa.puntos_venta_disponibles if empresa else "") or "").split(",") | select | list %}
   {% set descripciones_actuales = ((empresa.descripciones_disponibles if empresa else "") or "").split(",") | select | list %}
+  {% set descripciones_alicuotas_actuales = ((empresa.descripciones_alicuotas if empresa else "") or "").split(",") %}
 
   <section>
     <h2>{{ "Editar empresa" if empresa else "Agregar una empresa nueva" }}</h2>
@@ -182,13 +207,37 @@
       </div>
 
       <div class="campo">
-        <label>Tipo de comprobante</label>
-        <select name="config_tipo_comprobante" required>
-          <option value="">Seleccionar...</option>
-          {% for op in opciones_tipo_comprobante %}
-          <option value="{{ op }}" {{ "selected" if empresa and empresa.config_tipo_comprobante == op }}>{{ op }}</option>
-          {% endfor %}
+        <label>Tipo de contribuyente</label>
+        <select name="tipo_contribuyente" id="tipoContribuyente">
+          <option value="Monotributo" {{ "selected" if not empresa or empresa.tipo_contribuyente in (None, "", "Monotributo") }}>Monotributo</option>
+          <option value="Responsable Inscripto" {{ "selected" if empresa and empresa.tipo_contribuyente == "Responsable Inscripto" }}>Responsable Inscripto</option>
         </select>
+        <p class="hint">Un Responsable Inscripto factura con IVA discriminado (Factura A o B, según el cliente) en vez de Factura C.</p>
+      </div>
+
+      <div class="campo" id="campoAlicuotaIva" style="display:none;">
+        <label>Alícuotas de IVA que usa esta empresa</label>
+        <div class="checks">
+          {% for valor, etiqueta in opciones_alicuota_iva %}
+          <label><input type="checkbox" name="config_alicuota_iva" value="{{ valor }}" {{ "checked" if valor in alicuotas_iva_actuales }}> {{ etiqueta }}</label>
+          {% endfor %}
+        </div>
+        <p class="hint">Podés marcar más de una si esta empresa vende cosas con distinta alícuota (ej. una carnicería: 21% en general, 10.5% en embutidos). La primera que marques queda como default al cargar un comprobante nuevo -- después se puede cambiar comprobante por comprobante.</p>
+      </div>
+
+      <div class="campo">
+        <label>Tipo de comprobante</label>
+        <div class="checks" id="checksTipoComprobanteRI" style="display:none;">
+          {% for op in opciones_tipo_comprobante_ri %}
+          <label><input type="checkbox" name="config_tipo_comprobante" value="{{ op }}" {{ "checked" if op in tipos_comprobante_actuales }}> {{ op }}</label>
+          {% endfor %}
+        </div>
+        <div class="checks" id="checksTipoComprobanteMonotributo" style="display:none;">
+          {% for op in opciones_tipo_comprobante_monotributo %}
+          <label><input type="checkbox" name="config_tipo_comprobante" value="{{ op }}" {{ "checked" if op in tipos_comprobante_actuales }}> {{ op }}</label>
+          {% endfor %}
+        </div>
+        <p class="hint">Marcá los que uses para esta empresa (un Responsable Inscripto suele necesitar Factura A y B juntas). El primero que marques queda como default al cargar un comprobante nuevo.</p>
       </div>
 
       <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
@@ -292,34 +341,41 @@
         </div>
       </div>
 
-      <div class="fila-2">
-        <div class="campo">
-          <label>Producto / Servicio</label>
-          <div class="puntos-venta-lista" id="listaDescripciones">
-            {% for d in descripciones_actuales %}
-            <span class="chip" data-desc="{{ d }}">{{ d }}<button type="button" onclick="quitarDescripcion('{{ d }}')">×</button></span>
-            {% endfor %}
-          </div>
-          <div class="agregar-punto">
-            <input type="text" id="nuevaDescripcion" placeholder="ej: ropa">
-            <button type="button" onclick="agregarDescripcion()">+ Agregar</button>
-          </div>
-          <p class="hint">Si cargás más de una, cada factura nueva usa la primera por defecto -- salvo que actives "elegir al azar" abajo.</p>
-          <label style="display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13.5px;font-weight:400;margin-top:10px;">
-            <input type="checkbox" name="config_descripcion_aleatoria" style="width:auto;" {{ "checked" if empresa and empresa.config_descripcion_aleatoria }}>
-            Elegir una descripción al azar entre las cargadas en cada factura nueva
-          </label>
-          <input type="hidden" name="descripciones_disponibles" id="descripcionesDisponibles" value="{{ empresa.descripciones_disponibles if empresa else '' }}">
+      <div class="campo">
+        <label>Producto / Servicio</label>
+        <div class="puntos-venta-lista" id="listaDescripciones">
+          {% for d in descripciones_actuales %}
+          {% set alicuota_d = descripciones_alicuotas_actuales[loop.index0] if loop.index0 < descripciones_alicuotas_actuales|length else "" %}
+          <span class="chip" data-desc="{{ d }}" data-alicuota="{{ alicuota_d }}">{{ d }}{{ " (" + mapa_alicuota_etiquetas.get(alicuota_d, alicuota_d) + ")" if alicuota_d }}<button type="button" onclick="quitarDescripcion('{{ d }}')">×</button></span>
+          {% endfor %}
         </div>
-        <div class="campo">
-          <label>Unidad de medida</label>
-          <select name="config_unidad_medida" required>
-            <option value="">Seleccionar...</option>
-            {% for op in opciones_unidad_medida %}
-            <option value="{{ op }}" {{ "selected" if empresa and empresa.config_unidad_medida == op }}>{{ op }}</option>
+        <div class="agregar-punto agregar-descripcion">
+          <input type="text" id="nuevaDescripcion" placeholder="ej: ropa">
+          <select id="alicuotaNuevaDescripcion" class="campo-alicuota-descripcion" style="display:none;">
+            <option value="">Sin alícuota</option>
+            {% for valor, etiqueta in opciones_alicuota_iva %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
             {% endfor %}
           </select>
+          <button type="button" onclick="agregarDescripcion()">+ Agregar</button>
         </div>
+        <p class="hint">Si cargás más de una, cada factura nueva usa la primera por defecto -- salvo que actives "elegir al azar" abajo.{{ ' Para Responsable Inscripto, elegí también la alícuota de cada una -- cuando un comprobante use esa descripción, se le va a poner esa alícuota sola.' if empresa and empresa.tipo_contribuyente == "Responsable Inscripto" }}</p>
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13.5px;font-weight:400;margin-top:10px;">
+          <input type="checkbox" name="config_descripcion_aleatoria" style="width:auto;" {{ "checked" if empresa and empresa.config_descripcion_aleatoria }}>
+          Elegir una descripción al azar entre las cargadas en cada factura nueva
+        </label>
+        <input type="hidden" name="descripciones_disponibles" id="descripcionesDisponibles" value="{{ empresa.descripciones_disponibles if empresa else '' }}">
+        <input type="hidden" name="descripciones_alicuotas" id="descripcionesAlicuotas" value="{{ empresa.descripciones_alicuotas if empresa else '' }}">
+      </div>
+
+      <div class="campo">
+        <label>Unidad de medida</label>
+        <select name="config_unidad_medida" required>
+          <option value="">Seleccionar...</option>
+          {% for op in opciones_unidad_medida %}
+          <option value="{{ op }}" {{ "selected" if empresa and empresa.config_unidad_medida == op }}>{{ op }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="fila-2">
@@ -343,6 +399,30 @@
 </div>
 
 <script>
+const MAPA_ALICUOTA_ETIQUETAS = {{ dict(opciones_alicuota_iva) | tojson }};
+
+function actualizarVisibilidadAlicuota() {
+  const tipo = document.getElementById('tipoContribuyente').value;
+  const esRI = (tipo === 'Responsable Inscripto');
+  document.getElementById('campoAlicuotaIva').style.display = esRI ? 'block' : 'none';
+  document.getElementById('alicuotaNuevaDescripcion').style.display = esRI ? 'inline-block' : 'none';
+
+  // Los tipos de comprobante de Responsable Inscripto (A, B, T y sus FCE) y
+  // los de Monotributo (C) son mundos separados en ARCA -- no tiene sentido
+  // ofrecer los dos juntos. Se deshabilitan los del grupo oculto además de
+  // ocultarlos, así un checkbox tildado de antes (de cuando la empresa era
+  // del otro tipo) no se cuela igual al guardar -- los inputs disabled no
+  // se mandan con el formulario.
+  const checksRI = document.getElementById('checksTipoComprobanteRI');
+  const checksMono = document.getElementById('checksTipoComprobanteMonotributo');
+  checksRI.style.display = esRI ? 'flex' : 'none';
+  checksMono.style.display = esRI ? 'none' : 'flex';
+  checksRI.querySelectorAll('input').forEach(inp => { inp.disabled = !esRI; });
+  checksMono.querySelectorAll('input').forEach(inp => { inp.disabled = esRI; });
+}
+document.getElementById('tipoContribuyente').addEventListener('change', actualizarVisibilidadAlicuota);
+actualizarVisibilidadAlicuota();
+
 async function desconectarDrive(empresaId) {
   const ok = confirm('¿Desconectar Google Drive de esta empresa? Los archivos que ya subiste no se borran, pero los que subas de ahora en más van a guardarse en el servidor otra vez.');
   if (!ok) return;
@@ -400,22 +480,29 @@ function quitarPunto(valor) {
 function refrescarDescripciones() {
   const chips = document.querySelectorAll('#listaDescripciones .chip');
   const descripciones = Array.from(chips).map(c => c.dataset.desc);
+  const alicuotas = Array.from(chips).map(c => c.dataset.alicuota || '');
   document.getElementById('descripcionesDisponibles').value = descripciones.join(',');
+  document.getElementById('descripcionesAlicuotas').value = alicuotas.join(',');
 }
 
 function agregarDescripcion() {
   const input = document.getElementById('nuevaDescripcion');
+  const selectAlicuota = document.getElementById('alicuotaNuevaDescripcion');
   const valor = input.value.trim();
   if (!valor) return;
   const lista = document.getElementById('listaDescripciones');
   if (lista.querySelector(`[data-desc="${valor}"]`)) { input.value = ''; return; }
 
+  const alicuota = selectAlicuota.value;
   const chip = document.createElement('span');
   chip.className = 'chip';
   chip.dataset.desc = valor;
-  chip.innerHTML = `${valor}<button type="button" onclick="quitarDescripcion('${valor}')">×</button>`;
+  chip.dataset.alicuota = alicuota;
+  const etiquetaAlicuota = alicuota ? ` (${MAPA_ALICUOTA_ETIQUETAS[alicuota] || alicuota})` : '';
+  chip.innerHTML = `${valor}${etiquetaAlicuota}<button type="button" onclick="quitarDescripcion('${valor}')">×</button>`;
   lista.appendChild(chip);
   input.value = '';
+  selectAlicuota.value = '';
   refrescarDescripciones();
 }
 

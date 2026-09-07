@@ -50,6 +50,31 @@ def calcular_fecha_facturacion(fecha_comprobante_str, dias_atras=10):
     return fecha_elegida.strftime("%d/%m/%Y")
 
 
+def concepto_efectivo(fecha_comprobante_str, concepto_configurado, dias_atras=10):
+    """
+    Si la empresa factura por defecto en concepto "Productos y Servicios
+    (Mixto)" ("3") pero la fecha del comprobante está DENTRO de los últimos
+    `dias_atras` días (la misma ventana que usa calcular_fecha_facturacion,
+    mismo criterio de comparación), se declara como "Productos" ("1") en su
+    lugar -- no tiene sentido facturar como si fuera un período de servicio
+    cuando la operación es reciente y se factura casi al toque.
+
+    Fuera de esa ventana (comprobante viejo) o con cualquier otro concepto
+    configurado (no-mixto), se respeta tal cual el que eligió la empresa.
+    """
+    if concepto_configurado != "3":
+        return concepto_configurado
+    try:
+        fecha_real = datetime.strptime(fecha_comprobante_str, "%d/%m/%Y")
+    except (TypeError, ValueError):
+        return concepto_configurado
+
+    fecha_por_defecto = datetime.now() - timedelta(days=dias_atras or 10)
+    if fecha_real >= fecha_por_defecto:
+        return "1"
+    return concepto_configurado
+
+
 def iniciar_sesion(page, cuil, password):
     page.goto("https://auth.afip.gob.ar/contribuyente_/login.xhtml")
     page.get_by_role("spinbutton").fill(cuil)
@@ -63,11 +88,43 @@ def entrar_a_comprobantes_en_linea(page, razon_social):
     "Comprobantes en línea" se abre en una ventana emergente (popup) aparte,
     no en la misma pestaña -- por eso el resto de las funciones reciben
     esa ventana nueva, no la original.
+
+    Ahí adentro, "Seleccione la Empresa a representar" muestra un botón por
+    cada empresa que el CUIL logueado puede representar -- en el caso más
+    común (un monotributista con una sola razón social) hay UN solo botón.
+    Antes se buscaba ese botón por texto EXACTO contra empresa.razon_social_arca,
+    y bastaba una letra distinta, un espacio de más o una mayúscula/minúscula
+    diferente para que Playwright no encontrara nada y se quedara esperando
+    para siempre, sin ningún aviso de error -- quedaba "tildado" en esa
+    pantalla. Si hay un solo botón, se clickea directo sin importar el
+    texto; el matcheo por razón social solo hace falta (y solo entonces se
+    exige que esté bien escrita) cuando aparece más de una empresa para
+    elegir.
     """
     with page.expect_popup() as popup_info:
         page.locator("a").filter(has_text="Comprobantes en línea").click()
     ventana = popup_info.value
-    ventana.get_by_role("button", name=razon_social).click()
+
+    botones_empresa = ventana.get_by_role("button")
+    botones_empresa.first.wait_for(timeout=45000)
+    cantidad_empresas = botones_empresa.count()
+
+    if cantidad_empresas == 1:
+        botones_empresa.first.click()
+    elif cantidad_empresas > 1:
+        boton_por_nombre = ventana.get_by_role("button", name=razon_social)
+        if boton_por_nombre.count() == 0:
+            nombres_disponibles = botones_empresa.all_inner_texts()
+            raise ValueError(
+                f"Hay {cantidad_empresas} empresas para elegir en ARCA y ninguna coincide con "
+                f"la razón social configurada (\"{razon_social}\"). Las que aparecen ahí son: "
+                f"{', '.join(nombres_disponibles)}. Revisá que 'Razón social en ARCA' esté escrita "
+                "EXACTO como aparece ahí (mayúsculas incluidas)."
+            )
+        boton_por_nombre.first.click()
+    else:
+        raise ValueError("No apareció ninguna empresa para elegir en 'Comprobantes en línea' de ARCA.")
+
     ventana.get_by_role("button", name="Generar Comprobantes").click()
     return ventana
 
@@ -171,30 +228,57 @@ def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hast
     )
 
 
-def completar_receptor(ventana, condicion_iva, tipo_doc_receptor, condicion_venta, medio_pago_detectado=None, tipo_pago=None, numero_pago=None):
+def _completar_tarjeta(ventana, prefijo, tipo_pago, tipo_pago_detalle, numero_pago):
+    """
+    Completa el panel de Tipo/Descripción/Número que aparece al tildar
+    Tarjeta de Débito o Crédito. `prefijo` es "debito" o "credito" -- arma
+    los ids reales de ARCA: #tarjeta_id_tipo_<prefijo>1 (select),
+    #tarjeta_desc_tipo_<prefijo>1 (descripción libre, solo si el tipo es
+    "Otra...") y #tarjeta_nro_<prefijo>1 (número).
+
+    Si tipo_pago es "Otra..." -- el caso de una marca que no es una opción
+    real del desplegable de ARCA, ej. "VISA Débito" en vez de
+    "Visa Electrón" -- hay que tipear tipo_pago_detalle en la casilla de
+    Descripción que aparece al lado. Si esa casilla queda vacía, ARCA no
+    deja avanzar de pantalla (por eso el intento anterior se quedó
+    esperando el Paso 3 sin que nunca cargara).
+
+    El campo Número exige el número COMPLETO de tarjeta (20 dígitos) con
+    ceros a la izquierda -- lo único que se puede leer de un comprobante
+    real son los últimos dígitos, así que se rellena acá con zfill(20).
+
+    IMPORTANTE: no se toca el botón "Agregar" de este panel. Ya está
+    confirmado que es solo para sumar una tarjeta ADICIONAL en un pago
+    dividido entre varias -- no hace falta para que la que ya se tipeó
+    quede cargada. Clickearlo de más agrega una segunda fila vacía en el
+    panel que ARCA exige completar antes de dejar avanzar (eso fue lo que
+    trabó el intento anterior en el Paso 2, y por eso el bot terminó
+    esperando un campo del Paso 3 que nunca llegó a aparecer).
+    """
+    ventana.locator(f"#tarjeta_id_tipo_{prefijo}1").select_option(label=tipo_pago)
+    if tipo_pago == "Otra...":
+        ventana.locator(f"#tarjeta_desc_tipo_{prefijo}1").fill(tipo_pago_detalle or "")
+    numero_completo = str(numero_pago or "").strip().zfill(20)
+    ventana.locator(f"#tarjeta_nro_{prefijo}1").fill(numero_completo)
+
+
+def completar_receptor(ventana, condicion_iva, tipo_doc_receptor, condicion_venta, medio_pago_detectado=None, tipo_pago=None, tipo_pago_detalle=None, numero_pago=None):
     """
     Si medio_pago_detectado es "Débito" o "Crédito", después de tildar el
-    checkbox de la tarjeta correspondiente aparece un panel extra con Tipo y
-    Número de tarjeta, que hay que completar ANTES de tocar Continuar --
-    confirmado con grabaciones reales para las dos. No hace falta apretar
-    "Agregar": ese botón es para sumar VARIAS tarjetas al mismo comprobante
-    (pago dividido); con una sola alcanza con completar Tipo y Número y
-    continuar directo.
+    checkbox de la tarjeta correspondiente aparece un panel extra con Tipo,
+    Descripción (si el tipo es "Otra...") y Número de tarjeta -- ver
+    _completar_tarjeta() para el detalle de cómo se completa cada uno.
     """
     ventana.locator("#idivareceptor").select_option(label=condicion_iva)
     ventana.locator("#idtipodocreceptor").select_option(label=tipo_doc_receptor)
     ventana.get_by_role("checkbox", name=condicion_venta).check()
 
     if medio_pago_detectado == "Débito":
-        ventana.locator("#tarjeta_id_tipo_debito1").select_option(label=tipo_pago)
-        campo_numero = ventana.locator("#tarjeta_nro_debito1")
-        campo_numero.click()
-        campo_numero.fill(numero_pago)
+        ventana.get_by_role("checkbox", name="Tarjeta de Débito").check()
+        _completar_tarjeta(ventana, "debito", tipo_pago, tipo_pago_detalle, numero_pago)
     elif medio_pago_detectado == "Crédito":
-        ventana.locator("#tarjeta_id_tipo_credito1").select_option(label=tipo_pago)
-        campo_numero = ventana.locator("#tarjeta_nro_credito1")
-        campo_numero.click()
-        campo_numero.fill(numero_pago)
+        ventana.get_by_role("checkbox", name="Tarjeta de Crédito").check()
+        _completar_tarjeta(ventana, "credito", tipo_pago, tipo_pago_detalle, numero_pago)
 
     ventana.get_by_role("button", name="Continuar >").click()
 
@@ -205,6 +289,98 @@ def completar_detalle(ventana, descripcion, unidad_medida, importe):
     campo_precio = ventana.locator("#detalle_precio1")
     campo_precio.fill(str(importe))
     campo_precio.press("Enter")
+    ventana.get_by_role("button", name="Continuar >").click()
+
+
+# Alícuota de IVA -- valores internos de ARCA confirmados con una captura
+# real del desplegable (no siguen ningún orden obvio, así que se elige
+# por VALOR, no por texto: evita depender de que "No gravado"/"10,5%"
+# etc. coincidan letra por letra, coma y mayúscula con lo que guarda el
+# sistema).
+MAPA_ALICUOTA_IVA_ARCA = {
+    "NO_GRAVADO": "1", "EXENTO": "2", "0": "3",
+    "10.5": "4", "21": "5", "27": "6", "5": "8", "2.5": "9",
+}
+
+# Tipos de comprobante de Responsable Inscripto ya confirmados de punta a
+# punta con una grabación real de Playwright codegen -- cualquier otro
+# (Factura T, Recibo A/B, las variantes FCE) corta con un aviso claro en
+# vez de arriesgarse a mandar algo mal a una factura real.
+TIPOS_COMPROBANTE_RI_CONFIRMADOS = {"Factura A", "Factura B"}
+
+
+def completar_receptor_ri(
+    ventana, condicion_iva, tipo_doc_receptor, cuit_dni, condicion_venta,
+    medio_pago_detectado=None, tipo_pago=None, tipo_pago_detalle=None, numero_pago=None,
+):
+    """
+    "Datos del Receptor, Paso 2 de 4" para Responsable Inscripto --
+    confirmado con grabaciones reales de Factura A y Factura B. Muy
+    parecido a completar_receptor() de Monotributo (misma pantalla base,
+    "genComDatosOperacion.do"), con una diferencia real: en Factura A el
+    Tipo de Documento queda FIJO en "CUIT" (se ve como texto fijo en la
+    pantalla, no como desplegable) -- el <select id="idtipodocreceptor">
+    directamente no existe ahí. En Factura B sí existe y hay que elegirlo
+    (por ejemplo, DNI para un Consumidor Final).
+
+    Si medio_pago_detectado es "Débito" o "Crédito", hay que tildar el
+    checkbox de esa tarjeta y completar el panel de Tipo/Descripción/Número
+    -- ver _completar_tarjeta() para el detalle. Mismos ids que en
+    Monotributo -- no hace falta un mapa nuevo para esto.
+    """
+    ventana.locator("#idivareceptor").select_option(label=condicion_iva)
+
+    selector_tipo_doc = ventana.locator("#idtipodocreceptor")
+    if selector_tipo_doc.count() > 0:
+        selector_tipo_doc.select_option(label=tipo_doc_receptor or "DNI")
+
+    if cuit_dni:
+        ventana.locator("#nrodocreceptor").fill(cuit_dni)
+
+    ventana.get_by_role("checkbox", name=condicion_venta).check()
+
+    if medio_pago_detectado == "Débito":
+        ventana.get_by_role("checkbox", name="Tarjeta de Débito").check()
+        _completar_tarjeta(ventana, "debito", tipo_pago, tipo_pago_detalle, numero_pago)
+    elif medio_pago_detectado == "Crédito":
+        ventana.get_by_role("checkbox", name="Tarjeta de Crédito").check()
+        _completar_tarjeta(ventana, "credito", tipo_pago, tipo_pago_detalle, numero_pago)
+
+    ventana.get_by_role("button", name="Continuar >").click()
+
+
+def completar_lineas_productos_ri(ventana, lineas):
+    """
+    "Datos de la Operación, Paso 3 de 4" para Responsable Inscripto --
+    confirmado con una grabación real agregando una segunda línea con el
+    botón "Agregar línea descripción". Cada línea tiene sus propios
+    campos numerados (detalle_descripcion1, detalle_descripcion2, ...).
+
+    Por ahora se manda siempre UNA sola línea, armada con los datos que
+    ya tiene el comprobante (cargar varias líneas a mano en un mismo
+    comprobante es una mejora pendiente aparte, todavía no está el lugar
+    en la tabla para hacerlo) -- pero la función ya soporta la lista
+    completa para cuando esa mejora esté lista, sin tener que tocar esto.
+
+    Cada línea es un dict con: descripcion, cantidad, unidad_medida,
+    precio_unitario_neto (SIN IVA -- ARCA calcula el IVA y el subtotal
+    solos a partir de este dato y la alícuota, confirmado con captura
+    real) y alicuota_iva.
+    """
+    for i, linea in enumerate(lineas, start=1):
+        if i > 1:
+            ventana.get_by_role("button", name="Agregar línea descripción").click()
+
+        ventana.locator(f"#detalle_descripcion{i}").fill(linea["descripcion"])
+        ventana.locator(f"#detalle_cantidad{i}").fill(str(linea.get("cantidad") or 1))
+        ventana.locator(f"#detalle_medida{i}").select_option(label=linea["unidad_medida"])
+        ventana.locator(f"#detalle_precio{i}").fill(str(linea["precio_unitario_neto"]))
+
+        codigo_alicuota = MAPA_ALICUOTA_IVA_ARCA.get(linea["alicuota_iva"])
+        if codigo_alicuota is None:
+            raise ValueError(f"Alícuota de IVA inválida o sin configurar: {linea['alicuota_iva']!r}")
+        ventana.locator(f"#detalle_tipo_iva{i}").select_option(codigo_alicuota)
+
     ventana.get_by_role("button", name="Continuar >").click()
 
 
@@ -222,6 +398,46 @@ def confirmar_y_facturar(ventana, modo_prueba=False):
     ventana.get_by_role("button", name="Confirmar", exact=True).click()
     # TODO: leer el CAE real que aparece en esta pantalla antes de volver al menú
     ventana.get_by_role("button", name="Menú Principal").click()
+
+
+def descomponer_neto_iva(importe_total, alicuota_iva):
+    """
+    Un Responsable Inscripto declara el neto gravado y el IVA por
+    separado en ARCA, a diferencia de Monotributo que solo carga un
+    importe total. Como comprobante.precio_unitario/importe_total ya
+    viene calculado sobre el TOTAL cobrado (lo que efectivamente
+    transfirió el cliente), hay que descomponerlo hacia atrás para saber
+    cuánto de eso es neto y cuánto es IVA.
+
+    alicuota_iva viene como uno de los 8 valores reales que tiene ARCA
+    (confirmado con una captura real de "Alícuota IVA"):
+    "NO_GRAVADO", "EXENTO", "0", "2.5", "5", "10.5", "21", "27" -- los
+    primeros dos NO son porcentajes (son conceptos legales distintos: "no
+    gravado" es algo fuera del alcance del IVA, "exento" es una operación
+    puntualmente exenta), pero para esta cuenta dan el mismo resultado que
+    una alícuota de 0%: todo el importe es neto, el IVA da $0.
+
+    Devuelve (neto, iva) como floats, redondeados a 2 decimales -- ninguno
+    de los dos se ajusta para que la suma dé EXACTO el total centavo a
+    centavo (puede haber una diferencia de $0,01 por redondeo, común en
+    este tipo de cálculo y que ARCA tolera).
+    """
+    total = float(importe_total or 0)
+
+    if alicuota_iva in ("NO_GRAVADO", "EXENTO"):
+        return round(total, 2), 0.0
+
+    try:
+        porcentaje = float(alicuota_iva)
+    except (TypeError, ValueError):
+        raise ValueError(f"Alícuota de IVA inválida: {alicuota_iva!r}")
+
+    if porcentaje <= 0:
+        return round(total, 2), 0.0
+
+    neto = total / (1 + porcentaje / 100)
+    iva = total - neto
+    return round(neto, 2), round(iva, 2)
 
 
 def obtener_credenciales(empresa):
@@ -245,6 +461,14 @@ def facturar_comprobante(comprobante, modo_prueba=False):
     ninguna factura ni se genera CAE. Sirve para chequear visualmente que
     todos los campos se completan bien antes de facturar de verdad.
 
+    Responsable Inscripto (Factura A y B, únicos tipos confirmados con
+    grabación real por ahora): el Paso 4 de ARCA (revisión final y
+    confirmación) todavía no se grabó, así que para estas empresas SOLO se
+    permite modo_prueba=True -- llega completo hasta el final del Paso 3 y
+    se detiene ahí a propósito, sin arriesgarse a tocar un botón de
+    confirmación no confirmado. Facturar de verdad (modo_prueba=False)
+    tira un ValueError claro en vez de intentarlo a ciegas.
+
     Devuelve un dict {"fecha_usada": "DD/MM/AAAA", "fecha_ajustada": bool}:
     fecha_usada es la fecha que REALMENTE se escribió en ARCA (puede no ser
     la de comprobante.fecha_comprobante, ver calcular_fecha_facturacion);
@@ -252,6 +476,14 @@ def facturar_comprobante(comprobante, modo_prueba=False):
     pueda avisarle al usuario en vez de dejar el cambio pasar en silencio.
     """
     empresa = comprobante.empresa
+    es_ri = empresa.tipo_contribuyente == "Responsable Inscripto"
+
+    if es_ri and (comprobante.tipo_comprobante or "").strip() not in TIPOS_COMPROBANTE_RI_CONFIRMADOS:
+        raise ValueError(
+            f"El comprobante #{comprobante.id} es \"{comprobante.tipo_comprobante}\" -- todavía no está "
+            "grabado con Playwright cómo se carga ese tipo en ARCA para Responsable Inscripto (solo están "
+            "confirmadas Factura A y Factura B por ahora). Facturalo a mano en ARCA mientras tanto."
+        )
 
     campos_obligatorios = [
         comprobante.punto_venta, comprobante.tipo_comprobante, comprobante.concepto,
@@ -267,7 +499,70 @@ def facturar_comprobante(comprobante, modo_prueba=False):
             "tiene campos de facturación sin completar."
         )
 
-    fecha_facturacion = calcular_fecha_facturacion(comprobante.fecha_comprobante, empresa.config_dias_atras_fecha_emision)
+    # "Otra..." en Tipo de tarjeta necesita el texto del Detalle para poder
+    # completar la casilla de Descripción que aparece al lado en ARCA -- sin
+    # eso, ARCA no deja avanzar de esa pantalla.
+    if comprobante.tipo_pago == "Otra..." and not comprobante.tipo_pago_detalle:
+        raise ValueError(
+            f"El comprobante #{comprobante.id} tiene \"Otra...\" como Tipo de tarjeta pero le falta "
+            "el Detalle (ej. \"VISA Débito\") -- completalo en Revisión Manual antes de facturar."
+        )
+
+    # Cualquier comprobante "clase A" (Factura A, Nota de Débito/Crédito A,
+    # Recibo A, FCE A -- todos terminan en " A") exige CUIT del receptor
+    # SIEMPRE, sin importar qué Condición de IVA tenga. Además, sea cual sea
+    # el tipo de comprobante: si el operador eligió "CUIT" o "CUIL" como
+    # Tipo de documento, ese número tiene que estar completo -- solo con
+    # "DNI" puede quedar vacío. Se corta acá para no llegar hasta ARCA y que
+    # rebote recién ahí.
+    es_clase_a = (comprobante.tipo_comprobante or "").strip().endswith(" A")
+    tipo_doc = (comprobante.tipo_documento or "").strip().upper()
+    exige_numero_documento = es_clase_a or tipo_doc in ("CUIT", "CUIL")
+    if exige_numero_documento and not comprobante.cuit_receptor:
+        motivo = (
+            f'es "{comprobante.tipo_comprobante}" -- ese tipo exige CUIT del receptor sin importar su Condición de IVA'
+            if es_clase_a else
+            f'tiene "{comprobante.tipo_documento}" como Tipo de documento -- hace falta completar el número'
+        )
+        raise ValueError(f"El comprobante #{comprobante.id} {motivo}. Completalo antes de facturar.")
+
+    if es_ri:
+        if not comprobante.alicuota_iva or comprobante.alicuota_iva not in MAPA_ALICUOTA_IVA_ARCA:
+            raise ValueError(
+                f"El comprobante #{comprobante.id} no tiene una Alícuota de IVA válida cargada -- "
+                "completala antes de facturar."
+            )
+        for linea_extra in comprobante.lineas_extra:
+            campos_linea = [linea_extra.descripcion, linea_extra.unidad_medida, linea_extra.alicuota_iva]
+            if not all(campos_linea) or linea_extra.alicuota_iva not in MAPA_ALICUOTA_IVA_ARCA:
+                raise ValueError(
+                    f"El comprobante #{comprobante.id} tiene una línea de producto extra sin completar "
+                    "(descripción, unidad de medida o alícuota) -- completala antes de facturar."
+                )
+        # El Paso 4 de ARCA (revisión final y confirmación) para Responsable
+        # Inscripto todavía no se grabó con Playwright -- no sabemos cómo se
+        # ve esa pantalla ni con qué texto exacto confirma. Hasta grabar eso,
+        # se permite "Probar" (llega hasta el Paso 3 completo y se detiene
+        # ahí, sin arriesgar nada), pero no facturar de verdad.
+        if not modo_prueba:
+            raise ValueError(
+                f"El comprobante #{comprobante.id} es de una empresa Responsable Inscripto -- todavía no "
+                "se grabó el Paso 4 (confirmación final) de ARCA para ese régimen, así que por ahora solo "
+                "se puede usar \"Probar\", no facturar de verdad."
+            )
+
+    # Un comprobante con $0 (o un monto irrisorio) es señal segura de que el
+    # lector no pudo leer bien la imagen -- facturarlo así generaría una
+    # factura inválida en ARCA. Se corta acá, antes de tocar el navegador.
+    if (comprobante.importe_total or 0) < 100:
+        raise ValueError(
+            f"El comprobante #{comprobante.id} tiene un monto de ${comprobante.importe_total or 0:.2f} "
+            "-- revisalo antes de facturar (mínimo $100)."
+        )
+
+    fecha_facturacion = comprobante.fecha_facturacion_manual or calcular_fecha_facturacion(
+        comprobante.fecha_comprobante, empresa.config_dias_atras_fecha_emision
+    )
 
     cuil, password = obtener_credenciales(empresa)
 
@@ -290,22 +585,60 @@ def facturar_comprobante(comprobante, modo_prueba=False):
                 comprobante.fecha_desde, comprobante.fecha_hasta,
             )
 
-            completar_receptor(
-                ventana,
-                comprobante.condicion_iva,
-                comprobante.tipo_documento,
-                comprobante.condicion_venta,
-                medio_pago_detectado=comprobante.medio_pago_detectado,
-                tipo_pago=comprobante.tipo_pago,
-                numero_pago=comprobante.numero_pago,
-            )
-            completar_detalle(
-                ventana,
-                descripcion=comprobante.descripcion,
-                unidad_medida=comprobante.unidad_medida,
-                importe=comprobante.precio_unitario,
-            )
-            confirmar_y_facturar(ventana, modo_prueba=modo_prueba)
+            if es_ri:
+                completar_receptor_ri(
+                    ventana,
+                    comprobante.condicion_iva,
+                    comprobante.tipo_documento,
+                    comprobante.cuit_receptor,
+                    comprobante.condicion_venta,
+                    medio_pago_detectado=comprobante.medio_pago_detectado,
+                    tipo_pago=comprobante.tipo_pago,
+                    tipo_pago_detalle=comprobante.tipo_pago_detalle,
+                    numero_pago=comprobante.numero_pago,
+                )
+                neto, _iva = descomponer_neto_iva(comprobante.precio_unitario, comprobante.alicuota_iva)
+                lineas = [{
+                    "descripcion": comprobante.descripcion,
+                    "cantidad": comprobante.cantidad,
+                    "unidad_medida": comprobante.unidad_medida,
+                    "precio_unitario_neto": neto,
+                    "alicuota_iva": comprobante.alicuota_iva,
+                }]
+                for linea_extra in comprobante.lineas_extra:
+                    neto_extra, _ = descomponer_neto_iva(linea_extra.precio_unitario, linea_extra.alicuota_iva)
+                    lineas.append({
+                        "descripcion": linea_extra.descripcion,
+                        "cantidad": linea_extra.cantidad,
+                        "unidad_medida": linea_extra.unidad_medida,
+                        "precio_unitario_neto": neto_extra,
+                        "alicuota_iva": linea_extra.alicuota_iva,
+                    })
+                completar_lineas_productos_ri(ventana, lineas)
+                # Llegados acá, modo_prueba siempre es True (se valida más
+                # arriba) -- se queda un rato en el Paso 4 para poder
+                # revisarlo a ojo, pero no se toca nada más: todavía no está
+                # grabado cómo confirma esta pantalla para Responsable
+                # Inscripto.
+                ventana.wait_for_timeout(30000)
+            else:
+                completar_receptor(
+                    ventana,
+                    comprobante.condicion_iva,
+                    comprobante.tipo_documento,
+                    comprobante.condicion_venta,
+                    medio_pago_detectado=comprobante.medio_pago_detectado,
+                    tipo_pago=comprobante.tipo_pago,
+                    tipo_pago_detalle=comprobante.tipo_pago_detalle,
+                    numero_pago=comprobante.numero_pago,
+                )
+                completar_detalle(
+                    ventana,
+                    descripcion=comprobante.descripcion,
+                    unidad_medida=comprobante.unidad_medida,
+                    importe=comprobante.precio_unitario,
+                )
+                confirmar_y_facturar(ventana, modo_prueba=modo_prueba)
         finally:
             contexto.close()
             navegador.close()

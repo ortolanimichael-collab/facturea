@@ -1,10 +1,12 @@
 import os
 import io
+import random
+import re
 import tempfile
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, or_
 
 from dotenv import load_dotenv
 load_dotenv()  # lee el .env local si existe (no hace nada si no hay ninguno,
@@ -17,11 +19,11 @@ from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user,
 )
 
-from models import db, init_db, Usuario, Empresa, Comprobante, RegistroSubida, DIAS_PRUEBA_GRATIS
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, DIAS_PRUEBA_GRATIS
 import drive_sync
 from procesador import procesar_archivo
-from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_facturacion
-from previsualizacion_pdf import generar_pdf_preview
+from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_facturacion, concepto_efectivo
+from previsualizacion_pdf import generar_pdf_preview, CONCEPTOS
 from almacenamiento import ruta_absoluta, eliminar_archivo_persistente
 import google_drive_cliente
 
@@ -32,6 +34,16 @@ init_db(app)
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
+
+# IDs de empresa que pidieron detener un "Facturar todo lo pendiente" en
+# curso -- se consulta desde adentro del bucle en facturar_todos() (ver
+# más abajo) y se limpia solo al terminar. Vive en memoria del proceso
+# nomás: alcanza porque el servidor corre con threaded=True, así que el
+# pedido de "detener" (otra request) se atiende en paralelo mientras la
+# facturación en lote sigue corriendo en la suya. Si el servidor corriera
+# con más de un worker/proceso, esto NO se compartiría entre ellos -- no es
+# el caso acá (ni en local ni en el dev server de Render tal como está).
+_detener_facturacion_solicitado = set()
 
 DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID", "")
 
@@ -154,7 +166,58 @@ def _sync_missing_columns():
                 print(f"[info] columna agregada automáticamente: {table.name}.{col.name}")
 
 
+with app.app_context():
+    # Crea las tablas que estén en el modelo pero todavía no existan en la
+    # base (ej: comprobante_lineas, agregada para las líneas extra de
+    # Responsable Inscripto) -- no toca ni borra nada de las que ya existen.
+    db.create_all()
+
 _sync_missing_columns()
+
+
+def _sync_column_widths():
+    """
+    Si un campo de texto (VARCHAR) se agranda en el modelo (ej: pasó de
+    guardar un solo valor a una lista separada por coma, como
+    Empresa.config_tipo_comprobante), esto lo agranda también en la base
+    real -- _sync_missing_columns() de arriba solo agrega columnas NUEVAS,
+    no cambia el tamaño de una que ya existe.
+
+    Agrandar es siempre seguro (nunca se pierde texto ya guardado, algo que
+    sí podría pasar si se achicara) -- por eso esto solo agranda, nunca
+    achica, y solo toca columnas de texto con largo fijo (VARCHAR), no
+    Integer/Boolean/etc.
+
+    Solo corre contra Postgres: SQLite (la base local de prueba) ni
+    siquiera hace cumplir el largo de un VARCHAR, así que no hace falta
+    tocar nada ahí, y además su ALTER TABLE no soporta cambiar el tipo de
+    una columna existente (rompería con un error si lo intentáramos).
+    """
+    with app.app_context():
+        if db.engine.dialect.name != "postgresql":
+            return
+        inspector = inspect(db.engine)
+        for table in db.metadata.tables.values():
+            if not inspector.has_table(table.name):
+                continue
+            columnas_reales = {c["name"]: c["type"] for c in inspector.get_columns(table.name)}
+            for col in table.columns:
+                tipo_real = columnas_reales.get(col.name)
+                if tipo_real is None:
+                    continue  # todavía no existe -- eso lo crea _sync_missing_columns()
+
+                largo_real = getattr(tipo_real, "length", None)
+                largo_modelo = getattr(col.type, "length", None)
+                if largo_real is None or largo_modelo is None or largo_modelo <= largo_real:
+                    continue  # no es VARCHAR de largo fijo, o ya entra tal como está
+
+                col_type = col.type.compile(db.engine.dialect)
+                with db.engine.begin() as conn:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ALTER COLUMN "{col.name}" TYPE {col_type}'))
+                print(f"[info] columna agrandada automáticamente: {table.name}.{col.name} ({largo_real} -> {largo_modelo})")
+
+
+_sync_column_widths()
 
 
 crear_admin_inicial()
@@ -365,7 +428,9 @@ def _completar_campos_empresa(empresa, form):
     if password_nueva:  # solo la pisa si escribió algo nuevo (no la borra si la deja vacía)
         empresa.set_password_arca(password_nueva)
 
-    empresa.config_tipo_comprobante = form.get("config_tipo_comprobante", "").strip()
+    empresa.config_tipo_comprobante = ",".join(form.getlist("config_tipo_comprobante"))
+    empresa.tipo_contribuyente = form.get("tipo_contribuyente", "").strip() or "Monotributo"
+    empresa.config_alicuota_iva = ",".join(form.getlist("config_alicuota_iva")) or None
     empresa.puntos_venta_disponibles = form.get("puntos_venta_disponibles", "").strip()
     empresa.config_punto_venta = form.get("config_punto_venta", "").strip()
     empresa.config_concepto = form.get("config_concepto", "").strip()
@@ -389,6 +454,7 @@ def _completar_campos_empresa(empresa, form):
             pass  # si vino un formato raro, no se toca lo que ya tenía guardado
 
     empresa.descripciones_disponibles = form.get("descripciones_disponibles", "").strip()
+    empresa.descripciones_alicuotas = form.get("descripciones_alicuotas", "").strip() or None
     lista_descripciones = [d.strip() for d in empresa.descripciones_disponibles.split(",") if d.strip()]
     empresa.config_producto_servicio = lista_descripciones[0] if lista_descripciones else ""
     empresa.config_descripcion_aleatoria = form.get("config_descripcion_aleatoria") == "on"
@@ -441,25 +507,33 @@ def empresa_drive_desconectar(empresa_id):
 
 # ---------- Comprobantes (por empresa) ----------
 
-@app.route("/empresas/<int:empresa_id>/comprobantes")
-@login_required
-def comprobantes(empresa_id):
-    empresa = current_user.empresas.filter_by(id=empresa_id).first()
-    if not empresa:
-        return redirect(url_for("panel"))
+def _parse_fecha_ddmmaaaa(fecha_str):
+    """Convierte 'DD/MM/AAAA' a datetime, o None si viene vacía o mal formada."""
+    if not fecha_str:
+        return None
+    try:
+        return datetime.strptime(fecha_str, "%d/%m/%Y")
+    except ValueError:
+        return None
 
-    filas = (
-        Comprobante.query.filter_by(empresa_id=empresa.id)
-        .order_by(Comprobante.creado_en.desc())
-        .all()
-    )
 
-    # La fecha REAL del comprobante (fecha_comprobante) no es necesariamente
-    # la que termina en ARCA -- calcular_fecha_facturacion puede ajustarla
-    # hacia el default de la empresa. Se calcula acá, por fila, para
-    # mostrarla en la tabla sin guardar nada nuevo en la base (es un atributo
-    # de Python en memoria, no una columna -- no se persiste ni hace falta).
-    for c in filas:
+def _ordenar_por_fecha_facturacion(comprobantes, empresa):
+    """
+    Ordena una lista de Comprobante de más vieja a más nueva -- primero por
+    fecha de facturación (la que realmente se va a escribir en ARCA, la
+    misma que calcula calcular_fecha_facturacion), y a igualdad de esa
+    fecha, por fecha del comprobante real. Así se factura/se muestra primero
+    lo más atrasado. De paso, deja cargado c.fecha_facturacion_ajustada en
+    cada fila (se usa para mostrarla en la tabla, no hace falta recalcularla
+    después).
+
+    Las filas sin fecha válida (no debería pasar, pero por las dudas) quedan
+    al final, no se pierden.
+    """
+    for c in comprobantes:
+        if c.fecha_facturacion_manual:
+            c.fecha_facturacion_ajustada = c.fecha_facturacion_manual
+            continue
         c.fecha_facturacion_ajustada = None
         if c.fecha_comprobante:
             try:
@@ -469,6 +543,33 @@ def comprobantes(empresa_id):
             except ValueError:
                 pass  # fecha con formato inesperado -- se deja en None, la tabla muestra "—"
 
+    def _clave(c):
+        clave_facturacion = _parse_fecha_ddmmaaaa(c.fecha_facturacion_ajustada) or datetime.max
+        clave_comprobante = _parse_fecha_ddmmaaaa(c.fecha_comprobante) or datetime.max
+        return (clave_facturacion, clave_comprobante)
+
+    return sorted(comprobantes, key=_clave)
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes")
+@login_required
+def comprobantes(empresa_id):
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return redirect(url_for("panel"))
+
+    filas = (
+        Comprobante.query.filter_by(empresa_id=empresa.id)
+        .all()
+    )
+
+    # Se ordena de más vieja a más nueva por fecha de facturación (y a
+    # igualdad, por fecha del comprobante) -- así en pantalla, y también al
+    # facturar todo en lote, se atiende primero lo más atrasado. Esto ya
+    # calcula fecha_facturacion_ajustada de paso (ver la función).
+    filas = _ordenar_por_fecha_facturacion(filas, empresa)
+
+    for c in filas:
         # facturado_en se guarda en UTC (datetime.utcnow) -- para mostrarlo hay
         # que pasarlo a hora de Argentina (UTC-3, sin horario de verano) o
         # quedaría 3 horas adelantado en la tabla.
@@ -485,12 +586,24 @@ def comprobantes(empresa_id):
                 "fecha_comprobante": c.fecha_comprobante, "concepto": c.concepto,
                 "fecha_desde": c.fecha_desde, "fecha_hasta": c.fecha_hasta,
                 "tipo_documento": c.tipo_documento, "cuit_receptor": c.cuit_receptor,
+                "cuit_alternativo": c.cuit_alternativo,
                 "medio_pago_detectado": c.medio_pago_detectado,
                 "condicion_iva": c.condicion_iva, "condicion_venta": c.condicion_venta,
-                "tipo_pago": c.tipo_pago, "numero_pago": c.numero_pago,
+                "tipo_pago": c.tipo_pago, "tipo_pago_detalle": c.tipo_pago_detalle,
+                "numero_pago": c.numero_pago,
                 "descripcion": c.descripcion, "cantidad": c.cantidad,
                 "unidad_medida": c.unidad_medida, "precio_unitario": c.precio_unitario,
                 "nombre_razon_social": c.nombre_razon_social, "id_transaccion": c.id_transaccion,
+                "fecha_facturacion_manual": c.fecha_facturacion_manual or c.fecha_facturacion_ajustada,
+                "alicuota_iva": c.alicuota_iva,
+                "lineas_extra": [
+                    {
+                        "id": l.id, "descripcion": l.descripcion, "cantidad": l.cantidad,
+                        "unidad_medida": l.unidad_medida, "precio_unitario": l.precio_unitario,
+                        "alicuota_iva": l.alicuota_iva,
+                    }
+                    for l in c.lineas_extra
+                ],
             },
         }
         for c in filas
@@ -498,7 +611,7 @@ def comprobantes(empresa_id):
 
     return render_template(
         "comprobantes.html", comprobantes=filas, usuario=current_user, empresa=empresa,
-        datos_revision=datos_revision, stats=_calcular_estadisticas(empresa.id),
+        datos_revision=datos_revision, stats=_calcular_estadisticas(empresa.id), conceptos=CONCEPTOS,
     )
 
 
@@ -539,7 +652,13 @@ def _calcular_estadisticas(empresa_id):
             for r in duplicados
         ],
         "nombres_bloqueados": [r.nombre_archivo for r in bloqueados],
-        "nombres_error": [r.nombre_archivo for r in con_error],
+        "errores_detalle": [
+            {
+                "registro_id": r.id, "nombre_archivo": r.nombre_archivo,
+                "tiene_imagen": bool(r.archivo_ruta or r.archivo_drive_id),
+            }
+            for r in con_error
+        ],
         "facturados": len(facturados),
         "pendientes": len(pendientes),
         "monto_pendiente": monto_pendiente,
@@ -568,7 +687,18 @@ def api_subir(empresa_id):
                 continue
             ruta_local = os.path.join(tmp, archivo.filename)
             archivo.save(ruta_local)
-            resultado, comprobante_relacionado, (archivo_ruta_intento, archivo_drive_id_intento) = procesar_archivo(ruta_local, archivo.filename, current_user.id, empresa.id, fecha_hoy)
+            # El CUIL/CUIT propio de la empresa (con el que factura en ARCA)
+            # se le pasa al lector para que lo descarte si aparece en la
+            # imagen -- ahí casi siempre es el emisor (nuestro cliente
+            # mandándose a sí mismo el comprobante), no el receptor real. Se
+            # limpia a solo dígitos porque cuil_arca puede estar guardado
+            # con o sin guiones según cómo lo haya tipeado el usuario, y el
+            # lector siempre compara contra dígitos limpios.
+            cuit_propio = re.sub(r"\D", "", empresa.cuil_arca or "")
+            resultado, comprobante_relacionado, (archivo_ruta_intento, archivo_drive_id_intento) = procesar_archivo(
+                ruta_local, archivo.filename, current_user.id, empresa.id, fecha_hoy,
+                cuit_propio_cliente=cuit_propio,
+            )
             resumen[clave[resultado]] += 1
 
             ext = archivo.filename.rsplit(".", 1)[-1].lower() if "." in archivo.filename else ""
@@ -678,10 +808,12 @@ CAMPOS_EDITABLES_COMPROBANTE = {
     "fecha_hasta": "texto",
     "tipo_documento": "texto",
     "cuit_receptor": "texto",
+    "cuit_alternativo": "texto",
     "medio_pago_detectado": "texto",
     "condicion_iva": "texto",
     "condicion_venta": "texto",
     "tipo_pago": "texto",
+    "tipo_pago_detalle": "texto",
     "numero_pago": "texto",
     "descripcion": "texto",
     "cantidad": "numero",
@@ -689,6 +821,8 @@ CAMPOS_EDITABLES_COMPROBANTE = {
     "precio_unitario": "numero",
     "nombre_razon_social": "texto",
     "id_transaccion": "texto",
+    "fecha_facturacion_manual": "texto",
+    "alicuota_iva": "texto",
 }
 
 
@@ -723,6 +857,172 @@ def comprobante_editar_campo(empresa_id, comprobante_id):
     if campo in ("cantidad", "precio_unitario"):
         comprobante.recalcular_importe()
 
+    if campo == "fecha_comprobante":
+        # "Desde" y "Hasta" (el período declarado en ARCA) casi siempre
+        # coinciden con la fecha del comprobante -- se actualizan solas.
+        comprobante.fecha_desde = valor
+        comprobante.fecha_hasta = valor
+        # La fecha de facturación también se recalcula con el criterio de
+        # siempre (hoy-10 días, salvo que el comprobante sea más reciente),
+        # PISANDO cualquier fecha de facturación manual que hubiera antes --
+        # si el usuario cambió la fecha del comprobante, lo lógico es que
+        # quiera que la facturación se ajuste a la fecha nueva, no que
+        # se quede con un valor manual pensado para la fecha vieja. Si hace
+        # falta, se puede volver a editar a mano después sin problema.
+        try:
+            comprobante.fecha_facturacion_manual = calcular_fecha_facturacion(
+                valor, empresa.config_dias_atras_fecha_emision
+            )
+        except ValueError:
+            pass  # fecha con formato raro -- se deja la fecha de facturación como estaba
+
+        # Si la empresa factura por defecto en concepto Mixto pero esta
+        # fecha nueva cae dentro de los últimos N días, se declara como
+        # "Productos" en vez de mixto (ver concepto_efectivo). Se recalcula
+        # siempre a partir de la config de la empresa, no del concepto que
+        # ya tenía el comprobante -- si el usuario lo había cambiado a mano
+        # a otra cosa sin relación con esto, esta regla no debería pisarlo
+        # para siempre; se vuelve a partir de la base configurada cada vez.
+        comprobante.concepto = concepto_efectivo(
+            valor, empresa.config_concepto, empresa.config_dias_atras_fecha_emision
+        )
+
+    if campo == "descripcion":
+        # Si esta descripción tiene una alícuota propia cargada para la
+        # empresa (ej. "Embutidos" -> 10.5%), se aplica sola -- así no hay
+        # que acordarse de tocar dos campos cada vez que cambia el producto.
+        # Si la descripción no está en la lista de la empresa (o no es
+        # Responsable Inscripto), no se toca la alícuota que ya tenía.
+        alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(valor)
+        if alicuota_de_la_descripcion is not None:
+            comprobante.alicuota_iva = alicuota_de_la_descripcion
+
+    db.session.commit()
+    return jsonify(
+        ok=True, importe_total=comprobante.importe_total,
+        fecha_desde=comprobante.fecha_desde, fecha_hasta=comprobante.fecha_hasta,
+        fecha_facturacion_manual=comprobante.fecha_facturacion_manual,
+        concepto=comprobante.concepto, alicuota_iva=comprobante.alicuota_iva,
+    )
+
+
+CAMPOS_EDITABLES_LINEA = {
+    "descripcion": "texto",
+    "cantidad": "numero",
+    "unidad_medida": "texto",
+    "precio_unitario": "numero",
+    "alicuota_iva": "texto",
+}
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/lineas", methods=["POST"])
+@login_required
+def comprobante_agregar_linea(empresa_id, comprobante_id):
+    """
+    Agrega una línea EXTRA de producto/servicio (la 2ª, 3ª, etc. -- la
+    primera son los campos de siempre del propio comprobante). Empieza en
+    blanco/con defaults mínimos; se completa después editando campo por
+    campo, igual que cualquier otro campo de Revisión Manual.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    comprobante = Comprobante.query.filter_by(id=comprobante_id, empresa_id=empresa.id).first()
+    if not comprobante:
+        return jsonify(ok=False, error="Ese comprobante no existe."), 404
+    if comprobante.estado == "facturado":
+        return jsonify(ok=False, error="Este comprobante ya fue facturado, no se puede editar."), 400
+
+    siguiente_orden = 2 + len(comprobante.lineas_extra)
+    linea = ComprobanteLinea(
+        comprobante_id=comprobante.id, orden=siguiente_orden,
+        descripcion="", cantidad=1.0, unidad_medida=empresa.config_unidad_medida,
+        precio_unitario=0.0, alicuota_iva=None,
+    )
+    db.session.add(linea)
+    comprobante.recalcular_importe()
+    db.session.commit()
+
+    return jsonify(
+        ok=True, importe_total=comprobante.importe_total,
+        linea={
+            "id": linea.id, "descripcion": linea.descripcion, "cantidad": linea.cantidad,
+            "unidad_medida": linea.unidad_medida, "precio_unitario": linea.precio_unitario,
+            "alicuota_iva": linea.alicuota_iva,
+        },
+    )
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/lineas/<int:linea_id>/editar", methods=["POST"])
+@login_required
+def comprobante_editar_linea(empresa_id, comprobante_id, linea_id):
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    comprobante = Comprobante.query.filter_by(id=comprobante_id, empresa_id=empresa.id).first()
+    if not comprobante:
+        return jsonify(ok=False, error="Ese comprobante no existe."), 404
+    if comprobante.estado == "facturado":
+        return jsonify(ok=False, error="Este comprobante ya fue facturado, no se puede editar."), 400
+
+    linea = ComprobanteLinea.query.filter_by(id=linea_id, comprobante_id=comprobante.id).first()
+    if not linea:
+        return jsonify(ok=False, error="Esa línea no existe."), 404
+
+    datos = request.get_json(silent=True) or {}
+    campo = datos.get("campo")
+    valor = datos.get("valor")
+
+    tipo = CAMPOS_EDITABLES_LINEA.get(campo)
+    if not tipo:
+        return jsonify(ok=False, error=f"El campo '{campo}' no se puede editar."), 400
+
+    if tipo == "numero":
+        try:
+            valor = float(str(valor).replace(",", "."))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, error="Ese valor no es un número válido."), 400
+
+    setattr(linea, campo, valor)
+    if campo in ("cantidad", "precio_unitario"):
+        comprobante.recalcular_importe()
+
+    alicuota_de_la_descripcion = None
+    if campo == "descripcion":
+        # Mismo mecanismo que la descripción principal: si esta descripción
+        # tiene una alícuota propia cargada para la empresa, se aplica sola
+        # -- si el operador prefiere otra, la puede cambiar después a mano
+        # sin problema, esto no la deja bloqueada.
+        alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(valor)
+        if alicuota_de_la_descripcion is not None:
+            linea.alicuota_iva = alicuota_de_la_descripcion
+
+    db.session.commit()
+    return jsonify(ok=True, importe_total=comprobante.importe_total, alicuota_iva=linea.alicuota_iva)
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/lineas/<int:linea_id>/eliminar", methods=["POST"])
+@login_required
+def comprobante_eliminar_linea(empresa_id, comprobante_id, linea_id):
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    comprobante = Comprobante.query.filter_by(id=comprobante_id, empresa_id=empresa.id).first()
+    if not comprobante:
+        return jsonify(ok=False, error="Ese comprobante no existe."), 404
+    if comprobante.estado == "facturado":
+        return jsonify(ok=False, error="Este comprobante ya fue facturado, no se puede editar."), 400
+
+    linea = ComprobanteLinea.query.filter_by(id=linea_id, comprobante_id=comprobante.id).first()
+    if not linea:
+        return jsonify(ok=False, error="Esa línea no existe."), 404
+
+    db.session.delete(linea)
+    db.session.flush()
+    comprobante.recalcular_importe()
     db.session.commit()
     return jsonify(ok=True, importe_total=comprobante.importe_total)
 
@@ -764,6 +1064,22 @@ def comprobantes_editar_columna(empresa_id):
         setattr(comprobante, campo, valor)
         if campo in ("cantidad", "precio_unitario"):
             comprobante.recalcular_importe()
+        if campo == "fecha_comprobante":
+            comprobante.fecha_desde = valor
+            comprobante.fecha_hasta = valor
+            try:
+                comprobante.fecha_facturacion_manual = calcular_fecha_facturacion(
+                    valor, empresa.config_dias_atras_fecha_emision
+                )
+            except ValueError:
+                pass
+            comprobante.concepto = concepto_efectivo(
+                valor, empresa.config_concepto, empresa.config_dias_atras_fecha_emision
+            )
+        if campo == "descripcion":
+            alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(valor)
+            if alicuota_de_la_descripcion is not None:
+                comprobante.alicuota_iva = alicuota_de_la_descripcion
 
     db.session.commit()
     return jsonify(ok=True, actualizados=len(comprobantes_afectados))
@@ -781,6 +1097,14 @@ def comprobante_eliminar(empresa_id, comprobante_id):
         return jsonify(ok=False, error="Ese comprobante no existe."), 404
     if comprobante.estado == "facturado":
         return jsonify(ok=False, error="Este comprobante ya fue facturado, no se puede eliminar."), 400
+
+    # Mismo motivo que en eliminar-todos/eliminar-facturados: un RegistroSubida
+    # puede tener comprobante_id apuntando a este comprobante -- hay que
+    # soltar esa referencia antes de borrarlo, o la base rechaza el DELETE
+    # por foreign key (en Postgres siempre; en SQLite local puede no notarse).
+    RegistroSubida.query.filter_by(comprobante_id=comprobante.id).update(
+        {"comprobante_id": None}, synchronize_session=False
+    )
 
     eliminar_archivo_persistente(empresa, comprobante.archivo_ruta, comprobante.archivo_drive_id)
     db.session.delete(comprobante)
@@ -803,9 +1127,7 @@ def comprobantes_eliminar_todos(empresa_id):
 
     comprobantes = Comprobante.query.filter_by(empresa_id=empresa.id).all()
     cantidad = len(comprobantes)
-    for c in comprobantes:
-        eliminar_archivo_persistente(empresa, c.archivo_ruta, c.archivo_drive_id)
-        db.session.delete(c)
+    ids_comprobantes = [c.id for c in comprobantes]
 
     # Este botón es un reset total ("eliminar TODOS los archivos"), así que
     # también hay que borrar el historial de RegistroSubida completo -- si no,
@@ -814,10 +1136,36 @@ def comprobantes_eliminar_todos(empresa_id):
     # comparador de duplicados con un ícono roto en vez de mostrar nada
     # coherente) y las estadísticas de "archivos subidos en total" nunca
     # bajan a cero aunque se haya borrado todo.
-    registros = RegistroSubida.query.filter_by(empresa_id=empresa.id).all()
+    #
+    # IMPORTANTE: los RegistroSubida hay que borrarlos ANTES que los
+    # Comprobante -- un RegistroSubida puede tener comprobante_id apuntando a
+    # uno de estos comprobantes, y esa es una foreign key. Borrar el
+    # Comprobante mientras todavía existe un RegistroSubida que lo referencia
+    # rompe la integridad referencial (funcionaba "por accidente" en SQLite
+    # local porque no siempre chequea foreign keys, pero en Postgres -- como
+    # producción, o local apuntando a la base de producción -- siempre las
+    # hace cumplir y tira IntegrityError, cortando TODA la operación sin
+    # borrar nada y devolviendo una página de error en vez de JSON).
+    #
+    # El filtro no puede ser SOLO por empresa_id: confirmado con un caso real
+    # que un RegistroSubida puede tener comprobante_id apuntando a uno de
+    # estos comprobantes con su PROPIO empresa_id desalineado (dato viejo
+    # inconsistente) -- si el filtro fuera solo por empresa_id, ese renglón
+    # queda afuera, no se borra, y su comprobante_id fantasma sigue
+    # rompiendo el DELETE de comprobantes de la misma forma. Por eso se
+    # traen por las dos condiciones con OR: todos los de esta empresa, MÁS
+    # cualquiera que referencie a uno de estos comprobantes puntuales.
+    condiciones = [RegistroSubida.empresa_id == empresa.id]
+    if ids_comprobantes:
+        condiciones.append(RegistroSubida.comprobante_id.in_(ids_comprobantes))
+    registros = RegistroSubida.query.filter(or_(*condiciones)).all()
     for r in registros:
         eliminar_archivo_persistente(empresa, r.archivo_ruta, r.archivo_drive_id)
         db.session.delete(r)
+
+    for c in comprobantes:
+        eliminar_archivo_persistente(empresa, c.archivo_ruta, c.archivo_drive_id)
+        db.session.delete(c)
 
     db.session.commit()
     return jsonify(ok=True, eliminados=cantidad)
@@ -838,9 +1186,6 @@ def comprobantes_eliminar_facturados(empresa_id):
     comprobantes = Comprobante.query.filter_by(empresa_id=empresa.id, estado="facturado").all()
     cantidad = len(comprobantes)
     ids_borrados = [c.id for c in comprobantes]
-    for c in comprobantes:
-        eliminar_archivo_persistente(empresa, c.archivo_ruta, c.archivo_drive_id)
-        db.session.delete(c)
 
     # Los RegistroSubida de "duplicado" que apuntaban a alguno de estos
     # comprobantes como "original" quedarían con un comprobante_id fantasma
@@ -848,11 +1193,30 @@ def comprobantes_eliminar_facturados(empresa_id):
     # referencia, no el registro entero, para no perder las estadísticas
     # históricas. El front ya maneja bien un comprobante_id vacío (muestra
     # "No encontré el comprobante original" en vez de romper la imagen).
+    #
+    # IMPORTANTE: esto tiene que hacerse ANTES de borrar los Comprobante, no
+    # después -- mientras el RegistroSubida siga apuntando (comprobante_id)
+    # a un Comprobante que se está por borrar, la base rechaza el DELETE por
+    # violar la foreign key (pasa siempre en Postgres; en SQLite local puede
+    # no notarse porque no siempre la chequea). Si eso pasa, la transacción
+    # entera se cancela sin borrar nada y el servidor responde con una
+    # página de error en vez de JSON.
+    #
+    # El filtro es solo por comprobante_id -- NO también por empresa_id.
+    # Confirmado con un caso real que un RegistroSubida puede tener
+    # comprobante_id apuntando a uno de estos comprobantes con su PROPIO
+    # empresa_id desalineado (dato viejo inconsistente); exigir las dos
+    # condiciones a la vez dejaba ese renglón afuera y su comprobante_id
+    # fantasma seguía rompiendo el DELETE igual. Lo que hay que evitar es
+    # la referencia rota, sin importar qué empresa_id tenga guardado.
     if ids_borrados:
         RegistroSubida.query.filter(
-            RegistroSubida.empresa_id == empresa.id,
             RegistroSubida.comprobante_id.in_(ids_borrados),
         ).update({"comprobante_id": None}, synchronize_session=False)
+
+    for c in comprobantes:
+        eliminar_archivo_persistente(empresa, c.archivo_ruta, c.archivo_drive_id)
+        db.session.delete(c)
 
     db.session.commit()
     return jsonify(ok=True, eliminados=cantidad)
@@ -921,6 +1285,96 @@ def registro_subida_archivo(empresa_id, registro_id):
     return send_file(ruta)
 
 
+@app.route("/empresas/<int:empresa_id>/registros/<int:registro_id>/agregar-manual", methods=["POST"])
+@login_required
+def registro_agregar_manual(empresa_id, registro_id):
+    """
+    Carga un comprobante "en blanco" a partir de un archivo que quedó en
+    "error de lectura" -- reutiliza la imagen que ya se guardó de ese
+    intento (no hace falta volver a subirla) y lo arma con los valores por
+    defecto de la empresa, igual que si el OCR lo hubiera podido leer pero
+    sin sacar ningún dato real de la imagen. Queda con monto $0 (se marca
+    "REVISAR" y no se puede facturar hasta corregirlo) para que se complete
+    entero -- monto, fecha, concepto, CUIT, todo -- desde Revisión Manual,
+    con el mismo editor que cualquier otro comprobante pendiente.
+
+    El RegistroSubida pasa de "error" a "nuevo" y queda vinculado al
+    comprobante recién creado, así desaparece de la lista de errores.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    registro = RegistroSubida.query.filter_by(id=registro_id, empresa_id=empresa.id).first()
+    if not registro:
+        return jsonify(ok=False, error="No encontramos ese registro."), 404
+    if registro.resultado != "error":
+        return jsonify(ok=False, error="Este archivo no está en la lista de errores."), 400
+
+    dias_atras = empresa.config_dias_atras_fecha_emision or 10
+    fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
+
+    cantidad = 1.0
+    if empresa.config_descripcion_aleatoria:
+        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    else:
+        opciones_descripcion = []
+    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+
+    comprobante = Comprobante(
+        usuario_id=current_user.id,
+        empresa_id=empresa.id,
+        id_transaccion=None,  # cargado a mano, sin lectura de OCR -- no participa de la detección de duplicados
+        punto_venta=empresa.config_punto_venta,
+        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        alicuota_iva=(empresa.config_alicuota_iva or "").split(",")[0] or None,
+        descripcion=descripcion_elegida,
+        unidad_medida=empresa.config_unidad_medida,
+        precio_unitario=0.0,
+        tipo_documento="DNI",
+        cuit_receptor="",
+        nombre_razon_social="CONSUMIDOR FINAL",
+        fecha_comprobante=fecha_comprobante,
+        medio_pago_detectado="Transferencia",
+        condicion_iva=empresa.config_condicion_iva,
+        condicion_venta=(empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else "",
+        fecha_desde=fecha_comprobante,
+        fecha_hasta=fecha_comprobante,
+        importe_total=0.0,
+        cantidad=cantidad,
+        archivo_origen=registro.nombre_archivo,
+        # Reutiliza el mismo archivo que ya se guardó para este intento --
+        # no se vuelve a subir ni se duplica en disco/Drive.
+        archivo_ruta=registro.archivo_ruta,
+        archivo_drive_id=registro.archivo_drive_id,
+    )
+    db.session.add(comprobante)
+    db.session.flush()  # para tener comprobante.id antes de vincularlo
+
+    registro.resultado = "nuevo"
+    registro.comprobante = comprobante
+
+    db.session.commit()
+    return jsonify(ok=True, comprobante_id=comprobante.id)
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/detener-facturacion", methods=["POST"])
+@login_required
+def detener_facturacion(empresa_id):
+    """
+    Pide que un "Facturar todo lo pendiente" en curso se detenga apenas
+    termine el comprobante que esté facturando en ese momento -- no corta a
+    mitad de uno (eso podría dejarlo a medio facturar en ARCA), pero no
+    arranca el siguiente.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+    _detener_facturacion_solicitado.add(empresa.id)
+    return jsonify(ok=True)
+
+
 @app.route("/empresas/<int:empresa_id>/comprobantes/facturar-todos", methods=["POST"])
 @login_required
 def facturar_todos(empresa_id):
@@ -949,13 +1403,28 @@ def facturar_todos(empresa_id):
             Comprobante.empresa_id == empresa.id,
             Comprobante.estado.in_(["pendiente", "error"]),
         )
-        .order_by(Comprobante.creado_en.asc())
         .all()
     )
+    # Se factura primero lo más atrasado (mismo criterio que en la tabla:
+    # fecha de facturación y, a igualdad, fecha del comprobante).
+    pendientes = _ordenar_por_fecha_facturacion(pendientes, empresa)
 
-    resumen = {"facturados": 0, "errores": 0, "detalle": [], "detenido_por_limite": False, "monto_facturado": 0.0}
+    # Se limpia por las dudas quede pegado en "true" de una corrida anterior
+    # que haya terminado sin pasar por acá (ej. el servidor se reinició a
+    # mitad de camino) -- cada facturación en lote nueva arranca sin la
+    # detención ya pedida de antemano.
+    _detener_facturacion_solicitado.discard(empresa.id)
+
+    resumen = {
+        "facturados": 0, "errores": 0, "detalle": [], "detenido_por_limite": False,
+        "detenido_manualmente": False, "monto_facturado": 0.0,
+    }
     acumulado = 0.0
     for comprobante in pendientes:
+        if empresa.id in _detener_facturacion_solicitado:
+            resumen["detenido_manualmente"] = True
+            break
+
         importe = comprobante.importe_total or 0.0
         if limite_monto is not None and (acumulado + importe) > limite_monto:
             resumen["detenido_por_limite"] = True
@@ -990,6 +1459,7 @@ def facturar_todos(empresa_id):
             resumen["detalle"].append({"id": comprobante.id, "error": str(e)})
         db.session.commit()  # se guarda uno a uno: si se corta a mitad de camino, no se pierde lo ya facturado
 
+    _detener_facturacion_solicitado.discard(empresa.id)
     return jsonify(ok=True, resumen=resumen)
 
 
