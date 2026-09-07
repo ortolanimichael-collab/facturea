@@ -342,12 +342,16 @@
       <input type="file" id="archivos" multiple accept="image/png,image/jpeg,application/pdf">
       <button id="btnSubir" class="btn">Subir y leer</button>
     </div>
+    {% if empresa.tiene_mercadopago_conectado() %}
+    <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
+    {% endif %}
     <button id="btnFacturarTodo" class="btn btn-facturar-todo">Facturar todo lo pendiente</button>
     <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
     <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
     <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
     <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
   </div>
+  <span class="msg" id="mercadopagoMsg" style="display:block;margin:-8px 0 8px;"></span>
 
   <div id="resumen" class="resumen"></div>
 
@@ -1598,6 +1602,47 @@ document.getElementById('btnSubir').addEventListener('click', async () => {
     btn.textContent = 'Subir y leer';
   }
 });
+
+const btnTraerMercadoPago = document.getElementById('btnTraerMercadoPago');
+if (btnTraerMercadoPago) {
+  btnTraerMercadoPago.addEventListener('click', async () => {
+    const dias = prompt('¿Cuántos días hacia atrás querés traer? (máximo 90)', '30');
+    if (dias === null) return; // canceló el cuadro
+    const diasNum = parseInt(dias, 10);
+    if (!diasNum || diasNum < 1) {
+      alert('Poné un número de días válido.');
+      return;
+    }
+
+    const msg = document.getElementById('mercadopagoMsg');
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Trayendo movimientos de Mercado Pago...';
+    btnTraerMercadoPago.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/mercadopago/traer-movimientos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dias: diasNum }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--stamp)';
+        msg.textContent = data.error || 'No se pudo traer los movimientos.';
+        return;
+      }
+      msg.style.color = 'var(--teal-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} pagos -- ${data.nuevos} nuevos agregados a la tabla como "pendiente".`;
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--stamp)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnTraerMercadoPago.disabled = false;
+    }
+  });
+}
 
 /* ---------- Revisión manual: imagen a la derecha, datos editables a la izquierda ---------- */
 
