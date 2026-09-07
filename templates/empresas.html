@@ -286,6 +286,26 @@
         {% endif %}
       </section>
 
+      <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
+        <h2 style="font-size:14px;">Mercado Pago de esta empresa (opcional)</h2>
+        <p class="desc">Conectando la cuenta de Mercado Pago de esta empresa vas a poder traer su historial de pagos (Point, QR, link de pago, transferencias) directo a la tabla, sin tener que subir cada comprobante a mano.</p>
+
+        {% if error_mercadopago %}
+        <p class="hint" style="color:var(--stamp);">No se pudo conectar: {{ error_mercadopago }}</p>
+        {% endif %}
+
+        {% if not empresa %}
+        <p class="hint">Guardá la empresa primero -- después de creada vas a poder conectar su Mercado Pago acá mismo.</p>
+        {% elif empresa.tiene_mercadopago_conectado() %}
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span class="estado-config completa">Conectado: {{ empresa.mercadopago_email or "cuenta de Mercado Pago" }}</span>
+          <button type="button" onclick="desconectarMercadoPago({{ empresa.id }})" style="font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:3px;border:1.5px solid var(--stamp);color:var(--stamp);background:var(--paper);cursor:pointer;">Desconectar</button>
+        </div>
+        {% else %}
+        <a href="/empresas/{{ empresa.id }}/mercadopago/conectar" class="btn" style="text-decoration:none;display:inline-block;">Conectar Mercado Pago</a>
+        {% endif %}
+      </section>
+
       <div class="campo">
         <label>Puntos de venta</label>
         <div class="puntos-venta-lista" id="listaPuntos">
@@ -438,6 +458,21 @@ async function desconectarDrive(empresaId) {
   if (!ok) return;
   try {
     const r = await fetch(`/empresas/${empresaId}/drive/desconectar`, { method: 'POST' });
+    if (r.ok || r.redirected) {
+      window.location.reload();
+    } else {
+      alert('No se pudo desconectar. Probá de nuevo.');
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+async function desconectarMercadoPago(empresaId) {
+  const ok = confirm('¿Desconectar Mercado Pago de esta empresa? Vas a poder volver a conectarla cuando quieras.');
+  if (!ok) return;
+  try {
+    const r = await fetch(`/empresas/${empresaId}/mercadopago/desconectar`, { method: 'POST' });
     if (r.ok || r.redirected) {
       window.location.reload();
     } else {
