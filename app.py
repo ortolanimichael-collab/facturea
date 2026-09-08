@@ -380,7 +380,14 @@ def panel():
 def empresas():
     if request.method == "POST":
         nueva = Empresa(usuario_id=current_user.id)
-        _completar_campos_empresa(nueva, request.form)
+        error = _completar_campos_empresa(nueva, request.form)
+        if error:
+            lista = current_user.empresas.order_by(Empresa.nombre_interno).all()
+            fecha_emision_default = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
+            return render_template(
+                "empresas.html", usuario=current_user, empresas=lista, empresa=None,
+                fecha_emision_default=fecha_emision_default, error_formulario=error,
+            )
         db.session.add(nueva)
         db.session.commit()
         return redirect(url_for("empresas"))
@@ -398,7 +405,15 @@ def empresas_editar(empresa_id):
         return redirect(url_for("empresas"))
 
     if request.method == "POST":
-        _completar_campos_empresa(empresa, request.form)
+        error = _completar_campos_empresa(empresa, request.form)
+        if error:
+            lista = current_user.empresas.order_by(Empresa.nombre_interno).all()
+            dias_atras = empresa.config_dias_atras_fecha_emision or 10
+            fecha_emision_default = (datetime.now() - timedelta(days=dias_atras)).strftime("%Y-%m-%d")
+            return render_template(
+                "empresas.html", usuario=current_user, empresas=lista, empresa=empresa,
+                fecha_emision_default=fecha_emision_default, error_formulario=error,
+            )
         db.session.commit()
         return redirect(url_for("empresas"))
 
@@ -423,11 +438,33 @@ def empresas_eliminar(empresa_id):
     return redirect(url_for("empresas"))
 
 
+def _validar_cuil(valor):
+    """
+    El CUIL/CUIT de ARCA tiene que ser 11 dígitos (con o sin guiones) -- se
+    coló un caso real donde alguien puso un email en ese campo por error y
+    rompió el guardado con un error 500 (la columna solo acepta 20
+    caracteres) en vez de un aviso claro, porque nada lo validaba antes de
+    mandarlo a la base. Devuelve un mensaje de error, o None si está bien.
+    """
+    solo_digitos = re.sub(r"\D", "", valor or "")
+    if len(solo_digitos) != 11:
+        return f'El CUIL/CUIT tiene que tener 11 dígitos (con o sin guiones, ej. 27353876932) -- "{valor}" no es válido.'
+    return None
+
+
 def _completar_campos_empresa(empresa, form):
+    """Devuelve un mensaje de error (string) si algo no es válido, o None si
+    quedó todo bien. Mientras haya error, el objeto empresa puede quedar con
+    cambios a medias en memoria, pero eso no importa -- las rutas que llaman
+    a esto no hacen commit si hay error, así que nada se guarda de más."""
     empresa.nombre_interno = form.get("nombre_interno", "").strip()
     empresa.razon_social_arca = form.get("razon_social_arca", "").strip()
 
-    empresa.cuil_arca = form.get("cuil_arca", "").strip()
+    cuil_arca_nuevo = form.get("cuil_arca", "").strip()
+    error_cuil = _validar_cuil(cuil_arca_nuevo)
+    if error_cuil:
+        return error_cuil
+    empresa.cuil_arca = cuil_arca_nuevo
     password_nueva = form.get("password_arca", "").strip()
     if password_nueva:  # solo la pisa si escribió algo nuevo (no la borra si la deja vacía)
         empresa.set_password_arca(password_nueva)
@@ -462,6 +499,8 @@ def _completar_campos_empresa(empresa, form):
     lista_descripciones = [d.strip() for d in empresa.descripciones_disponibles.split(",") if d.strip()]
     empresa.config_producto_servicio = lista_descripciones[0] if lista_descripciones else ""
     empresa.config_descripcion_aleatoria = form.get("config_descripcion_aleatoria") == "on"
+
+    return None
 
 
 # ---------- Google Drive por empresa ----------
