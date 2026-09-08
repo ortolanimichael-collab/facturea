@@ -3,6 +3,7 @@ import io
 import random
 import re
 import tempfile
+import threading
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
@@ -59,22 +60,44 @@ def avisar_registro_al_panel(usuario):
     Le avisa al panel de membresías que se registró un cliente nuevo, para
     que aparezca ahí sin tener que cargarlo a mano. Si el panel no está
     configurado o está apagado, no rompe el registro -- solo queda logueado.
+
+    El aviso se manda en un hilo de FONDO, no en el mismo pedido del
+    registro -- panel-membresías está en el plan Free de Render, que se
+    duerme por inactividad y puede tardar hasta 50-60 segundos en
+    despertar. Si se esperara esa respuesta acá mismo, quien se está
+    registrando se queda con la pantalla congelada todo ese tiempo
+    (confirmado con un caso real: se perdió un aviso porque el timeout
+    de 5 segundos de antes ni siquiera le daba tiempo a despertar).
+    Mandándolo de fondo, con más margen de tiempo, el registro responde
+    al instante igual, y el aviso tiene una chance real de llegar.
     """
     if not PANEL_MEMBRESIAS_URL:
         return
-    try:
-        requests.post(
-            f"{PANEL_MEMBRESIAS_URL}/api/registro-externo",
-            json={
-                "producto": "facturea",
-                "nombre": usuario.nombre_razon_social or usuario.email,
-                "email": usuario.email,
-                "dias_prueba": DIAS_PRUEBA_GRATIS,
-            },
-            timeout=5,
-        )
-    except requests.exceptions.RequestException as e:
-        print(f"[aviso] no se pudo avisar al panel de membresías: {e}")
+
+    # Se sacan los valores ACÁ, antes de lanzar el hilo -- el objeto `usuario`
+    # viene de SQLAlchemy, y una vez que este pedido termine (que puede pasar
+    # antes de que el hilo de fondo llegue a correr), su sesión puede quedar
+    # cerrada; tratar de leer sus atributos en ese momento tira error. Pasando
+    # strings sueltos al hilo, en vez del objeto entero, se evita el problema.
+    nombre = usuario.nombre_razon_social or usuario.email
+    email = usuario.email
+
+    def _mandar():
+        try:
+            requests.post(
+                f"{PANEL_MEMBRESIAS_URL}/api/registro-externo",
+                json={
+                    "producto": "facturea",
+                    "nombre": nombre,
+                    "email": email,
+                    "dias_prueba": DIAS_PRUEBA_GRATIS,
+                },
+                timeout=65,  # le da margen a que panel-membresías despierte del reposo
+            )
+        except requests.exceptions.RequestException as e:
+            print(f"[aviso] no se pudo avisar al panel de membresías: {e}")
+
+    threading.Thread(target=_mandar, daemon=True).start()
 
 
 def avisar_checkin_al_panel(email):
@@ -82,17 +105,24 @@ def avisar_checkin_al_panel(email):
     Le avisa al panel de membresías que este usuario se logueó ahora mismo,
     para que "última conexión" en el panel refleje la realidad. No rompe
     el login si el panel no está configurado o está apagado.
+
+    Mismo criterio que avisar_registro_al_panel: se manda de fondo, para
+    no hacer esperar el login de nadie a que panel-membresías despierte.
     """
     if not PANEL_MEMBRESIAS_URL:
         return
-    try:
-        requests.get(
-            f"{PANEL_MEMBRESIAS_URL}/api/validar-licencia",
-            params={"producto": "facturea", "email": email, "version": "web"},
-            timeout=5,
-        )
-    except requests.exceptions.RequestException as e:
-        print(f"[aviso] no se pudo avisar el check-in al panel de membresías: {e}")
+
+    def _mandar():
+        try:
+            requests.get(
+                f"{PANEL_MEMBRESIAS_URL}/api/validar-licencia",
+                params={"producto": "facturea", "email": email, "version": "web"},
+                timeout=65,
+            )
+        except requests.exceptions.RequestException as e:
+            print(f"[aviso] no se pudo avisar el check-in al panel de membresías: {e}")
+
+    threading.Thread(target=_mandar, daemon=True).start()
 
 
 def crear_admin_inicial():
@@ -1698,6 +1728,54 @@ def sincronizar_membresia():
 
     db.session.commit()
     return jsonify({"ok": True, "estado": usuario.estado})
+
+
+@app.route("/api/interno/registros-nuevos", methods=["GET"])
+def registros_nuevos_para_panel():
+    """
+    Panel de membresías llama ACÁ (con la misma clave compartida de arriba)
+    para traer los usuarios que se registraron en Facturea -- pensado para
+    que panel-membresías, que casi siempre está apagado/dormido, se ponga
+    al día solo en el momento en que alguien lo abre, en vez de depender
+    de que Facturea le avise en el instante exacto del registro (que se
+    pierde si panel-membresías no está despierto justo entonces -- ver
+    avisar_registro_al_panel() más arriba, que sigue existiendo como
+    intento inmediato "mejor esfuerzo", pero este endpoint es el que
+    garantiza que tarde o temprano se termine poniendo al día).
+
+    Parámetro opcional "desde" (fecha y hora ISO, ej.
+    "2026-09-01T00:00:00"): si viene, solo trae los usuarios registrados
+    DESPUÉS de esa fecha -- así panel-membresías puede pedir solo lo nuevo
+    desde la última vez que se sincronizó, en vez de la lista entera cada
+    vez que se abre.
+    """
+    clave_recibida = request.headers.get("X-Webhook-Secret", "")
+    if not PANEL_MEMBRESIAS_SECRET or clave_recibida != PANEL_MEMBRESIAS_SECRET:
+        return jsonify({"error": "no autorizado"}), 401
+
+    query = Usuario.query
+    desde_str = request.args.get("desde")
+    if desde_str:
+        try:
+            desde = datetime.fromisoformat(desde_str)
+            query = query.filter(Usuario.fecha_registro > desde)
+        except ValueError:
+            return jsonify({"error": "el parámetro 'desde' no es una fecha ISO válida"}), 400
+
+    usuarios = query.order_by(Usuario.fecha_registro.asc()).all()
+    return jsonify({
+        "ok": True,
+        "usuarios": [
+            {
+                "email": u.email,
+                "nombre": u.nombre_razon_social or u.email,
+                "fecha_registro": u.fecha_registro.isoformat() if u.fecha_registro else None,
+                "fecha_vencimiento": u.fecha_vencimiento.isoformat() if u.fecha_vencimiento else None,
+                "dias_prueba": DIAS_PRUEBA_GRATIS,
+            }
+            for u in usuarios
+        ],
+    })
 
 
 # ---------- Utilidad para crear el primer administrador ----------
