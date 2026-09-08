@@ -562,6 +562,16 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 if m:
                     importe_encontrado = _parsear_monto_argentino(m.group(1), m.group(2))
                     print(f"  🟢 [DEBUG-UALÁ] Monto (fmt2 'Monto $'): {importe_encontrado}")
+            # Formato 3: "Comprobante de transferencia\n$14.600" -- el monto es el
+            # título grande de la pantalla, sin la palabra "Monto" al lado y SIN
+            # centavos (no trae ",00"). Confirmado con un comprobante real de este
+            # formato que las reglas de arriba no llegaban a encontrar porque
+            # todas piden coma + 2 dígitos decimales.
+            if importe_encontrado == 0.0:
+                m = re.search(r'\$\s*([\d]{1,3}(?:\.[\d]{3})*)(?:,([\d]{2}))?\b', texto_raw)
+                if m:
+                    importe_encontrado = _parsear_monto_argentino(m.group(1), m.group(2) or "00")
+                    print(f"  🟢 [DEBUG-UALÁ] Monto (fmt3 '$ sin centavos'): {importe_encontrado}")
             # Fallback: cualquier $ X.XXX,XX en el documento
             if importe_encontrado == 0.0:
                 m = re.search(r'\$\s*([\d\.]+),([\d]{2})', texto_raw)
@@ -584,7 +594,12 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 print(f"  🟢 [DEBUG-UALÁ] ID (fmt1 'Id Op.'): {nro_movimiento}")
             # Formato 2: "ID. Operación  168c35f8-37a4-6d1f-b4ff-d7f27454819e"
             if nro_movimiento == "Desconocido":
-                m = re.search(r'ID\.?\s+[Oo]peraci[oó]n\s*[\s\n]*([A-Z0-9a-z\-]{10,50})', texto_raw)
+                # La clase de caracteres incluye vocales acentuadas (áéíóú) porque el
+                # OCR a veces "alucina" una tilde sobre una letra o número que en el
+                # comprobante real no la tiene (confirmado con un ID real que salió
+                # como "ORDó6LEN8..." en vez de "ORD6LEN8...") -- mejor capturar el ID
+                # con ese ruido adentro que perderlo del todo y quedar "Desconocido".
+                m = re.search(r'ID\.?\s+[Oo]peraci[oó]n\s*[\s\n]*([A-Za-z0-9\-áéíóúÁÉÍÓÚ]{10,50})', texto_raw)
                 if m:
                     nro_movimiento = m.group(1).strip().upper()
                     print(f"  🟢 [DEBUG-UALÁ] ID (fmt2 'ID. Operación'): {nro_movimiento}")
