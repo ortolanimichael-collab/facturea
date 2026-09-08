@@ -248,6 +248,7 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
         nombre_razon_social=datos.get("Nombre / Razón Social"),
         nombre_remitente=datos.get("Nombre Remitente"),
         fecha_comprobante=fecha_comprobante_detectada,
+        fecha_no_detectada=bool(datos.get("Fecha No Detectada")),
         medio_pago_detectado=medio_pago_detectado,
         tipo_pago=datos.get("Tipo Pago"),
         tipo_pago_detalle=datos.get("Tipo Pago Detalle"),

@@ -255,6 +255,7 @@ class Comprobante(db.Model):
     nombre_razon_social = db.Column(db.String(200))
     nombre_remitente = db.Column(db.String(200))
     fecha_comprobante = db.Column(db.String(20))
+    fecha_no_detectada = db.Column(db.Boolean, default=False)  # True si el lector no encontró una fecha real en el comprobante y usó la de hoy por defecto -- se resalta en la tabla para que se revise a mano
     # Si el usuario la edita a mano en Revisión Manual, se guarda acá y tiene
     # prioridad sobre la que calcula calcular_fecha_facturacion(). Si queda
     # vacía (caso normal), se sigue calculando sola como siempre.

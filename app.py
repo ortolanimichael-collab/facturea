@@ -684,6 +684,7 @@ def comprobantes(empresa_id):
             "campos": {
                 "punto_venta": c.punto_venta, "tipo_comprobante": c.tipo_comprobante,
                 "fecha_comprobante": c.fecha_comprobante, "concepto": c.concepto,
+                "fecha_no_detectada": bool(c.fecha_no_detectada),
                 "fecha_desde": c.fecha_desde, "fecha_hasta": c.fecha_hasta,
                 "tipo_documento": c.tipo_documento, "cuit_receptor": c.cuit_receptor,
                 "cuit_alternativo": c.cuit_alternativo,
@@ -958,6 +959,10 @@ def comprobante_editar_campo(empresa_id, comprobante_id):
         comprobante.recalcular_importe()
 
     if campo == "fecha_comprobante":
+        # Si el usuario edita la fecha a mano, ya la revisó -- se saca el
+        # aviso de "fecha no detectada" aunque el valor que ponga sea
+        # parecido al que había (lo importante es que la confirmó él).
+        comprobante.fecha_no_detectada = False
         # "Desde" y "Hasta" (el período declarado en ARCA) casi siempre
         # coinciden con la fecha del comprobante -- se actualizan solas.
         comprobante.fecha_desde = valor
@@ -1165,6 +1170,7 @@ def comprobantes_editar_columna(empresa_id):
         if campo in ("cantidad", "precio_unitario"):
             comprobante.recalcular_importe()
         if campo == "fecha_comprobante":
+            comprobante.fecha_no_detectada = False
             comprobante.fecha_desde = valor
             comprobante.fecha_hasta = valor
             try:
