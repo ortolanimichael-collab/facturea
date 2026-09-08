@@ -244,6 +244,7 @@
   tr.fila-monto-bajo{background:rgba(184,58,42,0.06);}
   td.celda-monto{white-space:nowrap;}
   td.monto-revisar{color:var(--stamp);font-weight:700;}
+  .aviso-fecha-no-detectada{color:var(--stamp);font-size:11.5px;font-weight:600;margin:-2px 0 6px;}
   .badge-revisar{
     display:inline-block;margin-left:8px;padding:2px 7px;border-radius:3px;
     background:var(--stamp);color:#fff;font-family:var(--mono);font-size:10px;
@@ -458,10 +459,10 @@
         {% set editable = c.estado != "facturado" %}
         {% set monto_bajo = (c.precio_unitario or 0) < 100 %}
         {% set falta_cuit_a = ((c.tipo_comprobante or "").strip().endswith(" A") or (c.tipo_documento or "").strip().upper() in ("CUIT", "CUIL")) and not c.cuit_receptor %}
-        <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a) }}">
+        <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a or c.fecha_no_detectada) }}">
           <td {% if editable %}data-field="punto_venta" data-type="text" data-value="{{ c.punto_venta or '' }}"{% endif %}>{{ c.punto_venta or "—" }}</td>
           <td {% if editable %}data-field="tipo_comprobante" data-type="select" data-value="{{ c.tipo_comprobante or '' }}"{% endif %}>{{ c.tipo_comprobante or "—" }}</td>
-          <td {% if editable %}data-field="fecha_comprobante" data-type="date" data-value="{{ c.fecha_comprobante or '' }}"{% endif %}>{{ c.fecha_comprobante or "—" }}</td>
+          <td {% if editable %}data-field="fecha_comprobante" data-type="date" data-value="{{ c.fecha_comprobante or '' }}"{% endif %} class="{{ 'monto-revisar' if c.fecha_no_detectada }}" {% if c.fecha_no_detectada %}title="No se encontró una fecha en el comprobante -- se usó la fecha de hoy por defecto. Revisala."{% endif %}>{{ c.fecha_comprobante or "—" }}{% if c.fecha_no_detectada %} ⚠{% endif %}</td>
           <td class="col-fecha-ajustada">{{ c.fecha_facturacion_ajustada or "—" }}</td>
           <td {% if editable %}data-field="concepto" data-type="select" data-value="{{ c.concepto or '' }}"{% endif %}>{{ conceptos.get(c.concepto, "—") }}</td>
           <td {% if editable %}data-field="fecha_desde" data-type="date" data-value="{{ c.fecha_desde or '' }}"{% endif %}>{{ c.fecha_desde or "—" }}</td>
@@ -1794,6 +1795,13 @@ function renderRevision() {
     const label = document.createElement('label');
     label.textContent = etiqueta;
     grupo.appendChild(label);
+
+    if (campo === 'fecha_comprobante' && c.campos.fecha_no_detectada) {
+      const aviso = document.createElement('p');
+      aviso.className = 'aviso-fecha-no-detectada';
+      aviso.textContent = '⚠ No se encontró una fecha en el comprobante -- se usó la fecha de hoy por defecto. Revisala.';
+      grupo.appendChild(aviso);
+    }
 
     let widget;
     if (soloLectura) {
