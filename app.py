@@ -55,6 +55,42 @@ PANEL_MEMBRESIAS_URL = os.environ.get("PANEL_MEMBRESIAS_URL", "")  # ej: http://
 PANEL_MEMBRESIAS_SECRET = os.environ.get("PANEL_MEMBRESIAS_SECRET", "")
 
 
+def _enviar_registro_al_panel(nombre, email):
+    """Hace el POST real a panel-membresías avisando el alta -- función
+    interna, sin hilo propio, para poder encadenarla en orden con el
+    check-in (ver avisar_registro_y_checkin_al_panel más abajo)."""
+    if not PANEL_MEMBRESIAS_URL:
+        return
+    try:
+        requests.post(
+            f"{PANEL_MEMBRESIAS_URL}/api/registro-externo",
+            json={
+                "producto": "facturea",
+                "nombre": nombre,
+                "email": email,
+                "dias_prueba": DIAS_PRUEBA_GRATIS,
+            },
+            timeout=65,  # le da margen a que panel-membresías despierte del reposo
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"[aviso] no se pudo avisar al panel de membresías: {e}")
+
+
+def _enviar_checkin_al_panel(email):
+    """Hace el GET real a panel-membresías avisando el check-in -- función
+    interna, sin hilo propio, mismo motivo que la de arriba."""
+    if not PANEL_MEMBRESIAS_URL:
+        return
+    try:
+        requests.get(
+            f"{PANEL_MEMBRESIAS_URL}/api/validar-licencia",
+            params={"producto": "facturea", "email": email, "version": "web"},
+            timeout=65,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"[aviso] no se pudo avisar el check-in al panel de membresías: {e}")
+
+
 def avisar_registro_al_panel(usuario):
     """
     Le avisa al panel de membresías que se registró un cliente nuevo, para
@@ -71,9 +107,6 @@ def avisar_registro_al_panel(usuario):
     Mandándolo de fondo, con más margen de tiempo, el registro responde
     al instante igual, y el aviso tiene una chance real de llegar.
     """
-    if not PANEL_MEMBRESIAS_URL:
-        return
-
     # Se sacan los valores ACÁ, antes de lanzar el hilo -- el objeto `usuario`
     # viene de SQLAlchemy, y una vez que este pedido termine (que puede pasar
     # antes de que el hilo de fondo llegue a correr), su sesión puede quedar
@@ -81,23 +114,7 @@ def avisar_registro_al_panel(usuario):
     # strings sueltos al hilo, en vez del objeto entero, se evita el problema.
     nombre = usuario.nombre_razon_social or usuario.email
     email = usuario.email
-
-    def _mandar():
-        try:
-            requests.post(
-                f"{PANEL_MEMBRESIAS_URL}/api/registro-externo",
-                json={
-                    "producto": "facturea",
-                    "nombre": nombre,
-                    "email": email,
-                    "dias_prueba": DIAS_PRUEBA_GRATIS,
-                },
-                timeout=65,  # le da margen a que panel-membresías despierte del reposo
-            )
-        except requests.exceptions.RequestException as e:
-            print(f"[aviso] no se pudo avisar al panel de membresías: {e}")
-
-    threading.Thread(target=_mandar, daemon=True).start()
+    threading.Thread(target=_enviar_registro_al_panel, args=(nombre, email), daemon=True).start()
 
 
 def avisar_checkin_al_panel(email):
@@ -109,20 +126,30 @@ def avisar_checkin_al_panel(email):
     Mismo criterio que avisar_registro_al_panel: se manda de fondo, para
     no hacer esperar el login de nadie a que panel-membresías despierte.
     """
+    threading.Thread(target=_enviar_checkin_al_panel, args=(email,), daemon=True).start()
+
+
+def avisar_registro_y_checkin_al_panel(usuario):
+    """
+    Para cuando alguien se REGISTRA (que de paso ya lo deja logueado):
+    manda el aviso de alta y el de check-in EN ORDEN, dentro del MISMO hilo
+    de fondo -- si se lanzaran como dos hilos separados (como pasaba antes),
+    no hay ninguna garantía de en qué orden le llegan a panel-membresías, y
+    quedó confirmado con un caso real que el check-in podía llegar ANTES de
+    que la suscripción nueva terminara de crearse del otro lado -- ahí no
+    hay nada todavía que marcar como conectado, y "última conexión" se
+    quedaba en blanco aunque el aviso en sí no fallara.
+    """
     if not PANEL_MEMBRESIAS_URL:
         return
+    nombre = usuario.nombre_razon_social or usuario.email
+    email = usuario.email
 
-    def _mandar():
-        try:
-            requests.get(
-                f"{PANEL_MEMBRESIAS_URL}/api/validar-licencia",
-                params={"producto": "facturea", "email": email, "version": "web"},
-                timeout=65,
-            )
-        except requests.exceptions.RequestException as e:
-            print(f"[aviso] no se pudo avisar el check-in al panel de membresías: {e}")
+    def _mandar_en_orden():
+        _enviar_registro_al_panel(nombre, email)
+        _enviar_checkin_al_panel(email)
 
-    threading.Thread(target=_mandar, daemon=True).start()
+    threading.Thread(target=_mandar_en_orden, daemon=True).start()
 
 
 def crear_admin_inicial():
@@ -354,12 +381,7 @@ def registro():
         db.session.add(nuevo)
         db.session.commit()
 
-        avisar_registro_al_panel(nuevo)
-        # Registrarse implica loguearse de una -- si no se avisa el check-in
-        # acá también, cualquier cuenta que se registre y nunca vuelva a pasar
-        # por /login (típico en pruebas rápidas) queda mostrando "Nunca se
-        # conectó" en panel-membresías, aunque sí entró.
-        avisar_checkin_al_panel(nuevo.email)
+        avisar_registro_y_checkin_al_panel(nuevo)
 
         login_user(nuevo)
         return redirect(url_for("panel"))
