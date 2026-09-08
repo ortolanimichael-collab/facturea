@@ -207,11 +207,11 @@
       <div class="fila-2">
         <div class="campo">
           <label>Nombre interno (como la vas a identificar vos)</label>
-          <input type="text" name="nombre_interno" value="{{ empresa.nombre_interno if empresa else '' }}" placeholder="ej: Juan Moya (Kiosco)" required>
+          <input type="text" name="nombre_interno" value="{{ empresa.nombre_interno if empresa else '' }}" placeholder="ej: María Pérez (Almacén)" required>
         </div>
         <div class="campo">
           <label>Razón social en ARCA</label>
-          <input type="text" name="razon_social_arca" value="{{ empresa.razon_social_arca if empresa else '' }}" placeholder="ej: MOYA HERRERA JUAN MARIA" required>
+          <input type="text" name="razon_social_arca" value="{{ empresa.razon_social_arca if empresa else '' }}" placeholder="ej: PEREZ MARIA LORENA" required>
           <p class="hint">Escribilo EXACTO como aparece en ARCA al elegir "Empresa a representar" (mayúsculas incluidas).</p>
         </div>
       </div>
@@ -259,11 +259,11 @@
         <div class="fila-2">
           <div class="campo">
             <label>CUIL</label>
-            <input type="text" name="cuil_arca" value="{{ empresa.cuil_arca if empresa else '' }}" placeholder="ej: 27353876932" inputmode="numeric" maxlength="20" required>
+            <input type="text" name="cuil_arca" value="{{ empresa.cuil_arca if empresa else '' }}" placeholder="ej: 27353876932" inputmode="numeric" maxlength="20" autocomplete="off" required>
           </div>
           <div class="campo">
             <label>Contraseña de la Clave Fiscal</label>
-            <input type="password" name="password_arca" placeholder="{{ '••••••••' if empresa and empresa.password_arca_cifrada else 'Ingresá la contraseña' }}">
+            <input type="password" name="password_arca" placeholder="{{ '••••••••' if empresa and empresa.password_arca_cifrada else 'Ingresá la contraseña' }}" autocomplete="new-password">
             <p class="hint">{{ "Ya está guardada. Dejá este campo vacío si no la querés cambiar." if empresa and empresa.password_arca_cifrada else "Se guarda cifrada, nunca en texto plano." }}</p>
           </div>
         </div>
@@ -313,11 +313,11 @@
         <label>Puntos de venta</label>
         <div class="puntos-venta-lista" id="listaPuntos">
           {% for p in puntos_actuales %}
-          <span class="chip" data-punto="{{ p }}">{{ p }}<button type="button" onclick="quitarPunto('{{ p }}')">×</button></span>
+          <span class="chip" data-punto="{{ p }}">{{ p|int }}<button type="button" onclick="quitarPunto('{{ p }}')">×</button></span>
           {% endfor %}
         </div>
         <div class="agregar-punto">
-          <input type="text" id="nuevoPunto" placeholder="ej: 00004">
+          <input type="text" id="nuevoPunto" placeholder="ej: 4">
           <button type="button" onclick="agregarPunto()">+ Agregar</button>
         </div>
         <p class="hint">Agregá todos los puntos de venta que use esta empresa. Después elegís cuál usar por defecto abajo.</p>
@@ -329,7 +329,7 @@
         <select name="config_punto_venta" id="selectPuntoDefault" required>
           <option value="">Seleccionar...</option>
           {% for p in puntos_actuales %}
-          <option value="{{ p }}" {{ "selected" if empresa and empresa.config_punto_venta == p }}>{{ p }}</option>
+          <option value="{{ p }}" {{ "selected" if empresa and empresa.config_punto_venta == p }}>{{ p|int }}</option>
           {% endfor %}
         </select>
       </div>
@@ -495,7 +495,7 @@ function refrescarSelectPuntos() {
     const p = chip.dataset.punto;
     const opt = document.createElement('option');
     opt.value = p;
-    opt.textContent = p;
+    opt.textContent = String(parseInt(p, 10)); // se ve sin ceros -- ARCA sigue recibiendo el value real con ceros
     if (p === valorActual) opt.selected = true;
     select.appendChild(opt);
   });
@@ -505,15 +505,20 @@ function refrescarSelectPuntos() {
 
 function agregarPunto() {
   const input = document.getElementById('nuevoPunto');
-  const valor = input.value.trim();
-  if (!valor) return;
+  const crudo = input.value.trim();
+  if (!crudo) return;
+  const numero = parseInt(crudo, 10);
+  if (isNaN(numero) || numero < 1) { input.value = ''; return; }
+  // ARCA exige el punto de venta con 4 dígitos y ceros a la izquierda --
+  // se completa solo acá, así alcanza con que el usuario escriba "4".
+  const valor = String(numero).padStart(4, '0');
   const lista = document.getElementById('listaPuntos');
   if (lista.querySelector(`[data-punto="${valor}"]`)) { input.value = ''; return; }
 
   const chip = document.createElement('span');
   chip.className = 'chip';
   chip.dataset.punto = valor;
-  chip.innerHTML = `${valor}<button type="button" onclick="quitarPunto('${valor}')">×</button>`;
+  chip.innerHTML = `${numero}<button type="button" onclick="quitarPunto('${valor}')">×</button>`;
   lista.appendChild(chip);
   input.value = '';
   refrescarSelectPuntos();
