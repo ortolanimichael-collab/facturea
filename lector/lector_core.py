@@ -279,6 +279,14 @@ def _ocr_pdf_como_imagen(ruta_pdf, nombre_archivo=""):
         img_pil = img_pil.point(lambda x: 0 if x < 200 else 255)
 
         texto_pagina = pytesseract.image_to_string(img_pil, lang="spa", config="--psm 6")
+        # Segunda pasada con otro modo de segmentación (psm 3, "página completa
+        # automática") y se SUMA al texto de arriba, sin reemplazarlo -- el modo
+        # psm 6 asume que todo el texto es más o menos del mismo tamaño, y en
+        # comprobantes con un título gigante (ej. el monto en letra grande de
+        # AstroPay) se lo termina comiendo entero. psm 3 sí lo agarra. Sumar en
+        # vez de cambiar el modo por completo evita romper los formatos que ya
+        # andaban bien con psm 6 solo.
+        texto_pagina += "\n" + pytesseract.image_to_string(img_pil, lang="spa", config="--psm 3")
         print(f"  🟡 [OCR-PDF] Página {i+1}: {len(texto_pagina)} chars extraídos por OCR")
         textos_paginas.append(texto_pagina)
 
@@ -326,6 +334,10 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
         # cae al OCR (_ocr_pdf_como_imagen). El OCR confunde "$" con "S", generando
         # "S 14.800,00" en vez de "$ 14.800,00". Se detecta por "brubank" en el texto.
         es_brubank_pdf = 'brubank' in texto and ('envio de dinero' in texto or 'envío de dinero' in texto)
+        # AstroPay: fondo oscuro, formato "Enviado por / Receptor" con CUIT/CUIL
+        # de cada lado, monto en formato internacional (ARS 4000.00, con PUNTO
+        # decimal, no coma) y fecha con año de 2 dígitos (01/08/26).
+        es_astropay = 'astropay' in texto and 'comprobante de transferencia' in texto
 
         # ── DETECCIÓN UALÁ ────────────────────────────────────────────────────
         # Ualá siempre tiene "ualá" en el texto Y "comprobante de transferencia".
@@ -347,6 +359,105 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
         es_uala_fmt1 = es_uala and 'monto debitado' in texto and 'cuenta destino' in texto
         # Formato 2: tiene "destinatario" y ("emisor" o "banco destino")
         es_uala_fmt2 = es_uala and 'destinatario' in texto and ('emisor' in texto or 'banco destino' in texto)
+
+        # ── BLOQUE ASTROPAY: procesamiento y retorno temprano ────────────────
+        if es_astropay:
+            print(f"  🟢 [DEBUG-ASTROPAY] Entrando al bloque AstroPay.")
+
+            # --- CUIT/CUIL de cada lado (Enviado por / Receptor) ---
+            # El documento trae DOS bloques "CUIT/CUIL <número>" -- el primero
+            # es de quien mandó la plata ("Enviado por"), el segundo de quien
+            # la recibió ("Receptor"). Cuál de los dos es "el cliente" depende
+            # de cuál NO sea el CUIT de la propia empresa (mismo criterio que
+            # ya se usa en el bloque Brubank de más abajo).
+            cuits_astropay = re.findall(r'CUIT/CUIL\s+(\d{11})', texto_raw, re.IGNORECASE)
+            print(f"  🟢 [DEBUG-ASTROPAY] CUITs encontrados: {cuits_astropay}")
+            cuit = "0"
+            for c in cuits_astropay:
+                if c != cuit_propio_cliente:
+                    cuit = c
+                    break
+            cuit_alternativo = "0"
+            for c in cuits_astropay:
+                if c != cuit and c != cuit_propio_cliente:
+                    cuit_alternativo = c
+                    break
+
+            # --- NOMBRE: el que corresponde al CUIT elegido arriba ---
+            nombre_razon_social = "CONSUMIDOR FINAL"
+            m_enviado = re.search(r'Enviado\s+por\s+([^\n]+)', texto_raw, re.IGNORECASE)
+            m_receptor = re.search(r'Receptor\s+([^\n]+)', texto_raw, re.IGNORECASE)
+            # Si el CUIT que se quedó como "cuit" viene DESPUÉS de "Receptor" en
+            # el texto (o sea, es el segundo de los dos), el nombre es el de
+            # "Receptor"; si es el primero, es el de "Enviado por".
+            pos_cuit_elegido = texto_raw.find(cuit) if cuit != "0" else -1
+            pos_receptor = texto_raw.lower().find('receptor')
+            if pos_cuit_elegido != -1 and pos_receptor != -1 and pos_cuit_elegido > pos_receptor and m_receptor:
+                nombre_razon_social = m_receptor.group(1).strip().upper()
+            elif m_enviado:
+                nombre_razon_social = m_enviado.group(1).strip().upper()
+            print(f"  🟢 [DEBUG-ASTROPAY] Nombre: {nombre_razon_social}, CUIT: {cuit}")
+
+            # --- FECHA: "01/08/26 - 21:43 hs" -- año de 2 dígitos ---
+            fecha_servicio = datetime.now().strftime('%d/%m/%Y')
+            m = re.search(r'\b(\d{1,2})/(\d{2})/(\d{2})\b', texto_raw)
+            if m:
+                anio_completo = f"20{m.group(3)}"
+                fecha_servicio = f"{m.group(1).zfill(2)}/{m.group(2)}/{anio_completo}"
+                print(f"  🟢 [DEBUG-ASTROPAY] Fecha: {fecha_servicio}")
+
+            # --- MONTO: "ARS 4000.00" -- PUNTO decimal, no coma (formato
+            # internacional, no el argentino que usa el resto del lector) ---
+            importe_encontrado = 0.0
+            monto_total_texto = ""
+            m = re.search(r'ARS\s*([\d,]+)\.(\d{2})', texto_raw, re.IGNORECASE)
+            if m:
+                enteros = m.group(1).replace(',', '')
+                try:
+                    importe_encontrado = float(f"{enteros}.{m.group(2)}")
+                    print(f"  🟢 [DEBUG-ASTROPAY] Monto: {importe_encontrado}")
+                except ValueError:
+                    pass
+            if importe_encontrado == 0.0:
+                print(f"  🔴 [DEBUG-ASTROPAY] Monto NO encontrado. Líneas con 'ARS': {[l for l in texto_raw.splitlines() if 'ars' in l.lower()][:5]}")
+            if importe_encontrado > 0:
+                monto_total_texto = f"{importe_encontrado:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+            # --- COELSA ID (número de transacción) ---
+            nro_movimiento = "Desconocido"
+            m = re.search(r'[Cc]oelsa\s*[Ii][Dd]\s*[\s\n]*([A-Za-z0-9]{10,40})', texto_raw)
+            if m:
+                nro_movimiento = m.group(1).strip().upper()
+                print(f"  🟢 [DEBUG-ASTROPAY] Coelsa ID: {nro_movimiento}")
+            else:
+                print(f"  🔴 [DEBUG-ASTROPAY] Coelsa ID NO encontrado.")
+
+            cuit_valido = cuit if cuit != "0" else ""
+            cuit_alternativo_valido = cuit_alternativo if cuit_alternativo != "0" else ""
+            tipo_doc = "CUIT" if cuit_valido else "DNI"
+            medio_pago, tipo_pago_detectado, numero_pago_detectado, tipo_pago_detalle_detectado = _detectar_medio_pago(texto_raw)
+            condicion_venta_detectada = {"Débito": "Tarjeta de Débito", "Crédito": "Tarjeta de Crédito"}.get(medio_pago)
+            return {
+                "Tipo Documento": tipo_doc,
+                "CUIT Receptor": cuit_valido,
+                "CUIT Alternativo": cuit_alternativo_valido,
+                "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
+                "Nombre Remitente": "No detectado",
+                "Fecha del Comprobante": fecha_servicio,
+                "Condicion IVA": "Consumidor Final",
+                "Condicion Venta": condicion_venta_detectada,
+                "Medio Pago": medio_pago,
+                "Tipo Pago": tipo_pago_detectado,
+                "Tipo Pago Detalle": tipo_pago_detalle_detectado,
+                "Numero Pago": numero_pago_detectado,
+                "Fecha Desde": fecha_servicio,
+                "Fecha Hasta": fecha_servicio,
+                "Importe Total": importe_encontrado,
+                "Monto Texto Completo": monto_total_texto,
+                "Archivo Origen": os.path.basename(ruta_pdf),
+                "Nro Movimiento": nro_movimiento,
+                "ID_Transaccion": nro_movimiento
+            }
 
         # ── BLOQUE BRUBANK PDF: procesamiento y retorno temprano ────────────
         if es_brubank_pdf:
@@ -1299,12 +1410,16 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                     fecha_servicio = f"{dia}/{mes_num}/{anio}"
                     break
 
-        match_fecha_nx = re.search(r'\b(\d{1,2})\s*/\s*([a-z]{3})\s*/\s*(\d{4})\b', texto)
-        if match_fecha_nx and match_fecha_nx.group(2) in MESES_ABREV:
+        # Formato "D/mes/YYYY" -- el mes puede venir abreviado (ago) o completo
+        # (agosto). Confirmado con comprobantes reales de Mercado Pago con el
+        # formato "1/agosto/2026 a las 22:25." que con mes completo no entraban.
+        match_fecha_nx = re.search(r'\b(\d{1,2})\s*/\s*([a-záéíóúñ]{3,15})\s*/\s*(\d{4})\b', texto)
+        mes_nx = MESES_ABREV.get(match_fecha_nx.group(2)[:3]) if match_fecha_nx else None
+        mes_nx = mes_nx or (MESES.get(match_fecha_nx.group(2)) if match_fecha_nx else None)
+        if match_fecha_nx and mes_nx:
             dia = match_fecha_nx.group(1).zfill(2)
-            mes = MESES_ABREV[match_fecha_nx.group(2)]
             anio = match_fecha_nx.group(3)
-            fecha_servicio = f"{dia}/{mes}/{anio}"
+            fecha_servicio = f"{dia}/{mes_nx}/{anio}"
         else:
             # Fecha con año 4 dígitos: DD/MM/YYYY o DD-MM-YYYY
             match_fecha_bna = re.search(r'\b(\d{1,2})\s*[-\/|]\s*(\d{1,2})\s*[-\/|]\s*(\d{4})\b', texto)
