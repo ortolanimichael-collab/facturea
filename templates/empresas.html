@@ -253,10 +253,13 @@
       <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
         <h2 style="font-size:14px;">Acceso a ARCA de esta empresa</h2>
         <p class="desc">Cada empresa tiene su propio CUIL y Clave Fiscal -- no se comparte con las demás.</p>
+        {% if error_formulario %}
+        <p class="hint" style="color:var(--stamp);">{{ error_formulario }}</p>
+        {% endif %}
         <div class="fila-2">
           <div class="campo">
             <label>CUIL</label>
-            <input type="text" name="cuil_arca" value="{{ empresa.cuil_arca if empresa else '' }}" placeholder="ej: 27353876932" required>
+            <input type="text" name="cuil_arca" value="{{ empresa.cuil_arca if empresa else '' }}" placeholder="ej: 27353876932" inputmode="numeric" maxlength="20" required>
           </div>
           <div class="campo">
             <label>Contraseña de la Clave Fiscal</label>
