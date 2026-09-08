@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturea — Empresas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
+    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
+    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
+    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 24px 80px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
+  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
+  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .nav-links a{color:var(--muted);text-decoration:none;}
+  .nav-links a:hover{color:var(--ink);}
+  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
+  p.sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+
+  .lista-empresas{display:flex;flex-direction:column;gap:10px;margin-bottom:30px;}
+  .fila-empresa{
+    background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;
+    padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  }
+  .fila-empresa .nombre{font-family:var(--mono);font-weight:600;font-size:14px;}
+  .fila-empresa .razon{font-size:12.5px;color:var(--muted);}
+  .fila-empresa .estado-config{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:20px;display:inline-block;margin-left:8px;}
+  .estado-config.completa{background:var(--teal-tint);color:var(--teal-deep);}
+  .estado-config.incompleta{background:#F1E6C8;color:#7A5A0A;}
+  .acciones-empresa{display:flex;gap:8px;font-family:var(--mono);font-size:12.5px;}
+  .acciones-empresa a, .acciones-empresa button{
+    text-decoration:none;color:var(--ink);border:1.5px solid var(--ink);border-radius:3px;
+    padding:6px 12px;background:var(--paper);cursor:pointer;
+  }
+  .acciones-empresa .eliminar{border-color:var(--stamp);color:var(--stamp);}
+  .vacio{text-align:center;padding:40px 20px;color:var(--muted);font-family:var(--mono);font-size:13px;background:var(--paper-2);border:1.5px dashed var(--ink);border-radius:2px;margin-bottom:30px;}
+
+  section{background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:26px 28px;margin-bottom:22px;}
+  section h2{font-family:var(--mono);font-size:15px;margin-bottom:4px;}
+  section p.desc{color:var(--muted);font-size:13px;margin-bottom:20px;}
+
+  .campo{margin-bottom:16px;}
+  .campo label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;}
+  .campo .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  input, select{
+    width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+  input:focus, select:focus{outline:none;border-color:var(--teal);}
+
+  .fila-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:560px){ .fila-2{grid-template-columns:1fr;} }
+
+  .checks{display:flex;flex-direction:column;gap:8px;}
+  .checks label{display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:14px;color:var(--ink);font-weight:400;}
+  .checks input{width:auto;}
+
+  .puntos-venta-lista{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+  .chip{
+    font-family:var(--mono);font-size:12.5px;background:var(--teal-tint);color:var(--teal-deep);
+    padding:6px 8px 6px 12px;border-radius:20px;display:flex;align-items:center;gap:8px;
+  }
+  .chip button{
+    background:none;border:none;cursor:pointer;color:var(--teal-deep);font-weight:700;
+    font-family:var(--mono);font-size:13px;line-height:1;padding:2px;
+  }
+  .agregar-punto{display:flex;gap:8px;}
+  .agregar-punto input[type=text]{flex:1;min-width:0;}
+  .agregar-descripcion .campo-alicuota-descripcion{flex:0 0 auto;width:150px;}
+  .agregar-punto input{flex:1;}
+  .agregar-punto button{
+    font-family:var(--mono);font-size:12.5px;padding:0 16px;border-radius:3px;border:1.5px solid var(--ink);
+    background:var(--paper);cursor:pointer;white-space:nowrap;
+  }
+  @media (max-width:560px){
+    /* En el celular, el campo de texto de "Producto / Servicio" quedaba
+       apretado a unos pocos píxeles de ancho porque el select de alícuota
+       (150px fijos) y el botón le dejaban casi todo el lugar -- se apila
+       todo en una columna en vez de forzarlo a entrar en una sola fila. */
+    .agregar-punto{flex-direction:column;align-items:stretch;}
+    .agregar-punto input[type=text]{width:100%;}
+    .agregar-descripcion .campo-alicuota-descripcion{width:100%;}
+    .agregar-punto button{padding:10px 16px;}
+  }
+
+  .btn{
+    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 22px;border-radius:3px;
+    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <div class="nav-links">
+      <a href="/panel">Panel</a>
+      <a href="/soporte">Soporte</a>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </header>
+  {% include '_aviso_membresia.html' %}
+
+  <h1>Empresas</h1>
+  <p class="sub">Cada empresa o cliente que representás en ARCA, con su propia configuración de facturación.</p>
+
+  {% if empresas %}
+  <div class="lista-empresas">
+    {% for e in empresas %}
+    <div class="fila-empresa">
+      <div>
+        <span class="nombre">{{ e.nombre_interno or "Sin nombre" }}</span>
+        <span class="estado-config {{ 'completa' if e.configuracion_completa() else 'incompleta' }}">
+          {{ "Configuración completa" if e.configuracion_completa() else "Falta completar" }}
+        </span>
+        {% if not (e.cuil_arca and e.password_arca_cifrada) %}
+        <span class="estado-config incompleta">Sin acceso a ARCA</span>
+        {% endif %}
+        <div class="razon">{{ e.razon_social_arca or "Razón social en ARCA sin cargar" }}</div>
+      </div>
+      <div class="acciones-empresa">
+        {% if e.configuracion_completa() %}
+        <a href="/empresas/{{ e.id }}/comprobantes">Ver comprobantes</a>
+        {% endif %}
+        <a href="/empresas/{{ e.id }}/editar">Editar</a>
+        <form method="POST" action="/empresas/{{ e.id }}/eliminar" onsubmit="return confirm('¿Eliminar esta empresa y perder el acceso a sus comprobantes?');" style="display:inline;">
+          <button type="submit" class="eliminar">Eliminar</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="vacio">Todavía no cargaste ninguna empresa. Completá el formulario de abajo para agregar la primera.</div>
+  {% endif %}
+
+  {% set opciones_tipo_comprobante_ri = [
+    "Factura A", "Nota de Débito A", "Nota de Crédito A", "Recibo A",
+    "Factura B", "Nota de Débito B", "Nota de Crédito B", "Recibo B",
+    "Factura T", "Nota de Débito T", "Nota de Crédito T",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) A",
+    "Nota de Débito Electrónica MiPyMEs (FCE) A",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) A",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) B",
+    "Nota de Débito Electrónica MiPyMEs (FCE) B",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) B"
+  ] %}
+  {% set opciones_tipo_comprobante_monotributo = [
+    "Factura C", "Nota de Débito C", "Nota de Crédito C", "Recibo C",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) C",
+    "Nota de Débito Electrónica MiPyMEs (FCE) C",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) C"
+  ] %}
+  {% set opciones_condicion_iva = [
+    "IVA Responsable Inscripto", "IVA Sujeto Exento", "Consumidor Final",
+    "Responsable Monotributo", "Sujeto No Categorizado", "Proveedor del Exterior",
+    "Cliente del Exterior", "IVA Liberado - Ley Nº 19.640", "Monotributista Social",
+    "IVA No Alcanzado", "Monotributista Trabajador Independiente Promovido"
+  ] %}
+  {% set opciones_tipo_doc = [
+    "CUIT", "CUIL", "CDI", "LE", "LC", "CI Extranjera", "DNI",
+    "Pasaporte", "CI Policía Federal", "Certificado de Migración"
+  ] %}
+  {% set opciones_condicion_venta = [
+    "Contado", "Tarjeta de Débito", "Tarjeta de Crédito", "Cuenta Corriente",
+    "Cheque", "Transferencia Bancaria", "Otra", "Otros medios de pago electrónico"
+  ] %}
+  {% set opciones_unidad_medida = [
+    "kilogramos", "metros", "metros cuadrados", "metros cúbicos", "litros", "1000 kWh",
+    "unidades", "pares", "docenas", "quilates", "millares", "gramos", "milímetros",
+    "mm cúbicos", "kilómetros", "hectolitros", "centímetros", "jgo. pqt. mazo naipes",
+    "cm cúbicos", "toneladas", "dam cúbicos", "hm cúbicos", "km cúbicos", "microgramos",
+    "nanogramos", "picogramos", "miligramos", "mililitros", "curie", "milicurie",
+    "microcurie", "uiacthor", "muiacthor", "kg base", "gruesa", "kg bruto", "uiactant",
+    "muiactant", "uiactig", "muiactig", "kg activo", "gramo activo", "gramo base",
+    "packs", "otras unidades"
+  ] %}
+  {% set condiciones_venta_actuales = ((empresa.config_condicion_venta if empresa else "") or "").split(",") %}
+  {% set tipos_comprobante_actuales = ((empresa.config_tipo_comprobante if empresa else "") or "").split(",") %}
+  {% set alicuotas_iva_actuales = ((empresa.config_alicuota_iva if empresa else "") or "").split(",") %}
+  {# Los 8 valores reales del desplegable "Alícuota IVA" de ARCA, confirmados
+     con una captura real de la pantalla -- No Gravado, Exento y 0% son TRES
+     conceptos legalmente distintos en ARCA, no una sola opción "0" como
+     había antes acá. #}
+  {% set opciones_alicuota_iva = [
+    ("NO_GRAVADO", "No Gravado"), ("EXENTO", "Exento"), ("0", "0%"),
+    ("2.5", "2,5%"), ("5", "5%"), ("10.5", "10,5%"), ("21", "21%"), ("27", "27%")
+  ] %}
+  {% set mapa_alicuota_etiquetas = dict(opciones_alicuota_iva) %}
+  {% set puntos_actuales = ((empresa.puntos_venta_disponibles if empresa else "") or "").split(",") | select | list %}
+  {% set descripciones_actuales = ((empresa.descripciones_disponibles if empresa else "") or "").split(",") | select | list %}
+  {% set descripciones_alicuotas_actuales = ((empresa.descripciones_alicuotas if empresa else "") or "").split(",") %}
+
+  <section>
+    <h2>{{ "Editar empresa" if empresa else "Agregar una empresa nueva" }}</h2>
+    <p class="desc">{{ "Modificá los datos de facturación de esta empresa." if empresa else "Cargá una empresa/cliente que representás en ARCA. Podés agregar todas las que necesites." }}</p>
+
+    <form method="POST" action="{{ '/empresas/' + empresa.id|string + '/editar' if empresa else '/empresas' }}" id="formEmpresa">
+      <div class="fila-2">
+        <div class="campo">
+          <label>Nombre interno (como la vas a identificar vos)</label>
+          <input type="text" name="nombre_interno" value="{{ empresa.nombre_interno if empresa else '' }}" placeholder="ej: María Pérez (Almacén)" required>
+        </div>
+        <div class="campo">
+          <label>Razón social en ARCA</label>
+          <input type="text" name="razon_social_arca" value="{{ empresa.razon_social_arca if empresa else '' }}" placeholder="ej: PEREZ MARIA LORENA" required>
+          <p class="hint">Escribilo EXACTO como aparece en ARCA al elegir "Empresa a representar" (mayúsculas incluidas).</p>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Tipo de contribuyente</label>
+        <select name="tipo_contribuyente" id="tipoContribuyente">
+          <option value="Monotributo" {{ "selected" if not empresa or empresa.tipo_contribuyente in (None, "", "Monotributo") }}>Monotributo</option>
+          <option value="Responsable Inscripto" {{ "selected" if empresa and empresa.tipo_contribuyente == "Responsable Inscripto" }}>Responsable Inscripto</option>
+        </select>
+        <p class="hint">Un Responsable Inscripto factura con IVA discriminado (Factura A o B, según el cliente) en vez de Factura C.</p>
+      </div>
+
+      <div class="campo" id="campoAlicuotaIva" style="display:none;">
+        <label>Alícuotas de IVA que usa esta empresa</label>
+        <div class="checks">
+          {% for valor, etiqueta in opciones_alicuota_iva %}
+          <label><input type="checkbox" name="config_alicuota_iva" value="{{ valor }}" {{ "checked" if valor in alicuotas_iva_actuales }}> {{ etiqueta }}</label>
+          {% endfor %}
+        </div>
+        <p class="hint">Podés marcar más de una si esta empresa vende cosas con distinta alícuota (ej. una carnicería: 21% en general, 10.5% en embutidos). La primera que marques queda como default al cargar un comprobante nuevo -- después se puede cambiar comprobante por comprobante.</p>
+      </div>
+
+      <div class="campo">
+        <label>Tipo de comprobante</label>
+        <div class="checks" id="checksTipoComprobanteRI" style="display:none;">
+          {% for op in opciones_tipo_comprobante_ri %}
+          <label><input type="checkbox" name="config_tipo_comprobante" value="{{ op }}" {{ "checked" if op in tipos_comprobante_actuales }}> {{ op }}</label>
+          {% endfor %}
+        </div>
+        <div class="checks" id="checksTipoComprobanteMonotributo" style="display:none;">
+          {% for op in opciones_tipo_comprobante_monotributo %}
+          <label><input type="checkbox" name="config_tipo_comprobante" value="{{ op }}" {{ "checked" if op in tipos_comprobante_actuales }}> {{ op }}</label>
+          {% endfor %}
+        </div>
+        <p class="hint">Marcá los que uses para esta empresa (un Responsable Inscripto suele necesitar Factura A y B juntas). El primero que marques queda como default al cargar un comprobante nuevo.</p>
+      </div>
+
+      <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
+        <h2 style="font-size:14px;">Acceso a ARCA de esta empresa</h2>
+        <p class="desc">Cada empresa tiene su propio CUIL y Clave Fiscal -- no se comparte con las demás.</p>
+        {% if error_formulario %}
+        <p class="hint" style="color:var(--stamp);">{{ error_formulario }}</p>
+        {% endif %}
+        <div class="fila-2">
+          <div class="campo">
+            <label>CUIL</label>
+            <input type="text" name="cuil_arca" value="{{ empresa.cuil_arca if empresa else '' }}" placeholder="ej: 27353876932" inputmode="numeric" maxlength="20" autocomplete="off" required>
+          </div>
+          <div class="campo">
+            <label>Contraseña de la Clave Fiscal</label>
+            <input type="password" name="password_arca" placeholder="{{ '••••••••' if empresa and empresa.password_arca_cifrada else 'Ingresá la contraseña' }}" autocomplete="new-password">
+            <p class="hint">{{ "Ya está guardada. Dejá este campo vacío si no la querés cambiar." if empresa and empresa.password_arca_cifrada else "Se guarda cifrada, nunca en texto plano." }}</p>
+          </div>
+        </div>
+      </section>
+
+      <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
+        <h2 style="font-size:14px;">Google Drive de esta empresa (opcional)</h2>
+        <p class="desc">Si la conectás, los comprobantes que subas para esta empresa quedan guardados en el Drive de ESA cuenta, no en el servidor de Facturea.</p>
+
+        {% if error_drive %}
+        <p class="hint" style="color:var(--stamp);">No se pudo conectar: {{ error_drive }}</p>
+        {% endif %}
+
+        {% if not empresa %}
+        <p class="hint">Guardá la empresa primero -- después de creada vas a poder conectar su Drive acá mismo.</p>
+        {% elif empresa.tiene_drive_conectado() %}
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span class="estado-config completa">Conectado: {{ empresa.google_drive_email or "cuenta de Google" }}</span>
+          <button type="button" onclick="desconectarDrive({{ empresa.id }})" style="font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:3px;border:1.5px solid var(--stamp);color:var(--stamp);background:var(--paper);cursor:pointer;">Desconectar</button>
+        </div>
+        {% else %}
+        <a href="/empresas/{{ empresa.id }}/drive/conectar" class="btn" style="text-decoration:none;display:inline-block;">Conectar Google Drive</a>
+        {% endif %}
+      </section>
+
+      <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
+        <h2 style="font-size:14px;">Mercado Pago de esta empresa (opcional)</h2>
+        <p class="desc">Conectando la cuenta de Mercado Pago de esta empresa vas a poder traer su historial de pagos (Point, QR, link de pago, transferencias) directo a la tabla, sin tener que subir cada comprobante a mano.</p>
+
+        {% if error_mercadopago %}
+        <p class="hint" style="color:var(--stamp);">No se pudo conectar: {{ error_mercadopago }}</p>
+        {% endif %}
+
+        {% if not empresa %}
+        <p class="hint">Guardá la empresa primero -- después de creada vas a poder conectar su Mercado Pago acá mismo.</p>
+        {% elif empresa.tiene_mercadopago_conectado() %}
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span class="estado-config completa">Conectado: {{ empresa.mercadopago_email or "cuenta de Mercado Pago" }}</span>
+          <button type="button" onclick="desconectarMercadoPago({{ empresa.id }})" style="font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:3px;border:1.5px solid var(--stamp);color:var(--stamp);background:var(--paper);cursor:pointer;">Desconectar</button>
+        </div>
+        {% else %}
+        <a href="/empresas/{{ empresa.id }}/mercadopago/conectar" class="btn" style="text-decoration:none;display:inline-block;">Conectar Mercado Pago</a>
+        {% endif %}
+      </section>
+
+      <div class="campo">
+        <label>Puntos de venta</label>
+        <div class="puntos-venta-lista" id="listaPuntos">
+          {% for p in puntos_actuales %}
+          <span class="chip" data-punto="{{ p }}">{{ p|int }}<button type="button" onclick="quitarPunto('{{ p }}')">×</button></span>
+          {% endfor %}
+        </div>
+        <div class="agregar-punto">
+          <input type="text" id="nuevoPunto" placeholder="ej: 4">
+          <button type="button" onclick="agregarPunto()">+ Agregar</button>
+        </div>
+        <p class="hint">Agregá todos los puntos de venta que use esta empresa. Después elegís cuál usar por defecto abajo.</p>
+        <input type="hidden" name="puntos_venta_disponibles" id="puntosVentaDisponibles" value="{{ empresa.puntos_venta_disponibles if empresa else '' }}">
+      </div>
+
+      <div class="campo">
+        <label>Punto de venta por defecto</label>
+        <select name="config_punto_venta" id="selectPuntoDefault" required>
+          <option value="">Seleccionar...</option>
+          {% for p in puntos_actuales %}
+          <option value="{{ p }}" {{ "selected" if empresa and empresa.config_punto_venta == p }}>{{ p|int }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="campo">
+        <label>Concepto</label>
+        <select name="config_concepto" required>
+          <option value="">Elegí una opción</option>
+          <option value="1" {{ "selected" if empresa and empresa.config_concepto == "1" }}>Productos</option>
+          <option value="2" {{ "selected" if empresa and empresa.config_concepto == "2" }}>Servicios</option>
+          <option value="3" {{ "selected" if empresa and empresa.config_concepto == "3" }}>Productos y Servicios (Mixto)</option>
+        </select>
+      </div>
+
+      <div class="fila-2">
+        <div class="campo">
+          <label>Condición frente al IVA (receptor)</label>
+          <select name="config_condicion_iva" required>
+            <option value="">Seleccionar...</option>
+            {% for op in opciones_condicion_iva %}
+            <option value="{{ op }}" {{ "selected" if empresa and empresa.config_condicion_iva == op }}>{{ op }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="campo">
+          <label>Tipo de documento del receptor</label>
+          <select name="config_tipo_doc_receptor" required>
+            <option value="">Seleccionar...</option>
+            {% for op in opciones_tipo_doc %}
+            <option value="{{ op }}" {{ "selected" if empresa and empresa.config_tipo_doc_receptor == op }}>{{ op }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Condición de venta</label>
+        <div class="checks">
+          {% for op in opciones_condicion_venta %}
+          <label><input type="checkbox" name="config_condicion_venta" value="{{ op }}" {{ "checked" if op in condiciones_venta_actuales }}> {{ op }}</label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Producto / Servicio</label>
+        <div class="puntos-venta-lista" id="listaDescripciones">
+          {% for d in descripciones_actuales %}
+          {% set alicuota_d = descripciones_alicuotas_actuales[loop.index0] if loop.index0 < descripciones_alicuotas_actuales|length else "" %}
+          <span class="chip" data-desc="{{ d }}" data-alicuota="{{ alicuota_d }}">{{ d }}{{ " (" + mapa_alicuota_etiquetas.get(alicuota_d, alicuota_d) + ")" if alicuota_d }}<button type="button" onclick="quitarDescripcion('{{ d }}')">×</button></span>
+          {% endfor %}
+        </div>
+        <div class="agregar-punto agregar-descripcion">
+          <input type="text" id="nuevaDescripcion" placeholder="ej: ropa">
+          <select id="alicuotaNuevaDescripcion" class="campo-alicuota-descripcion" style="display:none;">
+            <option value="">Sin alícuota</option>
+            {% for valor, etiqueta in opciones_alicuota_iva %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" onclick="agregarDescripcion()">+ Agregar</button>
+        </div>
+        <p class="hint">Si cargás más de una, cada factura nueva usa la primera por defecto -- salvo que actives "elegir al azar" abajo.{{ ' Para Responsable Inscripto, elegí también la alícuota de cada una -- cuando un comprobante use esa descripción, se le va a poner esa alícuota sola.' if empresa and empresa.tipo_contribuyente == "Responsable Inscripto" }}</p>
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13.5px;font-weight:400;margin-top:10px;">
+          <input type="checkbox" name="config_descripcion_aleatoria" style="width:auto;" {{ "checked" if empresa and empresa.config_descripcion_aleatoria }}>
+          Elegir una descripción al azar entre las cargadas en cada factura nueva
+        </label>
+        <input type="hidden" name="descripciones_disponibles" id="descripcionesDisponibles" value="{{ empresa.descripciones_disponibles if empresa else '' }}">
+        <input type="hidden" name="descripciones_alicuotas" id="descripcionesAlicuotas" value="{{ empresa.descripciones_alicuotas if empresa else '' }}">
+      </div>
+
+      <div class="campo">
+        <label>Unidad de medida</label>
+        <select name="config_unidad_medida" required>
+          <option value="">Seleccionar...</option>
+          {% for op in opciones_unidad_medida %}
+          <option value="{{ op }}" {{ "selected" if empresa and empresa.config_unidad_medida == op }}>{{ op }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="fila-2">
+        <div class="campo">
+          <label>Fecha de emisión por defecto</label>
+          <input type="date" name="config_fecha_emision" value="{{ fecha_emision_default }}">
+          <p class="hint">
+            Se usa al facturar cuando el comprobante no tiene una fecha propia más reciente que esta.
+            Por defecto son hoy menos 10 días, y se recalcula solo día a día -- si la dejás así, mañana
+            este campo va a mostrar un día más tarde, no el mismo que guardaste hoy. Si el comprobante
+            que se está por facturar tiene una fecha real POSTERIOR a esta (más nueva), se respeta la del
+            comprobante en su lugar.
+          </p>
+        </div>
+      </div>
+
+      <button type="submit" class="btn">{{ "Guardar cambios" if empresa else "Agregar empresa" }}</button>
+      {% if empresa %}<a href="/empresas" style="margin-left:14px;font-family:var(--mono);font-size:13px;color:var(--muted);">Cancelar</a>{% endif %}
+    </form>
+  </section>
+</div>
+
+<script>
+const MAPA_ALICUOTA_ETIQUETAS = {{ dict(opciones_alicuota_iva) | tojson }};
+
+function actualizarVisibilidadAlicuota() {
+  const tipo = document.getElementById('tipoContribuyente').value;
+  const esRI = (tipo === 'Responsable Inscripto');
+  document.getElementById('campoAlicuotaIva').style.display = esRI ? 'block' : 'none';
+  document.getElementById('alicuotaNuevaDescripcion').style.display = esRI ? 'inline-block' : 'none';
+
+  // Los tipos de comprobante de Responsable Inscripto (A, B, T y sus FCE) y
+  // los de Monotributo (C) son mundos separados en ARCA -- no tiene sentido
+  // ofrecer los dos juntos. Se deshabilitan los del grupo oculto además de
+  // ocultarlos, así un checkbox tildado de antes (de cuando la empresa era
+  // del otro tipo) no se cuela igual al guardar -- los inputs disabled no
+  // se mandan con el formulario.
+  const checksRI = document.getElementById('checksTipoComprobanteRI');
+  const checksMono = document.getElementById('checksTipoComprobanteMonotributo');
+  checksRI.style.display = esRI ? 'flex' : 'none';
+  checksMono.style.display = esRI ? 'none' : 'flex';
+  checksRI.querySelectorAll('input').forEach(inp => { inp.disabled = !esRI; });
+  checksMono.querySelectorAll('input').forEach(inp => { inp.disabled = esRI; });
+}
+document.getElementById('tipoContribuyente').addEventListener('change', actualizarVisibilidadAlicuota);
+actualizarVisibilidadAlicuota();
+
+async function desconectarDrive(empresaId) {
+  const ok = confirm('¿Desconectar Google Drive de esta empresa? Los archivos que ya subiste no se borran, pero los que subas de ahora en más van a guardarse en el servidor otra vez.');
+  if (!ok) return;
+  try {
+    const r = await fetch(`/empresas/${empresaId}/drive/desconectar`, { method: 'POST' });
+    if (r.ok || r.redirected) {
+      window.location.reload();
+    } else {
+      alert('No se pudo desconectar. Probá de nuevo.');
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+async function desconectarMercadoPago(empresaId) {
+  const ok = confirm('¿Desconectar Mercado Pago de esta empresa? Vas a poder volver a conectarla cuando quieras.');
+  if (!ok) return;
+  try {
+    const r = await fetch(`/empresas/${empresaId}/mercadopago/desconectar`, { method: 'POST' });
+    if (r.ok || r.redirected) {
+      window.location.reload();
+    } else {
+      alert('No se pudo desconectar. Probá de nuevo.');
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+function refrescarSelectPuntos() {
+  const chips = document.querySelectorAll('#listaPuntos .chip');
+  const select = document.getElementById('selectPuntoDefault');
+  const valorActual = select.value;
+  select.innerHTML = '<option value="">Seleccionar...</option>';
+  chips.forEach(chip => {
+    const p = chip.dataset.punto;
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = String(parseInt(p, 10)); // se ve sin ceros -- ARCA sigue recibiendo el value real con ceros
+    if (p === valorActual) opt.selected = true;
+    select.appendChild(opt);
+  });
+  const puntos = Array.from(chips).map(c => c.dataset.punto);
+  document.getElementById('puntosVentaDisponibles').value = puntos.join(',');
+}
+
+function agregarPunto() {
+  const input = document.getElementById('nuevoPunto');
+  const crudo = input.value.trim();
+  if (!crudo) return;
+  const numero = parseInt(crudo, 10);
+  if (isNaN(numero) || numero < 1) { input.value = ''; return; }
+  // ARCA exige el punto de venta con 4 dígitos y ceros a la izquierda --
+  // se completa solo acá, así alcanza con que el usuario escriba "4".
+  const valor = String(numero).padStart(4, '0');
+  const lista = document.getElementById('listaPuntos');
+  if (lista.querySelector(`[data-punto="${valor}"]`)) { input.value = ''; return; }
+
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.dataset.punto = valor;
+  chip.innerHTML = `${numero}<button type="button" onclick="quitarPunto('${valor}')">×</button>`;
+  lista.appendChild(chip);
+  input.value = '';
+  refrescarSelectPuntos();
+}
+
+function quitarPunto(valor) {
+  const chip = document.querySelector(`#listaPuntos [data-punto="${valor}"]`);
+  if (chip) chip.remove();
+  refrescarSelectPuntos();
+}
+
+function refrescarDescripciones() {
+  const chips = document.querySelectorAll('#listaDescripciones .chip');
+  const descripciones = Array.from(chips).map(c => c.dataset.desc);
+  const alicuotas = Array.from(chips).map(c => c.dataset.alicuota || '');
+  document.getElementById('descripcionesDisponibles').value = descripciones.join(',');
+  document.getElementById('descripcionesAlicuotas').value = alicuotas.join(',');
+}
+
+function agregarDescripcion() {
+  const input = document.getElementById('nuevaDescripcion');
+  const selectAlicuota = document.getElementById('alicuotaNuevaDescripcion');
+  const valor = input.value.trim();
+  if (!valor) return;
+  const lista = document.getElementById('listaDescripciones');
+  if (lista.querySelector(`[data-desc="${valor}"]`)) { input.value = ''; return; }
+
+  const alicuota = selectAlicuota.value;
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.dataset.desc = valor;
+  chip.dataset.alicuota = alicuota;
+  const etiquetaAlicuota = alicuota ? ` (${MAPA_ALICUOTA_ETIQUETAS[alicuota] || alicuota})` : '';
+  chip.innerHTML = `${valor}${etiquetaAlicuota}<button type="button" onclick="quitarDescripcion('${valor}')">×</button>`;
+  lista.appendChild(chip);
+  input.value = '';
+  selectAlicuota.value = '';
+  refrescarDescripciones();
+}
+
+function quitarDescripcion(valor) {
+  const chip = document.querySelector(`#listaDescripciones [data-desc="${valor}"]`);
+  if (chip) chip.remove();
+  refrescarDescripciones();
+}
+
+refrescarSelectPuntos();
+refrescarDescripciones();
+</script>
+</body>
+</html>
