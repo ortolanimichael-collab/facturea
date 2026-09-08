@@ -131,6 +131,17 @@ def buscar_pagos(empresa, fecha_desde_iso, fecha_hasta_iso):
     (formato ISO completo, ej. "2026-09-01T00:00:00.000-03:00"). Devuelve
     una lista de pagos (diccionarios), ya recorriendo todas las páginas --
     Mercado Pago los entrega de a bloques de 50 como máximo por pedido.
+
+    IMPORTANTE: /v1/payments/search devuelve TODOS los pagos donde esta
+    cuenta estuvo involucrada -- tanto los que cobró (ventas reales) como
+    los que hizo ella misma como compradora (ej. pagar un viaje de Uber o
+    una compra en Mercado Libre con la tarjeta asociada a esta cuenta).
+    Acá se filtran esos últimos: solo se devuelven los pagos donde el
+    "collector_id" (quien cobró) es esta misma cuenta -- si no, quedarían
+    cargados en Facturea como ventas propias gastos que en realidad son de
+    la empresa como compradora, no como vendedora (confirmado con un caso
+    real: una compra en Mercado Libre y un pago a Uber terminaron cargados
+    como ventas antes de este filtro).
     """
     access_token = _access_token_de(empresa)
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -164,7 +175,8 @@ def buscar_pagos(empresa, fecha_desde_iso, fecha_hasta_iso):
         if offset >= total or not resultados:
             break
 
-    return pagos
+    user_id_propio = str(empresa.mercadopago_user_id or "")
+    return [p for p in pagos if str(p.get("collector_id") or "") == user_id_propio]
 
 
 def desconectar(empresa):
