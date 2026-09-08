@@ -355,6 +355,11 @@ def registro():
         db.session.commit()
 
         avisar_registro_al_panel(nuevo)
+        # Registrarse implica loguearse de una -- si no se avisa el check-in
+        # acá también, cualquier cuenta que se registre y nunca vuelva a pasar
+        # por /login (típico en pruebas rápidas) queda mostrando "Nunca se
+        # conectó" en panel-membresías, aunque sí entró.
+        avisar_checkin_al_panel(nuevo.email)
 
         login_user(nuevo)
         return redirect(url_for("panel"))
