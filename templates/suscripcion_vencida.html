@@ -3,33 +3,81 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Facturea — Suscripción vencida</title>
+<title>AutoFactura — Suscripción vencida</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFEDE2; --ink:#21261F; --muted:#66665C;
-    --teal:#0F6E56; --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
-    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --red-tint:#FBE8E8;
+    --red-deep:#B33A3A;
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;display:flex;align-items:center;justify-content:center;}
-  .card{max-width:440px;padding:40px;text-align:center;}
-  .logo{font-family:var(--mono);font-weight:700;font-size:16px;margin-bottom:24px;color:var(--muted);}
-  h1{font-family:var(--mono);font-size:22px;margin-bottom:12px;}
+  body{
+    background:var(--paper);color:var(--ink);font-family:var(--sans);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    line-height:1.6;-webkit-font-smoothing:antialiased;padding:24px;
+  }
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
+
+  .card{
+    max-width:440px;width:100%;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:14px;padding:44px 40px;text-align:center;
+  }
+  .logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:28px;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:18px;letter-spacing:-0.01em;color:var(--navy);}
+
+  h1{font-size:22px;margin-bottom:14px;}
   p{color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:8px;}
-  .estado{display:inline-block;margin:16px 0;padding:6px 16px;border-radius:20px;background:rgba(163,45,45,0.1);color:var(--stamp);font-family:var(--mono);font-size:13px;font-weight:600;}
-  a.link{color:var(--teal);text-decoration:none;font-weight:600;}
+
+  .estado{
+    display:inline-block;margin:16px 0;padding:7px 18px;border-radius:20px;
+    background:var(--red-tint);color:var(--red-deep);
+    font-family:var(--sans);font-size:13px;font-weight:700;
+  }
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;margin-top:26px;
+    font-family:var(--sans);font-weight:700;font-size:14.5px;
+    padding:13px 24px;border-radius:8px;
+    text-decoration:none;cursor:pointer;border:1.5px solid transparent;
+    background:var(--blue);color:#FFFFFF;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  .btn:hover{filter:brightness(1.06);}
+  .btn:active{transform:translateY(1px);}
 </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">FACTUREA</div>
+    <div class="logo">
+      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="14.5" stroke="#28A9E0" stroke-width="1.6" fill="#0F1B3D"/>
+        <path d="M10 20L16 10L22 20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12.6 16.5H19.4" stroke="#28A9E0" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div class="logo-text">AutoFactura</div>
+    </div>
     <h1>Tu acceso está pausado</h1>
     <div class="estado">{{ 'Suspendido' if not usuario.activo else 'Prueba vencida' }}</div>
     <p>Tu período de prueba o suscripción terminó el {{ usuario.fecha_vencimiento.strftime('%d/%m/%Y') if usuario.fecha_vencimiento else '—' }}.</p>
     <p>Para renovar y seguir facturando, escribinos y te reactivamos apenas confirmemos el pago.</p>
-    <p style="margin-top: 24px;"><a class="link" href="{{ url_for('soporte') }}">Ir a soporte</a></p>
+    <a class="btn" href="{{ url_for('soporte') }}">Ir a soporte</a>
   </div>
 </body>
 </html>

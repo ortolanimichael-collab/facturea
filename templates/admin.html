@@ -5,56 +5,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Facturea — Panel admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
-    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
-    --stamp:#A32D2D; --amber:#F1E6C8; --amber-ink:#7A5A0A; --line: rgba(33,38,31,0.16);
-    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --warn-tint:#FDF1D9; --warn-deep:#8A5A0A;
+    --danger:#D64545; --danger-tint:#FBE9E9;
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
-  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:14px;}
-  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
-  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
-  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
-  .nav-links a{color:var(--muted);text-decoration:none;}
-  h1{font-family:var(--mono);font-size:22px;margin:24px 0 4px;}
-  p.sub{color:var(--muted);font-size:14px;margin-bottom:24px;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px;}
+
+  /* ---------- HEADER ---------- */
+  header.app-header{background:var(--navy-deep);border-bottom:2px solid var(--blue);margin-bottom:32px;}
+  header.app-header .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;gap:14px;flex-wrap:wrap;}
+  .logo{font-family:var(--sans);font-weight:800;font-size:18px;display:flex;align-items:center;gap:9px;text-decoration:none;color:#FFFFFF;}
+  .logo .dot{width:9px;height:9px;background:var(--blue);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;}
+  .nav-links a{color:#D6E1F5;text-decoration:none;}
+  .nav-links a:hover{color:#fff;}
+
+  h1{font-family:var(--sans);font-weight:800;font-size:24px;margin:0 0 4px;color:var(--ink);}
+  p.sub{color:var(--muted);font-size:14.5px;margin-bottom:28px;}
 
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
   @media (max-width:760px){ .stats{grid-template-columns:repeat(2,1fr);} }
-  .stat{background:var(--paper-2);border:1.5px solid var(--line);border-radius:3px;padding:16px 18px;}
-  .stat .n{font-family:var(--mono);font-size:24px;font-weight:700;}
-  .stat .l{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;}
+  .stat{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
+  .stat .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--navy);}
+  .stat .l{font-family:var(--sans);font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;margin-top:4px;}
 
-  table{width:100%;border-collapse:collapse;background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;overflow:hidden;}
-  thead th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);text-align:left;padding:12px 14px;border-bottom:1.5px solid var(--ink);}
-  tbody td{padding:12px 14px;font-size:13.5px;border-bottom:1px dashed var(--line);vertical-align:middle;}
+  table{width:100%;border-collapse:collapse;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  thead th{font-family:var(--sans);font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;color:var(--muted);text-align:left;padding:13px 14px;border-bottom:1.5px solid var(--line);background:var(--paper);}
+  tbody td{padding:13px 14px;font-size:13.5px;border-bottom:1px solid var(--line);vertical-align:middle;}
   tbody tr:last-child td{border-bottom:none;}
-  .estado{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:20px;display:inline-block;}
-  .estado.activo{background:var(--teal-tint);color:var(--teal-deep);}
-  .estado.vencido{background:var(--amber);color:var(--amber-ink);}
-  .estado.suspendido{background:#F5DEDE;color:var(--stamp);}
-  .btn-mini{font-family:var(--mono);font-size:11.5px;padding:6px 12px;border-radius:3px;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;cursor:pointer;}
+  tbody tr:hover{background:var(--blue-tint);}
+  .estado{font-family:var(--sans);font-weight:700;font-size:11px;padding:4px 10px;border-radius:20px;display:inline-block;text-transform:capitalize;}
+  .estado.activo{background:var(--blue-tint);color:var(--blue-deep);}
+  .estado.vencido{background:var(--warn-tint);color:var(--warn-deep);}
+  .estado.suspendido{background:var(--danger-tint);color:var(--danger);}
+  .btn-mini{font-family:var(--sans);font-weight:700;font-size:12px;padding:7px 14px;border-radius:8px;border:1.5px solid transparent;background:var(--blue);color:#fff;cursor:pointer;transition:filter .15s ease;}
+  .btn-mini:hover{filter:brightness(1.06);}
   .metodo-form{display:flex;gap:6px;align-items:center;}
-  .metodo-form input{font-family:var(--mono);font-size:11.5px;padding:6px 8px;border-radius:3px;border:1.5px solid var(--line);width:120px;background:var(--paper);color:var(--ink);}
-  .metodo-form button{font-family:var(--mono);font-size:11px;padding:6px 8px;border-radius:3px;border:1.5px solid var(--line);background:var(--paper-2);cursor:pointer;}
-  .admin-tag{font-family:var(--mono);font-size:10.5px;color:var(--teal-deep);}
+  .metodo-form input{font-family:var(--sans);font-size:12px;padding:7px 9px;border-radius:8px;border:1.5px solid var(--line);width:120px;background:var(--paper-2);color:var(--ink);}
+  .metodo-form input:focus{outline:none;border-color:var(--blue);}
+  .metodo-form button{font-family:var(--sans);font-weight:700;font-size:11.5px;padding:7px 10px;border-radius:8px;border:1.5px solid var(--navy);background:var(--paper-2);color:var(--navy);cursor:pointer;}
+  .metodo-form button:hover{background:var(--navy);color:#fff;}
+  .admin-tag{font-family:var(--sans);font-weight:700;font-size:10.5px;color:var(--blue-deep);}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
+<header class="app-header">
+  <div class="wrap">
     <a href="/" class="logo"><span class="dot"></span>facturea</a>
     <div class="nav-links">
       <span>{{ current_user.email }}</span>
       <a href="/logout">Cerrar sesión</a>
     </div>
-  </header>
-
+  </div>
+</header>
+<div class="wrap">
   <h1>Panel de administrador</h1>
   <p class="sub">Todos los clientes registrados, su plan, y su estado de suscripción.</p>
 

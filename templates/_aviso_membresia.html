@@ -2,10 +2,10 @@
 {% set dias = membresia_dias_restantes %}
 <div style="
   display:inline-flex; align-items:center; gap:6px;
-  font-family: 'IBM Plex Mono', monospace; font-size:12px; font-weight:600;
-  padding:4px 12px; border-radius:20px; margin-bottom:16px;
-  background: {{ '#FBEAEA' if dias <= 3 else ('#FBF2E1' if dias <= 7 else '#E1F5EE') }};
-  color: {{ '#A32D2D' if dias <= 3 else ('#A6742B' if dias <= 7 else '#0F6E56') }};
+  font-family: 'Manrope', 'Roboto', sans-serif; font-size:12.5px; font-weight:700;
+  padding:5px 14px; border-radius:20px; margin-bottom:16px;
+  background: {{ '#FBE9E9' if dias <= 3 else ('#FDF1D9' if dias <= 7 else '#E9F5FC') }};
+  color: {{ '#D64545' if dias <= 3 else ('#8A5A0A' if dias <= 7 else '#1C87B8') }};
 ">
   {% if dias <= 0 %}
     Vence hoy

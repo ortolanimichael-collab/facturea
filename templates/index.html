@@ -7,23 +7,22 @@
 <meta name="description" content="AutoFactura lee tus comprobantes de Mercado Pago, transferencias y bancos, y factura todos juntos ante ARCA. Para monotributistas y responsables inscriptos.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#F3EFE2;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
     --paper-2:#FFFFFF;
-    --ink:#191C2E;
-    --muted:#63665F;
-    --teal:#0B9169;
-    --teal-deep:#066B4E;
-    --teal-tint:#E3F5EC;
-    --sello:#E23F2A;
-    --sello-deep:#B92D1C;
-    --sello-tint:#FBE6E2;
-    --gold:#D79A2C;
-    --line: rgba(25,28,46,0.14);
-    --mono: "IBM Plex Mono", monospace;
-    --sans: "Manrope", sans-serif;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --line-navy: rgba(255,255,255,0.16);
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   html{scroll-behavior:smooth;}
@@ -36,138 +35,149 @@
   }
   a{color:inherit;}
   img,svg{display:block;max-width:100%;}
-  .wrap{max-width:1120px;margin:0 auto;padding:0 24px;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
   .eyebrow{
-    font-family:var(--mono);
-    font-size:12px;
-    letter-spacing:0.14em;
+    font-family:var(--sans);
+    font-size:12.5px;
+    letter-spacing:0.08em;
     text-transform:uppercase;
-    color:var(--teal-deep);
-    font-weight:600;
+    color:var(--blue-deep);
+    font-weight:700;
   }
-  h1,h2,h3{font-family:var(--mono);font-weight:600;letter-spacing:-0.01em;color:var(--ink);}
+  h1,h2,h3{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
   .btn{
     display:inline-flex;align-items:center;gap:8px;
-    font-family:var(--mono);font-weight:600;font-size:14px;
-    padding:13px 22px;border-radius:3px;
-    text-decoration:none;cursor:pointer;border:1.5px solid var(--ink);
-    transition:transform .15s ease, box-shadow .15s ease;
+    font-family:var(--sans);font-weight:700;font-size:14.5px;
+    padding:13px 24px;border-radius:8px;
+    text-decoration:none;cursor:pointer;border:1.5px solid transparent;
+    transition:filter .15s ease, transform .1s ease;
   }
-  .btn:hover{transform:translateY(-1px);}
-  .btn-primary{background:var(--sello);border-color:var(--sello-deep);color:#FFF7F5;box-shadow:2px 2px 0 var(--sello-deep);}
-  .btn-primary:hover{box-shadow:3px 3px 0 var(--sello-deep);}
-  .btn-ghost{background:transparent;color:var(--ink);}
+  .btn:hover{filter:brightness(1.06);}
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--blue);color:#FFFFFF;}
+  .btn-primary:hover{background:var(--blue-deep);}
+  .btn-ghost{background:transparent;color:var(--navy);border-color:var(--navy);}
+  .btn-ghost:hover{background:var(--navy);color:#fff;}
+  .btn-ghost-light{background:transparent;color:#FFFFFF;border-color:rgba(255,255,255,0.55);}
+  .btn-ghost-light:hover{background:rgba(255,255,255,0.12);}
 
   /* ---------- HEADER ---------- */
-  header{
-    position:sticky;top:0;z-index:50;
-    background:rgba(243,239,226,0.92);
-    backdrop-filter:blur(6px);
-    border-bottom:1px solid var(--line);
-  }
-  .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  header{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
   .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
-  .logo-mark{width:30px;height:30px;flex:none;}
-  .logo-text{font-family:var(--mono);font-weight:700;font-size:19px;letter-spacing:-0.02em;color:var(--ink);}
-  .nav-links{display:flex;gap:32px;align-items:center;}
-  .nav-links a{font-family:var(--mono);font-size:13px;text-decoration:none;color:var(--muted);}
-  .nav-links a:hover{color:var(--ink);}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .logo-sub{font-size:11px;color:#9FB3D9;letter-spacing:0.04em;margin-top:1px;}
+  .nav-auth{display:flex;gap:14px;align-items:center;}
+  .nav-auth a:not(.btn){font-family:var(--sans);font-size:13.5px;font-weight:600;text-decoration:none;color:#D6E1F5;}
+  .nav-auth a:not(.btn):hover{color:#fff;}
+  .nav-auth .btn{padding:9px 18px;font-size:13.5px;}
+  @media (max-width:480px){ .nav-auth{gap:8px;} .logo-sub{display:none;} }
+
+  .bar-nav{background:var(--navy);}
+  .nav-links{display:flex;gap:28px;align-items:center;padding:12px 24px;}
+  .nav-links a{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;text-decoration:none;color:#C9D5EE;}
+  .nav-links a:hover{color:#fff;}
   @media (max-width:720px){ .nav-links{display:none;} }
-  .nav-auth{display:flex;gap:16px;align-items:center;}
-  .nav-auth a:not(.btn){font-family:var(--mono);font-size:13px;text-decoration:none;color:var(--muted);}
-  .nav-auth a:not(.btn):hover{color:var(--ink);}
-  @media (max-width:400px){ .nav-auth{gap:10px;} .nav-auth a:not(.btn){font-size:12px;} }
 
   /* ---------- HERO ---------- */
-  .hero{padding:72px 0 40px;}
-  .hero-grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:56px;align-items:center;}
-  @media (max-width:900px){ .hero-grid{grid-template-columns:1fr;gap:44px;} }
-  .hero h1{font-size:42px;line-height:1.14;margin:14px 0 20px;}
-  @media (max-width:520px){ .hero h1{font-size:31px;} }
-  .hero p.lead{font-size:17px;color:var(--muted);max-width:48ch;margin-bottom:28px;}
+  .hero{padding:64px 0 56px;}
+  .hero-grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:48px;align-items:start;}
+  @media (max-width:900px){ .hero-grid{grid-template-columns:1fr;gap:36px;} }
+  .hero h1{font-size:40px;line-height:1.18;margin:14px 0 18px;}
+  @media (max-width:520px){ .hero h1{font-size:29px;} }
+  .hero p.lead{font-size:16.5px;color:var(--muted);max-width:50ch;margin-bottom:26px;}
   .hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
-  .hero-note{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:14px;}
+  .hero-note{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin-top:14px;font-weight:600;}
 
-  /* ---------- TICKET (signature element) ---------- */
-  .ticket-stage{position:relative;}
-  .ticket{
-    background:var(--paper-2);
-    border:1.5px solid var(--ink);
-    border-radius:2px;
-    box-shadow:6px 6px 0 rgba(25,28,46,0.12);
-    transform:rotate(-1.4deg);
+  /* ---------- ACCESS PANEL (signature element, ARCA-style login card) ---------- */
+  .panel{
+    background:var(--navy-deep);
+    border-radius:14px;
     padding:0;
     overflow:hidden;
+    color:#fff;
+    border:1px solid var(--navy-mid);
   }
-  .ticket-seg{padding:22px 24px;position:relative;}
-  .ticket-seg + .ticket-seg{
-    border-top:1.5px dashed var(--line);
+  .panel-head{
+    display:flex;align-items:center;gap:10px;
+    padding:22px 24px 6px;
   }
-  .ticket-seg::before{
-    content:"";
-    position:absolute;left:-8px;top:-8px;width:16px;height:16px;
-    background:var(--paper);border-radius:50%;
+  .panel-head .dot{width:30px;height:30px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;flex:none;}
+  .panel-head h3{color:#fff;font-size:17px;font-weight:800;}
+  .panel-body{padding:18px 24px 24px;}
+  .panel .btn-primary{width:100%;justify-content:center;margin-bottom:10px;}
+  .panel-link{display:block;text-align:center;font-size:13.5px;font-weight:600;color:#B9CBEF;text-decoration:none;padding:6px 0;}
+  .panel-link:hover{color:#fff;}
+  .panel-divider{border-top:1px solid var(--navy-mid);margin:14px 0;}
+  .panel .btn-ghost-light{width:100%;justify-content:center;margin-bottom:10px;}
+
+  .receipt{
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-radius:14px;
+    margin-top:16px;
+    overflow:hidden;
   }
-  .ticket-seg::after{
-    content:"";
-    position:absolute;right:-8px;top:-8px;width:16px;height:16px;
-    background:var(--paper);border-radius:50%;
-  }
-  .ticket-seg:first-child::before, .ticket-seg:first-child::after{display:none;}
-  .seg-label{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
-  .seg-title{font-family:var(--mono);font-weight:600;font-size:15px;margin-bottom:4px;}
+  .receipt-seg{padding:18px 22px;}
+  .receipt-seg + .receipt-seg{border-top:1px solid var(--line);}
+  .seg-label{font-family:var(--sans);font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:var(--blue-deep);font-weight:700;margin-bottom:8px;}
+  .seg-title{font-family:var(--sans);font-weight:700;font-size:15px;margin-bottom:4px;}
   .seg-sub{font-size:13px;color:var(--muted);}
-  .seg-1{background:linear-gradient(180deg, rgba(226,63,42,0.06), transparent);}
   .phone-mock{
-    display:flex;align-items:center;gap:12px;background:var(--ink);color:#F7F5EC;
-    border-radius:12px;padding:12px 14px;margin-top:12px;font-family:var(--mono);font-size:12px;
+    display:flex;align-items:center;gap:10px;background:var(--blue-tint);color:var(--navy);
+    border-radius:8px;padding:11px 14px;margin-top:12px;font-size:12.5px;font-weight:600;
   }
-  .phone-dot{width:8px;height:8px;border-radius:50%;background:var(--sello);flex:none;}
+  .phone-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none;}
   .row-mock{
     display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;
-    font-family:var(--mono);font-size:11px;margin-top:12px;
+    font-size:12px;margin-top:12px;
   }
-  .row-mock div{background:var(--teal-tint);color:var(--teal-deep);padding:6px 8px;border-radius:2px;}
-  .row-mock .hd{background:transparent;color:var(--muted);padding:0 8px;font-weight:600;}
-  .row-mock .mas{background:transparent;color:var(--muted);font-style:italic;}
+  .row-mock div{background:var(--blue-tint);color:var(--navy);padding:6px 8px;border-radius:6px;font-weight:600;}
+  .row-mock .hd{background:transparent;color:var(--muted);padding:0 8px;font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:0.04em;}
+  .row-mock .mas{background:transparent;color:var(--muted);font-style:italic;font-weight:500;}
   .cae-mock{
     margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;
-    font-family:var(--mono);
   }
-  .barcode{display:flex;gap:2px;height:30px;align-items:flex-end;}
-  .barcode span{width:2px;background:var(--ink);}
+  .barcode{display:flex;gap:2px;height:28px;align-items:flex-end;}
+  .barcode span{width:2px;background:var(--navy);}
   .stamp{
-    position:absolute;right:18px;bottom:14px;
-    font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.06em;
-    color:var(--sello);border:2px solid var(--sello);border-radius:4px;
-    padding:4px 8px;transform:rotate(-8deg);opacity:0.92;
+    margin-top:12px;display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--sans);font-size:12.5px;font-weight:700;
+    color:var(--blue-deep);background:var(--blue-tint);border-radius:20px;
+    padding:6px 14px;
   }
 
   /* ---------- SECTION SHELL ---------- */
-  section{padding:84px 0;}
+  section{padding:76px 0;}
   section.alt{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
-  .section-head{max-width:640px;margin-bottom:52px;}
-  .section-head h2{font-size:29px;margin-top:10px;}
-  .section-head p{color:var(--muted);font-size:16px;margin-top:12px;}
+  .section-head{max-width:640px;margin-bottom:48px;}
+  .section-head h2{font-size:28px;margin-top:10px;}
+  .section-head p{color:var(--muted);font-size:15.5px;margin-top:12px;}
 
   /* ---------- HOW IT WORKS ---------- */
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--ink);border-radius:2px;overflow:hidden;}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
   @media (max-width:820px){ .steps{grid-template-columns:1fr;} }
-  .step{padding:28px 26px;position:relative;background:var(--paper-2);}
-  .step + .step{border-left:1.5px dashed var(--line);}
-  @media (max-width:820px){ .step + .step{border-left:none;border-top:1.5px dashed var(--line);} }
-  .step-num{font-family:var(--mono);font-size:12px;color:var(--sello-deep);font-weight:700;letter-spacing:0.08em;}
-  .step h3{font-size:18px;margin:10px 0 8px;}
+  .step{padding:26px 24px;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;}
+  .step-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:30px;height:30px;border-radius:50%;
+    background:var(--navy);color:#fff;
+    font-family:var(--sans);font-size:13px;font-weight:800;
+  }
+  .step h3{font-size:17.5px;margin:14px 0 8px;}
   .step p{color:var(--muted);font-size:14.5px;}
 
   /* ---------- FEATURES ---------- */
   .features{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
   @media (max-width:900px){ .features{grid-template-columns:repeat(2,1fr);} }
   @media (max-width:620px){ .features{grid-template-columns:1fr;} }
-  .feature{border:1.5px solid var(--line);background:var(--paper-2);padding:22px;border-radius:2px;}
+  .feature{border:1px solid var(--line);background:var(--paper-2);padding:22px;border-radius:12px;}
   .feature-icon{
-    width:34px;height:34px;border-radius:50%;background:var(--teal-tint);color:var(--teal-deep);
-    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:14px;
+    width:40px;height:40px;border-radius:50%;background:#fff;color:var(--navy);
+    border:1.5px solid var(--navy);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;
     margin-bottom:14px;
   }
   .feature h3{font-size:15.5px;margin-bottom:6px;}
@@ -176,80 +186,87 @@
   /* ---------- FOR WHOM ---------- */
   .for-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
   @media (max-width:760px){ .for-grid{grid-template-columns:1fr;} }
-  .for-card{border:1.5px solid var(--line);background:var(--paper-2);padding:22px 24px;border-radius:2px;}
-  .for-card.yes{border-color:var(--teal);}
-  .for-card h3{font-family:var(--mono);font-size:14px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;}
-  .for-card.yes h3{color:var(--teal-deep);}
+  .for-card{border:1px solid var(--line);background:var(--paper-2);padding:24px 26px;border-radius:12px;}
+  .for-card.yes{border-color:var(--blue);border-width:1.5px;}
+  .for-card h3{font-family:var(--sans);font-size:13.5px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:14px;font-weight:800;}
+  .for-card.yes h3{color:var(--blue-deep);}
   .for-card.no h3{color:var(--muted);}
   .for-card ul{list-style:none;font-size:14.5px;color:var(--ink);}
   .for-card.no ul{color:var(--muted);}
-  .for-card li{padding:7px 0;border-top:1px dashed var(--line);}
+  .for-card li{padding:8px 0;border-top:1px solid var(--line);}
   .for-card li:first-child{border-top:none;}
 
   /* ---------- PLANS ---------- */
   .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
   @media (max-width:900px){ .plans{grid-template-columns:1fr;max-width:420px;margin:0 auto;} }
-  .plan{border:1.5px solid var(--ink);border-radius:2px;background:var(--paper-2);padding:26px 24px;position:relative;display:flex;flex-direction:column;}
-  .plan.featured{border-color:var(--sello-deep);box-shadow:5px 5px 0 var(--sello-tint);}
-  .plan.top{border-color:var(--gold);}
-  .plan-tag{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);}
-  .plan.featured .plan-tag{color:var(--sello-deep);}
-  .plan.top .plan-tag{color:var(--gold);}
-  .plan-name{font-family:var(--mono);font-size:19px;font-weight:600;margin:8px 0 4px;}
-  .plan-price{font-family:var(--mono);font-size:28px;font-weight:700;margin:12px 0 2px;}
-  .plan-price span{font-size:13px;font-weight:500;color:var(--muted);}
-  .plan-empresas{font-family:var(--mono);font-size:12.5px;color:var(--teal-deep);font-weight:600;margin-top:6px;}
+  .plan{border:1px solid var(--line);border-radius:14px;background:var(--paper-2);padding:26px 24px;position:relative;display:flex;flex-direction:column;}
+  .plan.featured{border-color:var(--blue);border-width:2px;}
+  .plan.top{border-color:var(--navy);border-width:1.5px;}
+  .plan-tag{font-family:var(--sans);font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .plan.featured .plan-tag{color:var(--blue-deep);}
+  .plan.top .plan-tag{color:var(--navy);}
+  .plan-name{font-family:var(--sans);font-size:19px;font-weight:800;margin:8px 0 4px;}
+  .plan-price{font-family:var(--sans);font-size:28px;font-weight:800;margin:12px 0 2px;color:var(--navy);}
+  .plan-price span{font-size:13px;font-weight:600;color:var(--muted);}
+  .plan-empresas{font-family:var(--sans);font-size:12.5px;color:var(--blue-deep);font-weight:700;margin-top:6px;}
   .plan-list{list-style:none;margin-top:18px;font-size:14px;flex:1;}
-  .plan-list li{padding:8px 0;border-top:1px dashed var(--line);display:flex;gap:9px;}
+  .plan-list li{padding:8px 0;border-top:1px solid var(--line);display:flex;gap:9px;}
   .plan-list li:first-child{border-top:none;}
-  .plan-list li::before{content:"—";color:var(--teal-deep);flex:none;}
+  .plan-list li::before{content:"✓";color:var(--blue-deep);font-weight:800;flex:none;}
   .plan .btn{width:100%;justify-content:center;margin-top:20px;}
-  .plans-note{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:22px;text-align:center;}
+  .plans-note{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin-top:22px;text-align:center;}
 
   /* ---------- CTA / FORM ---------- */
   .cta-box{
-    border:1.5px solid var(--ink);border-radius:2px;background:var(--ink);color:var(--paper-2);
+    border-radius:16px;background:var(--navy-deep);color:var(--paper-2);
     padding:48px 40px;display:grid;grid-template-columns:1.1fr 0.9fr;gap:32px;align-items:center;
   }
   @media (max-width:820px){ .cta-box{grid-template-columns:1fr;padding:34px 24px;} }
   .cta-box h2{color:var(--paper-2);font-size:26px;}
-  .cta-box p{color:#C6C4D1;margin-top:10px;font-size:14.5px;}
-  .cta-box .btn-primary{box-shadow:none;}
+  .cta-box p{color:#B9CBEF;margin-top:10px;font-size:14.5px;}
   .cta-fields{display:flex;flex-direction:column;gap:10px;}
   .cta-fields input{
-    font-family:var(--sans);font-size:14px;padding:12px 14px;border-radius:3px;
-    border:1.5px solid #3C3F55;background:#252840;color:var(--paper-2);
+    font-family:var(--sans);font-size:14px;padding:12px 14px;border-radius:8px;
+    border:1.5px solid var(--navy-mid);background:var(--navy);color:var(--paper-2);
   }
-  .cta-fields input::placeholder{color:#8E8FA3;}
+  .cta-fields input::placeholder{color:#8194BC;}
   .cta-fields .btn{margin-top:4px;}
-  .form-note{font-family:var(--mono);font-size:11px;color:#8E8FA3;margin-top:4px;}
+  .form-note{font-family:var(--sans);font-size:11.5px;color:#8194BC;margin-top:4px;font-weight:600;}
 
-  footer{padding:40px 0;border-top:1px solid var(--line);}
+  footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);}
   .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
-  .foot-row p{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="wrap nav">
-    <a href="#/" class="logo">
-      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="16" cy="16" r="14.5" stroke="#191C2E" stroke-width="1.5" fill="#FFFFFF"/>
-        <circle cx="16" cy="16" r="10.5" stroke="#0B9169" stroke-width="1.5" stroke-dasharray="2.5 2.5"/>
-        <path d="M11 16.5L14.3 19.8L21.5 12.5" stroke="#E23F2A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span class="logo-text">AutoFactura</span>
-    </a>
-    <nav class="nav-links">
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="#/" class="logo">
+        <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14.5" stroke="#28A9E0" stroke-width="1.6" fill="#0F1B3D"/>
+          <path d="M10 20L16 10L22 20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.6 16.5H19.4" stroke="#28A9E0" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="logo-text">AutoFactura</div>
+          <div class="logo-sub">Facturación electrónica automática</div>
+        </div>
+      </a>
+      <nav class="nav-auth">
+        <a href="/login">Iniciar sesión</a>
+        <a href="/registro" class="btn btn-primary">Crear cuenta</a>
+      </nav>
+    </div>
+  </div>
+  <div class="bar-nav">
+    <div class="wrap nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#funciones">Funciones</a>
+      <a href="#para-quien">Para quién es</a>
       <a href="#planes">Planes</a>
-    </nav>
-    <nav class="nav-auth">
-      <a href="/login">Iniciar sesión</a>
-      <a href="/registro" class="btn btn-ghost" style="padding:8px 16px;">Crear cuenta</a>
-    </nav>
+    </div>
   </div>
 </header>
 
@@ -267,9 +284,25 @@
         <p class="hero-note">15 días gratis para probar · sin tarjeta de crédito</p>
       </div>
 
-      <div class="ticket-stage">
-        <div class="ticket">
-          <div class="ticket-seg seg-1">
+      <div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="dot">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 12L10 16L18 8" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Ingresar a AutoFactura</h3>
+          </div>
+          <div class="panel-body">
+            <a href="/login" class="btn btn-primary">Iniciar sesión</a>
+            <a href="/recuperar" class="panel-link">Recuperar contraseña</a>
+            <div class="panel-divider"></div>
+            <a href="/registro" class="btn btn-ghost-light">Crear cuenta gratis</a>
+            <a href="#planes" class="panel-link">Ver planes y precios</a>
+          </div>
+        </div>
+
+        <div class="receipt">
+          <div class="receipt-seg">
             <p class="seg-label">01 · Subís todo junto</p>
             <p class="seg-title">47 comprobantes de una sola vez</p>
             <p class="seg-sub">Fotos, PDFs, o conectás Mercado Pago y AutoFactura trae los pagos solo, todos los días.</p>
@@ -278,7 +311,7 @@
               47 comprobantes cargados — listos para leer
             </div>
           </div>
-          <div class="ticket-seg">
+          <div class="receipt-seg">
             <p class="seg-label">02 · AutoFactura lee todo</p>
             <p class="seg-title">Cada uno arma su fila solo</p>
             <div class="row-mock">
@@ -287,13 +320,13 @@
               <div class="mas">+ 46 más</div><div>—</div><div>OK</div>
             </div>
           </div>
-          <div class="ticket-seg">
+          <div class="receipt-seg">
             <p class="seg-label">03 · Facturás el lote</p>
             <p class="seg-title">47 facturas con CAE, un solo click</p>
             <div class="cae-mock">
               <div>
-                <div style="font-size:11px;color:var(--muted);">Último CAE</div>
-                <div style="font-weight:600;">75328617817021</div>
+                <div style="font-size:11px;color:var(--muted);font-weight:600;">Último CAE</div>
+                <div style="font-weight:700;">75328617817021</div>
               </div>
               <div class="barcode" aria-hidden="true">
                 <span style="height:18px;"></span><span style="height:26px;"></span><span style="height:14px;"></span>
@@ -302,7 +335,7 @@
                 <span style="height:26px;"></span><span style="height:14px;"></span>
               </div>
             </div>
-            <div class="stamp">47 facturadas ✓</div>
+            <div class="stamp">✓ 47 facturadas</div>
           </div>
         </div>
       </div>
@@ -318,17 +351,17 @@
       </div>
       <div class="steps">
         <div class="step">
-          <p class="step-num">Paso 01</p>
+          <div class="step-num">1</div>
           <h3>Subís o conectás Mercado Pago</h3>
           <p>Arrastrás todos los comprobantes juntos, sin separar por banco o formato. O conectás tu cuenta de Mercado Pago una vez, y AutoFactura trae los pagos nuevos solo.</p>
         </div>
         <div class="step">
-          <p class="step-num">Paso 02</p>
+          <div class="step-num">2</div>
           <h3>Revisás la planilla completa</h3>
           <p>AutoFactura ya completó cliente, monto, fecha y medio de pago de cada uno. Lo que falte, lo editás vos, como un Excel, antes de facturar nada.</p>
         </div>
         <div class="step">
-          <p class="step-num">Paso 03</p>
+          <div class="step-num">3</div>
           <h3>Facturás el lote entero</h3>
           <p>Un click y entra a ARCA a facturar comprobante por comprobante, solo. Monotributo o Responsable Inscripto, Factura A, B o C — vos seguís con lo tuyo mientras tanto.</p>
         </div>
@@ -472,7 +505,7 @@
           <p class="form-note" style="margin-bottom:2px;">¿Tenés dudas antes de anotarte? Escribinos:</p>
           <input type="text" id="nombre" placeholder="Tu nombre" required>
           <input type="tel" id="whatsapp" placeholder="Tu WhatsApp" required>
-          <button type="submit" class="btn btn-ghost" style="border-color:#F7F5EC; color:#F7F5EC;">Consultar por WhatsApp</button>
+          <button type="submit" class="btn btn-ghost-light">Consultar por WhatsApp</button>
         </form>
       </div>
     </div>

@@ -3,112 +3,190 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Facturea — Soporte</title>
+<title>AutoFactura — Soporte</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
-    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
-    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
-    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
-  .wrap{max-width:800px;margin:0 auto;padding:32px 24px 80px;}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
-  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
-  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
-  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
-  .nav-links a{color:var(--muted);text-decoration:none;}
-  .nav-links a:hover{color:var(--ink);}
-  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
-  p.sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  h1,h2,h3{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
 
-  .tabs{display:flex;gap:8px;margin-bottom:20px;font-family:var(--mono);font-size:13px;flex-wrap:wrap;}
-  .tab{padding:9px 16px;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper-2);cursor:pointer;}
-  .tab.activa{background:var(--teal);color:#F7F5EC;border-color:var(--teal-deep);}
+  /* ---------- HEADER ---------- */
+  header.site{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .logo-sub{font-size:11px;color:#9FB3D9;letter-spacing:0.04em;margin-top:1px;}
+  @media (max-width:480px){ .logo-sub{display:none;} }
+
+  .bar-nav{background:var(--navy);}
+  .nav-links{display:flex;gap:24px;align-items:center;padding:12px 24px;flex-wrap:wrap;}
+  .nav-links a{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;text-decoration:none;color:#C9D5EE;}
+  .nav-links a:hover{color:#fff;}
+
+  /* ---------- PAGE ---------- */
+  .page{padding:48px 0 80px;}
+  .content-narrow{max-width:800px;margin:0 auto;}
+  .eyebrow{
+    font-family:var(--sans);font-size:12.5px;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--blue-deep);font-weight:700;
+  }
+  h1.titulo{font-size:26px;margin-top:8px;}
+  p.sub{color:var(--muted);font-size:14.5px;margin-top:10px;margin-bottom:32px;}
+
+  .tabs{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;}
+  .tab{
+    font-family:var(--sans);font-size:13.5px;font-weight:700;
+    padding:10px 18px;border:1.5px solid var(--navy);border-radius:8px;
+    background:var(--paper-2);cursor:pointer;color:var(--navy);
+    transition:background .15s ease, color .15s ease;
+  }
+  .tab:hover{background:var(--blue-tint);}
+  .tab.activa{background:var(--blue);color:#fff;border-color:var(--blue);}
 
   section.panel-tab{display:none;}
   section.panel-tab.activa{display:block;}
 
-  .item{background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:18px 20px;margin-bottom:12px;}
-  .item h3{font-family:var(--mono);font-size:14px;margin-bottom:6px;}
+  .item{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin-bottom:14px;}
+  .item h3{font-size:15.5px;margin-bottom:8px;}
   .item p{font-size:13.5px;color:var(--muted);}
 
-  .campo{margin-bottom:16px;}
-  .campo label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;}
+  .campo{margin-bottom:18px;}
+  .campo label{
+    font-family:var(--sans);font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;display:block;margin-bottom:6px;
+  }
   input, textarea{
-    width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;
+    width:100%;font-family:var(--sans);font-size:14px;padding:12px 14px;border-radius:8px;
     border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
   }
+  input:focus, textarea:focus{outline:none;border-color:var(--blue);}
   textarea{resize:vertical;min-height:110px;}
+
   .btn{
-    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 22px;border-radius:3px;
-    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    font-family:var(--sans);font-weight:700;font-size:14.5px;
+    padding:13px 24px;border-radius:8px;
+    text-decoration:none;cursor:pointer;border:1.5px solid transparent;
+    transition:filter .15s ease, transform .1s ease;
   }
+  .btn:hover{filter:brightness(1.06);}
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--blue);color:#FFFFFF;}
+  .btn-primary:hover{background:var(--blue-deep);}
+
+  footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);margin-top:20px;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
-    <div class="nav-links">
+
+<header class="site">
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/panel" class="logo">
+        <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14.5" stroke="#28A9E0" stroke-width="1.6" fill="#0F1B3D"/>
+          <path d="M10 20L16 10L22 20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.6 16.5H19.4" stroke="#28A9E0" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="logo-text">AutoFactura</div>
+          <div class="logo-sub">Facturación electrónica automática</div>
+        </div>
+      </a>
+    </div>
+  </div>
+  <div class="bar-nav">
+    <div class="wrap nav-links">
       <a href="/panel">Panel</a>
       <a href="/empresas">Empresas</a>
       <a href="/logout">Cerrar sesión</a>
     </div>
-  </header>
-
-  <h1>Soporte</h1>
-  <p class="sub">Guías de uso, contacto y pedidos de revisión técnica.</p>
-
-  <div class="tabs">
-    <div class="tab activa" data-tab="guias" onclick="mostrarTab('guias')">Guías</div>
-    <div class="tab" data-tab="contacto" onclick="mostrarTab('contacto')">Contacto</div>
-    <div class="tab" data-tab="reporte" onclick="mostrarTab('reporte')">Reportar un problema</div>
   </div>
+</header>
 
-  <section class="panel-tab activa" id="tab-guias">
-    <div class="item">
-      <h3>Cómo cargar tu primera empresa</h3>
-      <p>Andá a "Empresas" → "Agregar una empresa nueva" y completá la razón social exacta como figura en ARCA y tus datos de facturación habituales.</p>
-    </div>
-    <div class="item">
-      <h3>Cómo subir comprobantes</h3>
-      <p>Entrá a la empresa desde el panel, andá a "Ver comprobantes" y subí las capturas de tus transferencias. Facturea las lee solas.</p>
-    </div>
-    <div class="item">
-      <h3>Cómo facturar</h3>
-      <p>Una vez que tus comprobantes están cargados y tu empresa tiene la configuración completa, Facturea genera la factura automáticamente ante ARCA.</p>
-    </div>
-  </section>
+<main class="page">
+  <div class="wrap content-narrow">
+    <p class="eyebrow">Ayuda</p>
+    <h1 class="titulo">Soporte</h1>
+    <p class="sub">Guías de uso, contacto y pedidos de revisión técnica.</p>
 
-  <section class="panel-tab" id="tab-contacto">
-    <div class="item">
-      <h3>Hablá con nosotros</h3>
-      <p>Escribinos por WhatsApp o email y te respondemos a la brevedad.</p>
+    <div class="tabs">
+      <div class="tab activa" data-tab="guias" onclick="mostrarTab('guias')">Guías</div>
+      <div class="tab" data-tab="contacto" onclick="mostrarTab('contacto')">Contacto</div>
+      <div class="tab" data-tab="reporte" onclick="mostrarTab('reporte')">Reportar un problema</div>
     </div>
-  </section>
 
-  <section class="panel-tab" id="tab-reporte">
-    <div class="item">
-      <h3>Contanos qué pasó</h3>
-      <p style="margin-bottom:16px;">Describí el problema con el mayor detalle posible; te contactamos para resolverlo.</p>
-      <form>
-        <div class="campo">
-          <label>Empresa afectada (opcional)</label>
-          <input type="text" placeholder="ej: Juan Moya (Kiosco)">
-        </div>
-        <div class="campo">
-          <label>Descripción del problema</label>
-          <textarea placeholder="Contanos qué pasó..."></textarea>
-        </div>
-        <button type="button" class="btn" onclick="alert('Por ahora escribinos directo por los canales de contacto. Este formulario todavía no está conectado.')">Enviar</button>
-      </form>
-    </div>
-  </section>
-</div>
+    <section class="panel-tab activa" id="tab-guias">
+      <div class="item">
+        <h3>Cómo cargar tu primera empresa</h3>
+        <p>Andá a "Empresas" → "Agregar una empresa nueva" y completá la razón social exacta como figura en ARCA y tus datos de facturación habituales.</p>
+      </div>
+      <div class="item">
+        <h3>Cómo subir comprobantes</h3>
+        <p>Entrá a la empresa desde el panel, andá a "Ver comprobantes" y subí las capturas de tus transferencias. AutoFactura las lee solas.</p>
+      </div>
+      <div class="item">
+        <h3>Cómo facturar</h3>
+        <p>Una vez que tus comprobantes están cargados y tu empresa tiene la configuración completa, AutoFactura genera la factura automáticamente ante ARCA.</p>
+      </div>
+    </section>
+
+    <section class="panel-tab" id="tab-contacto">
+      <div class="item">
+        <h3>Hablá con nosotros</h3>
+        <p>Escribinos por WhatsApp o email y te respondemos a la brevedad.</p>
+      </div>
+    </section>
+
+    <section class="panel-tab" id="tab-reporte">
+      <div class="item">
+        <h3>Contanos qué pasó</h3>
+        <p style="margin-bottom:16px;">Describí el problema con el mayor detalle posible; te contactamos para resolverlo.</p>
+        <form>
+          <div class="campo">
+            <label>Empresa afectada (opcional)</label>
+            <input type="text" placeholder="ej: Juan Moya (Kiosco)">
+          </div>
+          <div class="campo">
+            <label>Descripción del problema</label>
+            <textarea placeholder="Contanos qué pasó..."></textarea>
+          </div>
+          <button type="button" class="btn btn-primary" onclick="alert('Por ahora escribinos directo por los canales de contacto. Este formulario todavía no está conectado.')">Enviar</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFactura — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
 
 <script>
 function mostrarTab(nombre) {

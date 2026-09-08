@@ -3,112 +3,185 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Facturea — Panel</title>
+<title>AutoFactura — Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
-    --teal:#0F6E56; --teal-deep:#085041; --teal-tint:#E1F5EE;
-    --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
-    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --amber-tint:#FBF0DD;
+    --amber-deep:#8A5A0A;
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
-  .wrap{max-width:1000px;margin:0 auto;padding:32px 24px 80px;}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:14px;}
-  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
-  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
-  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--mono);font-size:13px;}
-  .nav-links a{color:var(--muted);text-decoration:none;}
-  .nav-links a:hover{color:var(--ink);}
-  h1{font-family:var(--mono);font-size:22px;margin-bottom:4px;}
-  p.sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  h1,h2{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
 
-  .grid-accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:34px;max-width:640px;}
+  /* ---------- HEADER ---------- */
+  header.site{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;flex-wrap:wrap;gap:12px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .logo-sub{font-size:11px;color:#9FB3D9;letter-spacing:0.04em;margin-top:1px;}
+  @media (max-width:480px){ .logo-sub{display:none;} }
+  .nav-auth{display:flex;gap:16px;align-items:center;}
+  .nav-auth span{font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;}
+  .nav-auth a{font-family:var(--sans);font-size:13.5px;font-weight:600;text-decoration:none;color:#D6E1F5;}
+  .nav-auth a:hover{color:#fff;}
+
+  /* ---------- PAGE ---------- */
+  .page{padding:48px 0 80px;}
+  .eyebrow{
+    font-family:var(--sans);font-size:12.5px;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--blue-deep);font-weight:700;
+  }
+  h1.saludo{font-size:26px;margin-top:8px;}
+  p.sub{color:var(--muted);font-size:14.5px;margin-top:10px;margin-bottom:32px;max-width:640px;}
+
+  .grid-accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:44px;max-width:680px;}
   @media (max-width:560px){ .grid-accesos{grid-template-columns:1fr;} }
   .tarjeta-acceso{
-    background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:20px;
-    text-decoration:none;color:var(--ink);display:block;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:22px;
+    text-decoration:none;color:var(--ink);display:block;transition:border-color .15s ease;
   }
-  .tarjeta-acceso .titulo{font-family:var(--mono);font-weight:600;font-size:14.5px;margin-bottom:6px;}
-  .tarjeta-acceso .desc{font-size:13px;color:var(--muted);}
+  .tarjeta-acceso:hover{border-color:var(--blue);}
+  .tarjeta-acceso .titulo{font-family:var(--sans);font-weight:700;font-size:15.5px;margin-bottom:6px;}
+  .tarjeta-acceso .desc{font-size:13.5px;color:var(--muted);}
 
-  h2.seccion{font-family:var(--mono);font-size:15px;margin-bottom:14px;}
+  h2.seccion{font-size:18px;margin-bottom:16px;}
 
-  .lista-empresas{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+  .lista-empresas{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
   .fila-empresa{
-    background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;
-    padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:12px;
+    padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
   }
-  .fila-empresa .nombre{font-family:var(--mono);font-weight:600;font-size:14px;}
-  .fila-empresa .estado-config{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:20px;display:inline-block;margin-left:8px;}
-  .estado-config.completa{background:var(--teal-tint);color:var(--teal-deep);}
-  .estado-config.incompleta{background:#F1E6C8;color:#7A5A0A;}
-  .acciones-empresa{display:flex;gap:8px;font-family:var(--mono);font-size:12.5px;}
+  .fila-empresa .nombre{font-family:var(--sans);font-weight:700;font-size:14.5px;}
+  .fila-empresa .estado-config{
+    font-family:var(--sans);font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
+    display:inline-block;margin-left:10px;letter-spacing:0.02em;
+  }
+  .estado-config.completa{background:var(--blue-tint);color:var(--blue-deep);}
+  .estado-config.incompleta{background:var(--amber-tint);color:var(--amber-deep);}
+  .acciones-empresa{display:flex;gap:8px;font-family:var(--sans);font-size:13px;font-weight:700;}
   .acciones-empresa a{
-    text-decoration:none;color:var(--ink);border:1.5px solid var(--ink);border-radius:3px;
-    padding:6px 12px;background:var(--paper);
+    text-decoration:none;color:var(--navy);border:1.5px solid var(--navy);border-radius:8px;
+    padding:8px 14px;background:transparent;transition:background .15s ease, color .15s ease;
   }
-  .vacio{text-align:center;padding:40px 20px;color:var(--muted);font-family:var(--mono);font-size:13px;background:var(--paper-2);border:1.5px dashed var(--ink);border-radius:2px;margin-bottom:14px;}
+  .acciones-empresa a:hover{background:var(--navy);color:#fff;}
+
+  .vacio{
+    text-align:center;padding:44px 20px;color:var(--muted);font-family:var(--sans);font-size:13.5px;
+    background:var(--paper-2);border:1.5px dashed var(--line);border-radius:12px;margin-bottom:18px;
+  }
   .btn{
-    font-family:var(--mono);font-weight:600;font-size:13.5px;padding:11px 18px;border-radius:3px;
-    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;text-decoration:none;display:inline-block;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    font-family:var(--sans);font-weight:700;font-size:14px;padding:12px 20px;border-radius:8px;
+    cursor:pointer;border:1.5px solid transparent;background:var(--blue);color:#FFFFFF;
+    text-decoration:none;transition:filter .15s ease, transform .1s ease;
   }
+  .btn:hover{filter:brightness(1.06);}
+  .btn:active{transform:translateY(1px);}
+
+  footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);margin-top:20px;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
-    <div class="nav-links">
-      <span>{{ usuario.nombre_razon_social or usuario.email }}</span>
-      <a href="/logout">Cerrar sesión</a>
-    </div>
-  </header>
-  {% include '_aviso_membresia.html' %}
 
-  <h1>Hola, {{ usuario.nombre_razon_social or usuario.email }}</h1>
-  <p class="sub">Este es tu panel de Facturea. Desde acá gestionás tus empresas (cada una con su propio acceso a ARCA) y podés pedir ayuda si algo no funciona.</p>
-
-  <div class="grid-accesos">
-    <a href="/empresas" class="tarjeta-acceso">
-      <div class="titulo">Empresas</div>
-      <div class="desc">Agregá, editá o eliminá las empresas/clientes que representás, con el CUIL y Clave Fiscal de cada una.</div>
-    </a>
-    <a href="/soporte" class="tarjeta-acceso">
-      <div class="titulo">Soporte</div>
-      <div class="desc">Guías de uso, contacto y pedidos de revisión técnica.</div>
-    </a>
-  </div>
-
-  <h2 class="seccion">Tus empresas</h2>
-
-  {% if empresas %}
-  <div class="lista-empresas">
-    {% for e in empresas %}
-    <div class="fila-empresa">
-      <div>
-        <span class="nombre">{{ e.nombre_interno or "Sin nombre" }}</span>
-        <span class="estado-config {{ 'completa' if e.configuracion_completa() else 'incompleta' }}">
-          {{ "Lista para facturar" if e.configuracion_completa() else "Falta completar" }}
-        </span>
-      </div>
-      <div class="acciones-empresa">
-        {% if e.configuracion_completa() %}
-        <a href="/empresas/{{ e.id }}/comprobantes">Ver comprobantes</a>
-        {% else %}
-        <a href="/empresas/{{ e.id }}/editar">Completar datos</a>
-        {% endif %}
+<header class="site">
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/panel" class="logo">
+        <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14.5" stroke="#28A9E0" stroke-width="1.6" fill="#0F1B3D"/>
+          <path d="M10 20L16 10L22 20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.6 16.5H19.4" stroke="#28A9E0" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="logo-text">AutoFactura</div>
+          <div class="logo-sub">Facturación electrónica automática</div>
+        </div>
+      </a>
+      <div class="nav-auth">
+        <span>{{ usuario.nombre_razon_social or usuario.email }}</span>
+        <a href="/logout">Cerrar sesión</a>
       </div>
     </div>
-    {% endfor %}
   </div>
-  <a href="/empresas" class="btn">+ Agregar otra empresa</a>
-  {% else %}
-  <div class="vacio">Todavía no cargaste ninguna empresa.</div>
-  <a href="/empresas" class="btn">+ Agregar mi primera empresa</a>
-  {% endif %}
-</div>
+</header>
+
+<main class="page">
+  <div class="wrap">
+    {% include '_aviso_membresia.html' %}
+
+    <p class="eyebrow">Panel</p>
+    <h1 class="saludo">Hola, {{ usuario.nombre_razon_social or usuario.email }}</h1>
+    <p class="sub">Este es tu panel de AutoFactura. Desde acá gestionás tus empresas (cada una con su propio acceso a ARCA) y podés pedir ayuda si algo no funciona.</p>
+
+    <div class="grid-accesos">
+      <a href="/empresas" class="tarjeta-acceso">
+        <div class="titulo">Empresas</div>
+        <div class="desc">Agregá, editá o eliminá las empresas/clientes que representás, con el CUIL y Clave Fiscal de cada una.</div>
+      </a>
+      <a href="/soporte" class="tarjeta-acceso">
+        <div class="titulo">Soporte</div>
+        <div class="desc">Guías de uso, contacto y pedidos de revisión técnica.</div>
+      </a>
+    </div>
+
+    <h2 class="seccion">Tus empresas</h2>
+
+    {% if empresas %}
+    <div class="lista-empresas">
+      {% for e in empresas %}
+      <div class="fila-empresa">
+        <div>
+          <span class="nombre">{{ e.nombre_interno or "Sin nombre" }}</span>
+          <span class="estado-config {{ 'completa' if e.configuracion_completa() else 'incompleta' }}">
+            {{ "Lista para facturar" if e.configuracion_completa() else "Falta completar" }}
+          </span>
+        </div>
+        <div class="acciones-empresa">
+          {% if e.configuracion_completa() %}
+          <a href="/empresas/{{ e.id }}/comprobantes">Ver comprobantes</a>
+          {% else %}
+          <a href="/empresas/{{ e.id }}/editar">Completar datos</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <a href="/empresas" class="btn">+ Agregar otra empresa</a>
+    {% else %}
+    <div class="vacio">Todavía no cargaste ninguna empresa.</div>
+    <a href="/empresas" class="btn">+ Agregar mi primera empresa</a>
+    {% endif %}
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFactura — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
 </body>
 </html>

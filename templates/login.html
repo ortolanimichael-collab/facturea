@@ -3,56 +3,177 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Facturea — Iniciar sesión</title>
+<title>AutoFactura — Iniciar sesión</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
-    --teal:#0F6E56; --teal-deep:#085041; --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
-    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --line-navy: rgba(255,255,255,0.16);
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
-  .wrap{max-width:1120px;margin:0 auto;padding:32px 24px 80px;}
-  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
-  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
-  .card{max-width:420px;margin:60px auto;background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:32px;}
-  h1{font-family:var(--mono);font-size:22px;margin-bottom:6px;}
-  p.sub{color:var(--muted);font-size:13.5px;margin-bottom:24px;}
-  label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;margin-top:14px;}
-  input{width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);}
-  input:focus{outline:none;border-color:var(--teal);}
-  .btn{
-    display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
-    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 18px;border-radius:3px;
-    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;margin-top:22px;
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
   }
-  .link-alt{display:block;text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
-  .link-alt a{color:var(--teal-deep);font-weight:600;text-decoration:none;}
-  .flash{font-family:var(--mono);font-size:12.5px;padding:10px 14px;border-radius:3px;margin-bottom:16px;background:#F5DEDE;color:var(--stamp);}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  h1,h2,h3{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    font-family:var(--sans);font-weight:700;font-size:14.5px;
+    padding:13px 24px;border-radius:8px;
+    text-decoration:none;cursor:pointer;border:1.5px solid transparent;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  .btn:hover{filter:brightness(1.06);}
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--blue);color:#FFFFFF;}
+  .btn-primary:hover{background:var(--blue-deep);}
+  .btn-ghost{background:transparent;color:var(--navy);border-color:var(--navy);}
+  .btn-ghost:hover{background:var(--navy);color:#fff;}
+
+  /* ---------- HEADER ---------- */
+  header{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .logo-sub{font-size:11px;color:#9FB3D9;letter-spacing:0.04em;margin-top:1px;}
+  .nav-auth{display:flex;gap:14px;align-items:center;}
+  .nav-auth a:not(.btn){font-family:var(--sans);font-size:13.5px;font-weight:600;text-decoration:none;color:#D6E1F5;}
+  .nav-auth a:not(.btn):hover{color:#fff;}
+  .nav-auth .btn{padding:9px 18px;font-size:13.5px;}
+  @media (max-width:480px){ .nav-auth{gap:8px;} .logo-sub{display:none;} }
+
+  /* ---------- LOGIN ---------- */
+  .login-shell{
+    min-height:calc(100vh - 73px);
+    display:flex;align-items:center;justify-content:center;
+    padding:56px 24px;
+  }
+  .panel{
+    width:100%;max-width:420px;
+    background:var(--navy-deep);
+    border-radius:14px;
+    overflow:hidden;
+    color:#fff;
+    border:1px solid var(--navy-mid);
+  }
+  .panel-head{
+    display:flex;align-items:center;gap:10px;
+    padding:24px 26px 8px;
+  }
+  .panel-head .dot{width:30px;height:30px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;flex:none;}
+  .panel-head h1{color:#fff;font-size:19px;font-weight:800;}
+  .panel-sub{padding:0 26px;font-size:13px;color:#B9CBEF;margin-top:2px;}
+  .panel-body{padding:22px 26px 28px;}
+
+  label{font-family:var(--sans);font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:#9FB3D9;font-weight:700;display:block;margin-bottom:6px;margin-top:16px;}
+  label:first-child{margin-top:0;}
+  input{
+    width:100%;font-family:var(--sans);font-size:14px;padding:12px 14px;border-radius:8px;
+    border:1.5px solid var(--navy-mid);background:var(--navy);color:#fff;
+  }
+  input::placeholder{color:#8194BC;}
+  input:focus{outline:none;border-color:var(--blue);}
+
+  .panel .btn-primary{width:100%;justify-content:center;margin-top:22px;}
+  .panel-link{display:block;text-align:center;font-size:13.5px;font-weight:600;color:#B9CBEF;text-decoration:none;padding:8px 0;margin-top:8px;}
+  .panel-link:hover{color:#fff;}
+  .panel-divider{border-top:1px solid var(--navy-mid);margin:16px 0;}
+  .panel-alt{text-align:center;font-size:13.5px;color:#B9CBEF;}
+  .panel-alt a{color:var(--blue);font-weight:700;text-decoration:none;}
+  .panel-alt a:hover{text-decoration:underline;}
+
+  .flash{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;padding:11px 14px;border-radius:8px;
+    margin-bottom:6px;background:rgba(211,73,73,0.16);color:#F3A6A6;border:1px solid rgba(211,73,73,0.4);
+  }
+
+  footer{padding:24px 0;background:var(--paper-2);border-top:1px solid var(--line);}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <a href="/" class="logo"><span class="dot"></span>facturea</a>
-  <div class="card">
-    <h1>Iniciar sesión</h1>
-    <p class="sub">Entrá a tu cuenta de Facturea.</p>
 
-    {% if error %}<div class="flash">{{ error }}</div>{% endif %}
-
-    <form method="POST">
-      <label>Email</label>
-      <input type="email" name="email" required>
-
-      <label>Contraseña</label>
-      <input type="password" name="password" required>
-
-      <button type="submit" class="btn">Entrar</button>
-    </form>
-    <p class="link-alt">¿Todavía no tenés cuenta? <a href="/registro">Crear cuenta</a></p>
+<header>
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/" class="logo">
+        <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14.5" stroke="#28A9E0" stroke-width="1.6" fill="#0F1B3D"/>
+          <path d="M10 20L16 10L22 20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.6 16.5H19.4" stroke="#28A9E0" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="logo-text">AutoFactura</div>
+          <div class="logo-sub">Facturación electrónica automática</div>
+        </div>
+      </a>
+      <nav class="nav-auth">
+        <a href="/registro">Crear cuenta</a>
+      </nav>
+    </div>
   </div>
-</div>
+</header>
+
+<main class="login-shell">
+  <div class="panel">
+    <div class="panel-head">
+      <div class="dot">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 12L10 16L18 8" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1>Iniciar sesión</h1>
+    </div>
+    <p class="panel-sub">Entrá a tu cuenta de AutoFactura.</p>
+
+    <div class="panel-body">
+      {% if error %}<div class="flash">{{ error }}</div>{% endif %}
+
+      <form method="POST">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="tu@email.com" required>
+
+        <label>Contraseña</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+
+        <button type="submit" class="btn btn-primary">Entrar</button>
+      </form>
+
+      <a href="/recuperar" class="panel-link">Recuperar contraseña</a>
+      <div class="panel-divider"></div>
+      <p class="panel-alt">¿Todavía no tenés cuenta? <a href="/registro">Crear cuenta</a></p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFactura — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
 </body>
 </html>
