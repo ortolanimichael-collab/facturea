@@ -400,10 +400,12 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
 
             # --- FECHA: "01/08/26 - 21:43 hs" -- año de 2 dígitos ---
             fecha_servicio = datetime.now().strftime('%d/%m/%Y')
+            fecha_detectada = False
             m = re.search(r'\b(\d{1,2})/(\d{2})/(\d{2})\b', texto_raw)
             if m:
                 anio_completo = f"20{m.group(3)}"
                 fecha_servicio = f"{m.group(1).zfill(2)}/{m.group(2)}/{anio_completo}"
+                fecha_detectada = True
                 print(f"  🟢 [DEBUG-ASTROPAY] Fecha: {fecha_servicio}")
 
             # --- MONTO: "ARS 4000.00" -- PUNTO decimal, no coma (formato
@@ -444,6 +446,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
                 "Nombre Remitente": "No detectado",
                 "Fecha del Comprobante": fecha_servicio,
+                "Fecha No Detectada": not fecha_detectada,
                 "Condicion IVA": "Consumidor Final",
                 "Condicion Venta": condicion_venta_detectada,
                 "Medio Pago": medio_pago,
@@ -501,6 +504,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
             # --- FECHA ---
             # "09 de mayo de 2026 - 22:26"  o  "O9 de mayo de 2026" (OCR: 0→O)
             fecha_servicio = datetime.now().strftime('%d/%m/%Y')
+            fecha_detectada = False
             m = re.search(
                 r'([O0]?\d|\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})',
                 texto_raw, re.IGNORECASE
@@ -512,6 +516,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 anio = m.group(3)
                 mes_num = MESES_ABREV.get(mes_txt, MESES.get(mes_txt, MESES.get(m.group(2).lower(), '01')))
                 fecha_servicio = f"{dia}/{mes_num}/{anio}"
+                fecha_detectada = True
                 print(f"  🟢 [DEBUG-BRUBANK-PDF] Fecha: {fecha_servicio}")
 
             # --- MONTO ---
@@ -546,6 +551,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
                 "Nombre Remitente": "No detectado",  # TODO: extracción de remitente pendiente para este formato PDF
                 "Fecha del Comprobante": fecha_emision_final,
+                "Fecha No Detectada": not fecha_detectada,
                 "Condicion IVA": "Consumidor Final",
                 "Condicion Venta": condicion_venta_detectada,
                 "Medio Pago": medio_pago,
@@ -634,10 +640,12 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
 
             # --- FECHA ---
             fecha_servicio = datetime.now().strftime('%d/%m/%Y')
+            fecha_detectada = False
             # Formato 1: "Fecha y hora  30/04/2026 23:02 hs"
             m = re.search(r'[Ff]echa\s+y\s+hora\s+(\d{1,2}/\d{2}/\d{4})', texto_raw)
             if m:
                 fecha_servicio = m.group(1)
+                fecha_detectada = True
                 print(f"  🟢 [DEBUG-UALÁ] Fecha (fmt1 'Fecha y hora'): {fecha_servicio}")
             else:
                 # Formato 2: "Fecha  1 de may del 2026 - 00:24hs"
@@ -649,12 +657,14 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                     anio = m.group(3)
                     mes_num = MESES_ABREV.get(mes_txt, MESES.get(mes_txt, '01'))
                     fecha_servicio = f"{dia}/{mes_num}/{anio}"
+                    fecha_detectada = True
                     print(f"  🟢 [DEBUG-UALÁ] Fecha (fmt2 'X de mes del YYYY'): {fecha_servicio}")
                 else:
                     # fallback dd/mm/yyyy genérico
                     m = re.search(r'\b(\d{1,2})[/\-](\d{2})[/\-](\d{4})\b', texto_raw)
                     if m:
                         fecha_servicio = f"{m.group(1).zfill(2)}/{m.group(2)}/{m.group(3)}"
+                        fecha_detectada = True
                         print(f"  🟡 [DEBUG-UALÁ] Fecha (fallback dd/mm/yyyy): {fecha_servicio}")
                     else:
                         print(f"  🔴 [DEBUG-UALÁ] Fecha NO encontrada. Líneas con 'fecha': {[l for l in texto_raw.splitlines() if 'fecha' in l.lower()][:5]}")
@@ -738,6 +748,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
                 "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
                 "Nombre Remitente": "No detectado",  # TODO: extracción de remitente pendiente para este formato PDF
                 "Fecha del Comprobante": fecha_emision_final,
+                "Fecha No Detectada": not fecha_detectada,
                 "Condicion IVA": "Consumidor Final",
                 "Condicion Venta": condicion_venta_detectada,
                 "Medio Pago": medio_pago,
@@ -832,17 +843,20 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
 
         # ── FECHA ─────────────────────────────────────────────────────────────
         fecha_servicio = datetime.now().strftime('%d/%m/%Y')
+        fecha_detectada = False
 
         # Formato "dd/mm/yyyy"
         m = re.search(r'\b(\d{1,2})[/\-](\d{2})[/\-](\d{4})\b', texto_raw)
         if m:
             fecha_servicio = f"{m.group(1).zfill(2)}/{m.group(2)}/{m.group(3)}"
+            fecha_detectada = True
         else:
             # "25 de Abril a las..."
             for mes_nombre, mes_num in MESES.items():
                 m2 = re.search(rf'(\d{{1,2}})\s+de\s+{mes_nombre}', texto, re.IGNORECASE)
                 if m2:
                     fecha_servicio = f"{m2.group(1).zfill(2)}/{mes_num}/2026"
+                    fecha_detectada = True
                     break
 
         # ── MONTO ─────────────────────────────────────────────────────────────
@@ -994,6 +1008,7 @@ def extraer_datos_de_pdf(ruta_pdf, fecha_interfaz, cuit_propio_cliente=""):
             "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
             "Nombre Remitente": "No detectado",  # TODO: extracción de remitente pendiente para este formato PDF
             "Fecha del Comprobante": fecha_emision_final,
+            "Fecha No Detectada": not fecha_detectada,
             "Condicion IVA": "Consumidor Final",
             "Condicion Venta": condicion_venta_detectada,
             "Medio Pago": medio_pago,
@@ -1396,6 +1411,7 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                 break
 
         # --- BUSQUEDA DE FECHA (con soporte especial Brubank fecha+hora) ---
+        fecha_detectada = False
         # Brubank: "19 de abril de 2026 - 22:59"
         if es_brubank:
             for mes_nombre, mes_num in MESES.items():
@@ -1408,6 +1424,7 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                     anio = m_bru.group(2)
                     hora_servicio = m_bru.group(3) if m_bru.group(3) else ""
                     fecha_servicio = f"{dia}/{mes_num}/{anio}"
+                    fecha_detectada = True
                     break
 
         # Formato "D/mes/YYYY" -- el mes puede venir abreviado (ago) o completo
@@ -1420,6 +1437,7 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
             dia = match_fecha_nx.group(1).zfill(2)
             anio = match_fecha_nx.group(3)
             fecha_servicio = f"{dia}/{mes_nx}/{anio}"
+            fecha_detectada = True
         else:
             # Fecha con año 4 dígitos: DD/MM/YYYY o DD-MM-YYYY
             match_fecha_bna = re.search(r'\b(\d{1,2})\s*[-\/|]\s*(\d{1,2})\s*[-\/|]\s*(\d{4})\b', texto)
@@ -1431,11 +1449,13 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                 mes = match_fecha_bna.group(2).zfill(2)
                 anio = match_fecha_bna.group(3)
                 fecha_servicio = f"{dia}/{mes}/{anio}"
+                fecha_detectada = True
             elif match_fecha_yy:
                 dia  = match_fecha_yy.group(1).zfill(2)
                 mes  = match_fecha_yy.group(2).zfill(2)
                 anio = "20" + match_fecha_yy.group(3)
                 fecha_servicio = f"{dia}/{mes}/{anio}"
+                fecha_detectada = True
                 print(f"  📅 [Fecha-YY] Detectada fecha con año corto: {fecha_servicio}")
             else:
                 for mes_nombre, mes_num in MESES.items():
@@ -1444,6 +1464,7 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                         if match_fecha:
                             dia = match_fecha.group(1).zfill(2)
                             fecha_servicio = f"{dia}/{mes_num}/2026" 
+                            fecha_detectada = True
                             break
         
         # --- BUSQUEDA DE MONTO Y CENTAVOS (MEJORADA) ---
@@ -1743,6 +1764,7 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
             "Nombre / Razón Social": nombre_razon_social if len(nombre_razon_social) > 2 else "CONSUMIDOR FINAL",
             "Nombre Remitente": nombre_remitente,  # Quien TRANSFIERE el dinero (si se pudo detectar)
             "Fecha del Comprobante": fecha_emision_final,
+            "Fecha No Detectada": not fecha_detectada,
             "Condicion IVA": "Consumidor Final",
             "Condicion Venta": condicion_venta_detectada,
             "Medio Pago": medio_pago,
