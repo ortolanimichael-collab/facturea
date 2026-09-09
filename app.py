@@ -24,6 +24,7 @@ from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea,
 import drive_sync
 from procesador import procesar_archivo
 import procesador
+from lector import lector_core
 from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_facturacion, concepto_efectivo
 from previsualizacion_pdf import generar_pdf_preview, CONCEPTOS
 from almacenamiento import ruta_absoluta, eliminar_archivo_persistente
@@ -440,6 +441,7 @@ def exigir_configuracion():
         "empresas", "empresas_editar", "empresas_eliminar",
         "soporte", "logout", "static", "suscripcion_vencida",
         "home", "terminos", "privacidad", "seguridad_datos", "lead_whatsapp",
+        "demo_leer_comprobante", "lead_demo",
     }
     if request.endpoint in rutas_libres:
         return
@@ -459,6 +461,7 @@ def exigir_membresia_activa():
     rutas_libres = {
         "suscripcion_vencida", "soporte", "logout", "static",
         "home", "terminos", "privacidad", "seguridad_datos", "lead_whatsapp",
+        "demo_leer_comprobante", "lead_demo",
     }
     if request.endpoint in rutas_libres:
         return
@@ -491,7 +494,12 @@ def suscripcion_vencida():
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    # Se usa para el aviso de "precio de lanzamiento" en la sección de
+    # planes -- un número REAL (cuántas cuentas hay hoy), no inventado. Ver
+    # el bloque de planes en templates/index.html: el aviso de cupo limitado
+    # solo se muestra si todavía queda lugar de verdad.
+    total_usuarios = Usuario.query.count()
+    return render_template("index.html", total_usuarios=total_usuarios, cupo_lanzamiento=100)
 
 
 @app.route("/terminos")
@@ -532,6 +540,86 @@ def lead_whatsapp():
     return jsonify(ok=True)
 
 
+@app.route("/api/demo/leer-comprobante", methods=["POST"])
+def demo_leer_comprobante():
+    """
+    Demo público de la landing (sección "Probalo con tu propio
+    comprobante", ver templates/index.html): corre el MISMO lector que usa
+    el sistema real (lector_core, vía el mismo camino que procesador.py)
+    sobre un archivo que sube cualquier visitante, sin cuenta ni login --
+    para que vea el resultado real antes de registrarse.
+
+    No guarda el archivo en ningún lado (se lee en un directorio temporal
+    que se borra solo al salir del "with") ni crea ningún Comprobante en la
+    base -- es SOLO una lectura de muestra, nunca se factura nada acá.
+
+    Devuelve un subconjunto reducido de los datos leídos (lo que tiene
+    sentido mostrar en una vista previa) -- no todo el diccionario interno
+    del lector.
+
+    OJO: esta ruta es pública y hace OCR (trabajo pesado de CPU) sin
+    login ni límite de uso -- alguien podría mandar pedidos en cadena para
+    saturar el servidor. Si se ve abuso real, conviene sumarle un límite de
+    pedidos por IP (por ejemplo con Flask-Limiter), que hoy no está.
+    """
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify(ok=False, error="No se recibió ningún archivo."), 400
+
+    ext = archivo.filename.lower().rsplit(".", 1)[-1] if "." in archivo.filename else ""
+    if ext not in procesador.EXTENSIONES_VALIDAS:
+        return jsonify(ok=False, error="Formato no soportado -- probá con una foto (JPG/PNG) o un PDF."), 400
+
+    # Límite de tamaño manual (esta ruta no pasa por login, así que no vale
+    # la pena confiar en límites pensados para archivos de cuentas reales).
+    archivo.seek(0, os.SEEK_END)
+    tamano = archivo.tell()
+    archivo.seek(0)
+    if tamano > 8 * 1024 * 1024:
+        return jsonify(ok=False, error="El archivo es muy pesado (máximo 8 MB para la prueba)."), 400
+
+    fecha_hoy = datetime.now().strftime("%d/%m/%Y")
+    with tempfile.TemporaryDirectory() as tmp:
+        ruta_local = os.path.join(tmp, archivo.filename)
+        archivo.save(ruta_local)
+        try:
+            if ext == "pdf":
+                datos = lector_core.extraer_datos_de_pdf(ruta_local, fecha_hoy)
+            else:
+                datos = lector_core.extraer_datos_de_imagen(ruta_local, fecha_hoy)
+        except Exception as e:
+            return jsonify(ok=False, error=f"No se pudo leer el archivo: {e}"), 500
+
+    if not datos:
+        return jsonify(ok=False, error="No pudimos leer los datos de este comprobante -- probá con otra foto, más clara y derecha."), 200
+
+    return jsonify(ok=True, datos={
+        "monto": datos.get("Importe Total"),
+        "fecha": datos.get("Fecha del Comprobante"),
+        "medio_pago": datos.get("Medio Pago"),
+        "nombre_razon_social": datos.get("Nombre / Razón Social"),
+        "id_transaccion": datos.get("ID_Transaccion"),
+    })
+
+
+@app.route("/api/leads/demo", methods=["POST"])
+def lead_demo():
+    """
+    El email que deja la persona en la landing DESPUÉS de ver el resultado
+    real del demo de arriba (demo_leer_comprobante), justo antes de mandarla
+    a /registro -- se guarda para remarketing igual que /api/leads/whatsapp,
+    aunque después no termine de crear la cuenta.
+    """
+    datos = request.get_json(silent=True) or {}
+    email = (datos.get("email") or "").strip().lower()[:200]
+    if not email or "@" not in email:
+        return jsonify(ok=False, error="Ingresá un email válido."), 400
+
+    db.session.add(LeadContacto(email=email, origen="demo_landing"))
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 # ---------- Cuenta ----------
 
 @app.route("/registro", methods=["GET", "POST"])
@@ -542,10 +630,10 @@ def registro():
         nombre = request.form.get("nombre", "").strip()
 
         if not email or not password or not nombre:
-            return render_template("registro.html", error="Completá todos los campos.")
+            return render_template("registro.html", error="Completá todos los campos.", email_prefill=email)
 
         if Usuario.query.filter_by(email=email).first():
-            return render_template("registro.html", error="Ya existe una cuenta con ese email.")
+            return render_template("registro.html", error="Ya existe una cuenta con ese email.", email_prefill=email)
 
         nuevo = Usuario(email=email, nombre_razon_social=nombre)
         nuevo.set_password(password)
@@ -558,7 +646,7 @@ def registro():
         login_user(nuevo)
         return redirect(url_for("panel"))
 
-    return render_template("registro.html")
+    return render_template("registro.html", email_prefill=request.args.get("email", ""))
 
 
 @app.route("/login", methods=["GET", "POST"])

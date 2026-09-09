@@ -387,19 +387,23 @@ class CuilAntiAbuso(db.Model):
 
 class LeadContacto(db.Model):
     """
-    Un renglón por cada persona que dejó nombre + WhatsApp desde el
-    formulario de la landing (sección "Empezá gratis") ANTES de que se
-    abra WhatsApp -- así queda el contacto guardado para remarketing
-    aunque la persona después no llegue a escribir de verdad. Ver
-    /api/leads/whatsapp en app.py, que es quien escribe acá, y
-    enviarWhatsapp() en templates/index.html, que es quien lo llama.
+    Un renglón por cada persona que dejó su contacto desde algún formulario
+    de la landing ANTES de convertirse en cuenta -- para remarketing aunque
+    después no siga el flujo. Dos orígenes por ahora:
+    - "landing_whatsapp": nombre + WhatsApp, desde el formulario de
+      "Empezá gratis" (ver /api/leads/whatsapp y enviarWhatsapp() en
+      templates/index.html).
+    - "demo_landing": el email que deja alguien después de probar el lector
+      de comprobantes en la landing sin crear cuenta todavía (ver
+      /api/leads/demo y el demo interactivo en templates/index.html).
     """
     __tablename__ = "leads_contacto"
 
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(200))
     telefono = db.Column(db.String(60))
-    origen = db.Column(db.String(50))  # de dónde vino -- "landing_whatsapp" por ahora, por si después se suman más formularios
+    email = db.Column(db.String(200))
+    origen = db.Column(db.String(50))  # "landing_whatsapp" | "demo_landing"
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
 
 
