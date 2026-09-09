@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFacturación — Seguridad de datos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0F1B3D; --navy:#16265A; --navy-mid:#1E3170;
+    --blue:#28A9E0; --blue-deep:#1C87B8; --blue-tint:#E9F5FC;
+    --paper:#F4F6F9; --paper-2:#FFFFFF; --ink:#131C33; --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --warn-tint:#FDF1D9; --warn-deep:#8A5A0A; --warn-line:#F0D9A8;
+    --sans: "Manrope", "Roboto", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  h1,h2{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
+
+  header.site{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .volver{font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;text-decoration:none;}
+  .volver:hover{color:#fff;}
+
+  .page{padding:44px 0 80px;}
+  .content-narrow{max-width:760px;margin:0 auto;}
+  .eyebrow{font-family:var(--sans);font-size:12.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue-deep);font-weight:700;}
+  h1.titulo{font-size:27px;margin-top:8px;}
+  p.sub{color:var(--muted);font-size:14px;margin-top:10px;margin-bottom:28px;}
+
+  .aviso-borrador{
+    background:var(--warn-tint);border:1.5px solid var(--warn-line);border-radius:12px;
+    padding:16px 20px;margin-bottom:32px;font-size:13.5px;color:var(--warn-deep);
+  }
+  .aviso-borrador b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:4px;}
+
+  .contenido h2{font-size:17px;margin:30px 0 10px;}
+  .contenido p, .contenido li{font-size:14.5px;color:var(--ink);margin-bottom:10px;}
+  .contenido ul{padding-left:20px;margin-bottom:10px;}
+  .contenido p.fecha{color:var(--muted);font-size:13px;margin-bottom:0;}
+
+  .item-seg{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:12px;}
+  .item-seg h3{font-size:15px;margin-bottom:6px;font-family:var(--sans);font-weight:700;}
+  .item-seg p{font-size:13.5px;color:var(--muted);margin:0;}
+
+  footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);margin-top:20px;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/" class="logo">
+        <img src="/static/img/logo-icon.png" class="logo-mark" alt="AutoFacturación">
+        <div class="logo-text">AutoFacturación</div>
+      </a>
+      <a href="/" class="volver">← Volver al inicio</a>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap content-narrow">
+    <p class="eyebrow">Legal</p>
+    <h1 class="titulo">Seguridad de datos</h1>
+    <p class="sub">Cómo protegemos tu Clave Fiscal y tus datos contables, en concreto.</p>
+
+    <!-- QUITAR ESTE AVISO cuando el texto de abajo haya sido revisado -->
+    <div class="aviso-borrador">
+      <b>Borrador — revisar antes de publicar</b>
+      Los puntos de abajo describen con precisión cómo está armado el sistema hoy. Antes de publicar esta página, conviene confirmar que cada punto sigue siendo cierto (por ejemplo, si en algún momento cambia el proveedor de hosting o el método de cifrado).
+    </div>
+
+    <div class="contenido">
+      <p class="fecha">Última actualización: [completar fecha]</p>
+
+      <h2>Cómo protegemos tu Clave Fiscal</h2>
+      <div class="item-seg">
+        <h3>Cifrado en la base de datos</h3>
+        <p>Tu Clave Fiscal de ARCA nunca se guarda como texto plano. Se cifra antes de guardarse y solo se descifra en el momento exacto de facturar, del lado del servidor -- ni siquiera un acceso directo a la base de datos alcanza para leerla.</p>
+      </div>
+      <div class="item-seg">
+        <h3>Acceso a ARCA por empresa, nunca compartido</h3>
+        <p>Cada empresa que cargás tiene su propio acceso a ARCA, independiente del resto -- si manejás varias empresas o le facturás a varios clientes, nunca se mezclan credenciales entre ellas.</p>
+      </div>
+
+      <h2>Cómo protegemos tu cuenta</h2>
+      <div class="item-seg">
+        <h3>Contraseñas con hash</h3>
+        <p>Tu contraseña de AutoFacturación se guarda con un algoritmo de hash, no en texto plano -- no se puede "recuperar" tu contraseña ni siquiera desde el servidor, solo restablecerla.</p>
+      </div>
+      <div class="item-seg">
+        <h3>Conexión cifrada (HTTPS)</h3>
+        <p>Toda la comunicación entre tu navegador y AutoFacturación viaja cifrada.</p>
+      </div>
+
+      <h2>Cómo protegemos tus comprobantes y facturas</h2>
+      <div class="item-seg">
+        <h3>Tu propio Google Drive, si lo conectás</h3>
+        <p>Si conectás tu cuenta de Google Drive, tus comprobantes se guardan directamente en tu propia carpeta -- no en un espacio compartido con otros clientes.</p>
+      </div>
+      <div class="item-seg">
+        <h3>Guardado de comprobantes en el servidor</h3>
+        <p>Los comprobantes que no se guardan en tu propio Google Drive quedan en el almacenamiento del servidor. [Completar: si en este momento el servidor usa un disco persistente o no -- esto afecta si un archivo puede perderse en un redeploy, y conviene resolverlo técnicamente antes de prometer nada acá.]</p>
+      </div>
+
+      <h2>Lo que NO hacemos</h2>
+      <ul>
+        <li>No vendemos ni compartimos tus datos con terceros para publicidad.</li>
+        <li>No usamos tu Clave Fiscal para nada que no sea el proceso de facturación que vos autorizaste.</li>
+        <li>No accedemos a tus comprobantes ni facturas salvo que nos escribas pidiendo ayuda con un problema puntual.</li>
+      </ul>
+
+      <h2>Si encontrás una vulnerabilidad</h2>
+      <p>Si detectás algún problema de seguridad, escribinos desde la página de <a href="/soporte">soporte</a> con el detalle -- lo vamos a tomar en serio y responder a la brevedad.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFacturación — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
+</body>
+</html>

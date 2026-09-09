@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFacturación — Términos y condiciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0F1B3D; --navy:#16265A; --navy-mid:#1E3170;
+    --blue:#28A9E0; --blue-deep:#1C87B8; --blue-tint:#E9F5FC;
+    --paper:#F4F6F9; --paper-2:#FFFFFF; --ink:#131C33; --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --warn-tint:#FDF1D9; --warn-deep:#8A5A0A; --warn-line:#F0D9A8;
+    --sans: "Manrope", "Roboto", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  h1,h2{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
+
+  header.site{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .volver{font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;text-decoration:none;}
+  .volver:hover{color:#fff;}
+
+  .page{padding:44px 0 80px;}
+  .content-narrow{max-width:760px;margin:0 auto;}
+  .eyebrow{font-family:var(--sans);font-size:12.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue-deep);font-weight:700;}
+  h1.titulo{font-size:27px;margin-top:8px;}
+  p.sub{color:var(--muted);font-size:14px;margin-top:10px;margin-bottom:28px;}
+
+  .aviso-borrador{
+    background:var(--warn-tint);border:1.5px solid var(--warn-line);border-radius:12px;
+    padding:16px 20px;margin-bottom:32px;font-size:13.5px;color:var(--warn-deep);
+  }
+  .aviso-borrador b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:4px;}
+
+  .contenido h2{font-size:17px;margin:30px 0 10px;}
+  .contenido p, .contenido li{font-size:14.5px;color:var(--ink);margin-bottom:10px;}
+  .contenido ul{padding-left:20px;margin-bottom:10px;}
+  .contenido p.fecha{color:var(--muted);font-size:13px;margin-bottom:0;}
+
+  footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);margin-top:20px;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/" class="logo">
+        <img src="/static/img/logo-icon.png" class="logo-mark" alt="AutoFacturación">
+        <div class="logo-text">AutoFacturación</div>
+      </a>
+      <a href="/" class="volver">← Volver al inicio</a>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap content-narrow">
+    <p class="eyebrow">Legal</p>
+    <h1 class="titulo">Términos y condiciones</h1>
+    <p class="sub">Las reglas de uso de AutoFacturación, en criollo.</p>
+
+    <!-- QUITAR ESTE AVISO cuando el texto de abajo haya sido revisado por un profesional -->
+    <div class="aviso-borrador">
+      <b>Borrador — todavía no revisado por un abogado</b>
+      Este texto es un punto de partida razonable, pero no reemplaza una revisión legal real antes de publicarlo, sobre todo por manejar datos de facturación (CUIL, Clave Fiscal) y operar a nivel nacional.
+    </div>
+
+    <div class="contenido">
+      <p class="fecha">Última actualización: [completar fecha]</p>
+
+      <h2>1. Qué es AutoFacturación</h2>
+      <p>AutoFacturación es un software que lee comprobantes de pago (fotos, PDFs, o movimientos traídos de Mercado Pago) y arma facturas electrónicas ante ARCA (ex AFIP) en nombre del usuario, usando los datos de acceso que el propio usuario carga para cada empresa.</p>
+
+      <h2>2. Quién puede usarlo</h2>
+      <p>El servicio está pensado para monotributistas y responsables inscriptos en Argentina que necesiten facturar comprobantes propios o de sus clientes (en el caso de contadores o gestorías). Al registrarte, declarás que los datos que cargás (CUIL, razón social, Clave Fiscal) corresponden a una empresa que tenés autorización real para representar ante ARCA.</p>
+
+      <h2>3. Período de prueba y planes pagos</h2>
+      <p>El registro incluye un período de prueba gratuito. Pasado ese período, hace falta una suscripción paga activa para seguir facturando. Los planes vigentes, sus precios y qué incluye cada uno están detallados en la página principal.</p>
+
+      <h2>4. Tu responsabilidad sobre los datos que cargás</h2>
+      <p>AutoFacturación lee los comprobantes de forma automática, pero el usuario es responsable de revisar los datos antes de confirmar la facturación (el sistema deja todo editable antes de mandar algo real a ARCA, justamente para esto). AutoFacturación no se hace responsable por errores en facturas que el usuario confirmó sin revisar.</p>
+
+      <h2>5. Qué NO hacemos</h2>
+      <ul>
+        <li>No vendemos ni compartimos tus datos con terceros para fines publicitarios.</li>
+        <li>No accedemos a tu Clave Fiscal más que para el proceso automático de facturación que vos autorizaste.</li>
+        <li>No garantizamos que ARCA vaya a estar siempre disponible o sin cambios en su sistema — si ARCA cambia algo de su lado, puede haber demoras hasta adaptar el software.</li>
+      </ul>
+
+      <h2>6. Cancelación</h2>
+      <p>Podés dejar de usar el servicio cuando quieras. [Completar: proceso concreto para dar de baja la suscripción y qué pasa con los datos cargados después de la baja.]</p>
+
+      <h2>7. Límite de responsabilidad</h2>
+      <p>[Este punto en particular conviene que lo redacte o revise un abogado: hasta dónde llega la responsabilidad de AutoFacturación ante un error de facturación, una multa de ARCA, o una caída del servicio.]</p>
+
+      <h2>8. Cambios a estos términos</h2>
+      <p>Estos términos pueden actualizarse. Los cambios importantes se van a avisar por email o dentro de la plataforma.</p>
+
+      <h2>9. Contacto</h2>
+      <p>Para cualquier consulta sobre estos términos, escribinos desde la página de <a href="/soporte">soporte</a>.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFacturación — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
+</body>
+</html>

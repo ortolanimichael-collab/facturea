@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFacturación — Política de privacidad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0F1B3D; --navy:#16265A; --navy-mid:#1E3170;
+    --blue:#28A9E0; --blue-deep:#1C87B8; --blue-tint:#E9F5FC;
+    --paper:#F4F6F9; --paper-2:#FFFFFF; --ink:#131C33; --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --warn-tint:#FDF1D9; --warn-deep:#8A5A0A; --warn-line:#F0D9A8;
+    --sans: "Manrope", "Roboto", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  h1,h2{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
+
+  header.site{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .volver{font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;text-decoration:none;}
+  .volver:hover{color:#fff;}
+
+  .page{padding:44px 0 80px;}
+  .content-narrow{max-width:760px;margin:0 auto;}
+  .eyebrow{font-family:var(--sans);font-size:12.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue-deep);font-weight:700;}
+  h1.titulo{font-size:27px;margin-top:8px;}
+  p.sub{color:var(--muted);font-size:14px;margin-top:10px;margin-bottom:28px;}
+
+  .aviso-borrador{
+    background:var(--warn-tint);border:1.5px solid var(--warn-line);border-radius:12px;
+    padding:16px 20px;margin-bottom:32px;font-size:13.5px;color:var(--warn-deep);
+  }
+  .aviso-borrador b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:4px;}
+
+  .contenido h2{font-size:17px;margin:30px 0 10px;}
+  .contenido p, .contenido li{font-size:14.5px;color:var(--ink);margin-bottom:10px;}
+  .contenido ul{padding-left:20px;margin-bottom:10px;}
+  .contenido p.fecha{color:var(--muted);font-size:13px;margin-bottom:0;}
+
+  footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);margin-top:20px;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/" class="logo">
+        <img src="/static/img/logo-icon.png" class="logo-mark" alt="AutoFacturación">
+        <div class="logo-text">AutoFacturación</div>
+      </a>
+      <a href="/" class="volver">← Volver al inicio</a>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap content-narrow">
+    <p class="eyebrow">Legal</p>
+    <h1 class="titulo">Política de privacidad</h1>
+    <p class="sub">Qué datos manejamos y qué hacemos (y qué no hacemos) con ellos.</p>
+
+    <!-- QUITAR ESTE AVISO cuando el texto de abajo haya sido revisado por un profesional -->
+    <div class="aviso-borrador">
+      <b>Borrador — todavía no revisado por un abogado</b>
+      Este texto describe con precisión cómo funciona el sistema hoy (según su propio código), pero conviene una revisión legal antes de publicarlo -- en Argentina, el tratamiento de datos personales está regulado por la Ley 25.326 de Protección de Datos Personales.
+    </div>
+
+    <div class="contenido">
+      <p class="fecha">Última actualización: [completar fecha]</p>
+
+      <h2>1. Qué datos recolectamos</h2>
+      <ul>
+        <li><b>De tu cuenta:</b> nombre o razón social, email y contraseña (la contraseña nunca se guarda en texto plano, se guarda con hash).</li>
+        <li><b>De cada empresa que cargás:</b> razón social ante ARCA, CUIL y Clave Fiscal (la Clave Fiscal se guarda cifrada, no en texto plano).</li>
+        <li><b>De tus comprobantes:</b> las imágenes o PDFs que subís, y los datos que el sistema lee de ellos (monto, fecha, medio de pago, etc.).</li>
+        <li><b>Si conectás Mercado Pago o Google Drive:</b> un token de acceso para poder traer tus pagos o guardar tus archivos, cifrado igual que la Clave Fiscal. Nunca tu contraseña de esas cuentas.</li>
+      </ul>
+
+      <h2>2. Para qué los usamos</h2>
+      <p>Únicamente para el funcionamiento del servicio: leer tus comprobantes, armar y presentar tus facturas ante ARCA, y (si vos lo conectaste) traer tus pagos de Mercado Pago o guardar tus archivos en tu propio Google Drive.</p>
+
+      <h2>3. Con quién se comparten</h2>
+      <ul>
+        <li><b>ARCA (ex AFIP):</b> es indispensable -- ahí es donde efectivamente se presenta la factura, usando tu propio acceso.</li>
+        <li><b>Mercado Pago y Google Drive:</b> solo si vos decidís conectarlos, y solo se accede a lo estrictamente necesario (pagos recibidos, o la carpeta de comprobantes).</li>
+        <li><b>Nadie más.</b> No vendemos ni compartimos tus datos con terceros para publicidad ni ningún otro fin.</li>
+      </ul>
+
+      <h2>4. Cómo protegemos tus datos</h2>
+      <p>La Clave Fiscal y los tokens de Mercado Pago/Google Drive se guardan cifrados (no en texto plano) en la base de datos. Las contraseñas de las cuentas de AutoFacturación se guardan con hash, no se pueden "leer" ni siquiera desde el propio servidor. Más detalle técnico en la página de <a href="/seguridad">seguridad de datos</a>.</p>
+
+      <h2>5. Cuánto tiempo se guardan</h2>
+      <p>[Completar: política real de retención -- por ejemplo, qué pasa con los comprobantes y facturas de una cuenta después de que se da de baja.]</p>
+
+      <h2>6. Tus derechos</h2>
+      <p>Podés pedir acceder a tus datos, corregirlos, o pedir que los eliminemos, escribiendo desde la página de <a href="/soporte">soporte</a>. [Completar con el procedimiento real y los plazos de respuesta.]</p>
+
+      <h2>7. Cambios a esta política</h2>
+      <p>Esta política puede actualizarse. Los cambios importantes se van a avisar por email o dentro de la plataforma.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFacturación — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
+</body>
+</html>

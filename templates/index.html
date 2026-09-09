@@ -113,40 +113,48 @@
   .panel-divider{border-top:1px solid var(--navy-mid);margin:14px 0;}
   .panel .btn-ghost-light{width:100%;justify-content:center;margin-bottom:10px;}
 
-  .receipt{
+  /* ---------- ANIMACIÓN "FACTURANDO EN VIVO" (reemplaza al mock estático de comprobante) ---------- */
+  .demo{
     background:var(--paper-2);
     border:1px solid var(--line);
     border-radius:14px;
     margin-top:16px;
     overflow:hidden;
   }
-  .receipt-seg{padding:18px 22px;}
-  .receipt-seg + .receipt-seg{border-top:1px solid var(--line);}
-  .seg-label{font-family:var(--sans);font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:var(--blue-deep);font-weight:700;margin-bottom:8px;}
-  .seg-title{font-family:var(--sans);font-weight:700;font-size:15px;margin-bottom:4px;}
-  .seg-sub{font-size:13px;color:var(--muted);}
-  .phone-mock{
-    display:flex;align-items:center;gap:10px;background:var(--blue-tint);color:var(--navy);
-    border-radius:8px;padding:11px 14px;margin-top:12px;font-size:12.5px;font-weight:600;
+  .demo-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 20px;border-bottom:1px solid var(--line);
   }
-  .phone-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none;}
-  .row-mock{
-    display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;
-    font-size:12px;margin-top:12px;
+  .demo-head-left{display:flex;align-items:center;gap:9px;}
+  .demo-live-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none;animation:pulso 1.4s ease-in-out infinite;}
+  @keyframes pulso{0%,100%{opacity:1;}50%{opacity:0.35;}}
+  .demo-head-title{font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink);}
+  .demo-head-count{font-family:var(--sans);font-size:12px;font-weight:700;color:var(--blue-deep);background:var(--blue-tint);padding:4px 10px;border-radius:20px;}
+  .demo-lista{padding:10px 10px;}
+  .demo-fila{
+    display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+    padding:10px 12px;border-radius:8px;margin:2px 0;
+    transition:background .4s ease;
   }
-  .row-mock div{background:var(--blue-tint);color:var(--navy);padding:6px 8px;border-radius:6px;font-weight:600;}
-  .row-mock .hd{background:transparent;color:var(--muted);padding:0 8px;font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:0.04em;}
-  .row-mock .mas{background:transparent;color:var(--muted);font-style:italic;font-weight:500;}
-  .cae-mock{
-    margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;
+  .demo-fila-cliente{font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--ink);}
+  .demo-fila-monto{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
+  .demo-fila-estado{
+    font-family:var(--sans);font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;
+    white-space:nowrap;transition:background .4s ease, color .4s ease;
   }
-  .barcode{display:flex;gap:2px;height:28px;align-items:flex-end;}
-  .barcode span{width:2px;background:var(--navy);}
-  .stamp{
-    margin-top:12px;display:inline-flex;align-items:center;gap:6px;
-    font-family:var(--sans);font-size:12.5px;font-weight:700;
-    color:var(--blue-deep);background:var(--blue-tint);border-radius:20px;
-    padding:6px 14px;
+  .demo-fila-estado.pendiente{background:var(--paper);color:var(--muted);}
+  .demo-fila-estado.procesando{background:var(--blue-tint);color:var(--blue-deep);}
+  .demo-fila-estado.facturado{background:#E4F5EA;color:#1C8A50;}
+  .demo-fila.recien-facturado{background:var(--blue-tint);}
+  .demo-foot{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;border-top:1px solid var(--line);background:var(--paper);
+  }
+  .demo-foot-cae{font-family:var(--sans);font-size:11.5px;color:var(--muted);}
+  .demo-foot-cae b{color:var(--ink);font-weight:700;}
+  .demo-nota{
+    display:flex;align-items:center;gap:8px;margin-top:12px;
+    font-family:var(--sans);font-size:12px;color:var(--muted);font-weight:600;
   }
 
   /* ---------- SECTION SHELL ---------- */
@@ -236,6 +244,60 @@
   footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);}
   .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
   .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
+
+  /* ---------- TESTIMONIOS Y AUTORIDAD ---------- */
+  .testimonios{padding:56px 0;background:var(--navy-deep);}
+  .testimonios .section-head{margin-bottom:36px;}
+  .testimonios .eyebrow{color:var(--blue);}
+  .testimonios .section-head h2{color:#fff;}
+  .testimonios .section-head p{color:#B9CBEF;}
+  .testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  @media (max-width:820px){ .testi-grid{grid-template-columns:1fr;} }
+  .testi-card{
+    background:var(--navy);border:1px solid var(--navy-mid);border-radius:14px;
+    padding:22px 22px 20px;display:flex;flex-direction:column;gap:14px;
+  }
+  .testi-quote{color:#E2E9F7;font-size:14.5px;line-height:1.55;}
+  .testi-quote::before{content:"“";color:var(--blue);font-weight:800;}
+  .testi-quote::after{content:"”";color:var(--blue);font-weight:800;}
+  .testi-persona{display:flex;align-items:center;gap:12px;margin-top:auto;}
+  .testi-avatar{
+    width:42px;height:42px;border-radius:50%;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--blue);color:#fff;font-family:var(--sans);font-weight:800;font-size:15px;
+  }
+  .testi-nombre{font-family:var(--sans);font-weight:700;font-size:13.5px;color:#fff;}
+  .testi-rubro{font-family:var(--sans);font-size:12px;color:#9FB3D9;}
+
+  .plataformas{margin-top:44px;padding-top:36px;border-top:1px solid var(--navy-mid);}
+  .plataformas-label{
+    text-align:center;font-family:var(--sans);font-size:11.5px;letter-spacing:0.06em;
+    text-transform:uppercase;color:#8194BC;font-weight:700;margin-bottom:22px;
+  }
+  .plataformas-fila{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;}
+  .plataforma-chip{
+    display:flex;align-items:center;gap:8px;
+    font-family:var(--sans);font-weight:800;font-size:14.5px;
+    color:#8194BC;border:1.5px solid var(--navy-mid);border-radius:10px;
+    padding:10px 18px;letter-spacing:-0.01em;
+    transition:color .2s ease, border-color .2s ease;
+  }
+  .plataforma-chip:hover{color:#fff;border-color:var(--blue);}
+  .plataforma-chip .dot-chip{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none;}
+
+  /* ---------- FOOTER CORPORATIVO ---------- */
+  footer.foot-corp{padding:0;}
+  .foot-top{padding:52px 0 40px;}
+  .foot-cols{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px;}
+  @media (max-width:820px){ .foot-cols{grid-template-columns:1fr 1fr;} }
+  @media (max-width:520px){ .foot-cols{grid-template-columns:1fr;} }
+  .foot-brand .logo{margin-bottom:10px;}
+  .foot-brand p{color:var(--muted);font-size:13px;max-width:32ch;}
+  .foot-col-title{font-family:var(--sans);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink);margin-bottom:14px;}
+  .foot-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
+  .foot-col a{font-family:var(--sans);font-size:13.5px;color:var(--muted);text-decoration:none;font-weight:600;}
+  .foot-col a:hover{color:var(--blue-deep);}
+  .foot-bottom{border-top:1px solid var(--line);padding:20px 0;}
 </style>
 </head>
 <body>
@@ -271,8 +333,8 @@
     <div class="wrap hero-grid">
       <div>
         <p class="eyebrow">Facturación electrónica · Monotributo y Responsable Inscripto</p>
-        <h1>Subís la pila de comprobantes. Salen todas las facturas.</h1>
-        <p class="lead">AutoFacturación lee tus comprobantes de Mercado Pago, Ualá, AstroPay, transferencias bancarias y más, arma la planilla completa y factura todo el lote ante ARCA — así sean 5 o 500. Sin tipear un solo dato a mano.</p>
+        <h1>Automatizá tu facturación y dejá de perder horas en la página de ARCA.</h1>
+        <p class="lead">El software que lee tus comprobantes con inteligencia artificial y factura todo tu mes en 1 clic. Seguro, rápido y sin errores.</p>
         <div class="hero-cta">
           <a href="/registro" class="btn btn-primary">Crear cuenta gratis</a>
           <a href="#como-funciona" class="btn btn-ghost">Ver cómo funciona</a>
@@ -297,42 +359,109 @@
           </div>
         </div>
 
-        <div class="receipt">
-          <div class="receipt-seg">
-            <p class="seg-label">01 · Subís todo junto</p>
-            <p class="seg-title">47 comprobantes de una sola vez</p>
-            <p class="seg-sub">Fotos, PDFs, o conectás Mercado Pago y AutoFacturación trae los pagos solo, todos los días.</p>
-            <div class="phone-mock">
-              <span class="phone-dot"></span>
-              47 comprobantes cargados — listos para leer
+        <div class="demo" id="demoFacturando" aria-label="Animación mostrando comprobantes pasando de pendiente a facturado con CAE">
+          <div class="demo-head">
+            <div class="demo-head-left">
+              <span class="demo-live-dot" aria-hidden="true"></span>
+              <span class="demo-head-title">Facturando el lote de septiembre</span>
+            </div>
+            <span class="demo-head-count" id="demoContador">0/6 facturadas</span>
+          </div>
+          <div class="demo-lista" id="demoLista">
+            <div class="demo-fila" data-monto="$14.500">
+              <span class="demo-fila-cliente">Celeste R.</span>
+              <span class="demo-fila-monto">$14.500</span>
+              <span class="demo-fila-estado pendiente">Pendiente</span>
+            </div>
+            <div class="demo-fila" data-monto="$8.200">
+              <span class="demo-fila-cliente">Martín A.</span>
+              <span class="demo-fila-monto">$8.200</span>
+              <span class="demo-fila-estado pendiente">Pendiente</span>
+            </div>
+            <div class="demo-fila" data-monto="$22.900">
+              <span class="demo-fila-cliente">Kiosco Del Sol</span>
+              <span class="demo-fila-monto">$22.900</span>
+              <span class="demo-fila-estado pendiente">Pendiente</span>
+            </div>
+            <div class="demo-fila" data-monto="$5.750">
+              <span class="demo-fila-cliente">Julieta P.</span>
+              <span class="demo-fila-monto">$5.750</span>
+              <span class="demo-fila-estado pendiente">Pendiente</span>
+            </div>
+            <div class="demo-fila" data-monto="$31.400">
+              <span class="demo-fila-cliente">Distribuidora Norte</span>
+              <span class="demo-fila-monto">$31.400</span>
+              <span class="demo-fila-estado pendiente">Pendiente</span>
+            </div>
+            <div class="demo-fila" data-monto="$11.100">
+              <span class="demo-fila-cliente">Bruno S.</span>
+              <span class="demo-fila-monto">$11.100</span>
+              <span class="demo-fila-estado pendiente">Pendiente</span>
             </div>
           </div>
-          <div class="receipt-seg">
-            <p class="seg-label">02 · AutoFacturación lee todo</p>
-            <p class="seg-title">Cada uno arma su fila solo</p>
-            <div class="row-mock">
-              <div class="hd">Cliente</div><div class="hd">Monto</div><div class="hd">Estado</div>
-              <div>Celeste R.</div><div>$14.500</div><div>OK</div>
-              <div class="mas">+ 46 más</div><div>—</div><div>OK</div>
+          <div class="demo-foot">
+            <span class="demo-foot-cae">Último CAE: <b id="demoCae">—</b></span>
+            <span class="demo-foot-cae" id="demoMontoTotal">$0 facturados</span>
+          </div>
+        </div>
+        <p class="demo-nota">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 12L10 16L18 8" stroke="#1C8A50" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Simulación del sistema real facturando un lote, comprobante por comprobante.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="testimonios">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Lo usan de verdad</p>
+        <h2>Lo que dicen los primeros que lo probaron</h2>
+        <p>Beta testers reales de AutoFacturación, facturando su mes a mes con esto.</p>
+      </div>
+      <div class="testi-grid">
+        <!-- PLACEHOLDER -- reemplazar con un testimonio real antes de publicar -->
+        <div class="testi-card">
+          <p class="testi-quote">Escribí acá la frase corta que te dio este cliente/beta tester sobre cómo le cambió facturar (ideal: 1-2 líneas, algo concreto — "antes tardaba 3 horas los domingos, ahora son 10 minutos").</p>
+          <div class="testi-persona">
+            <div class="testi-avatar">NN</div>
+            <div>
+              <div class="testi-nombre">Nombre y apellido reales</div>
+              <div class="testi-rubro">Rubro / tipo de negocio</div>
             </div>
           </div>
-          <div class="receipt-seg">
-            <p class="seg-label">03 · Facturás el lote</p>
-            <p class="seg-title">47 facturas con CAE, un solo click</p>
-            <div class="cae-mock">
-              <div>
-                <div style="font-size:11px;color:var(--muted);font-weight:600;">Último CAE</div>
-                <div style="font-weight:700;">75328617817021</div>
-              </div>
-              <div class="barcode" aria-hidden="true">
-                <span style="height:18px;"></span><span style="height:26px;"></span><span style="height:14px;"></span>
-                <span style="height:24px;"></span><span style="height:16px;"></span><span style="height:28px;"></span>
-                <span style="height:12px;"></span><span style="height:22px;"></span><span style="height:18px;"></span>
-                <span style="height:26px;"></span><span style="height:14px;"></span>
-              </div>
+        </div>
+        <!-- PLACEHOLDER -- reemplazar con un testimonio real antes de publicar -->
+        <div class="testi-card">
+          <p class="testi-quote">Segundo testimonio de ejemplo. Reemplazalo por una frase textual de otro cliente o beta tester real, con su nombre y rubro reales.</p>
+          <div class="testi-persona">
+            <div class="testi-avatar">NN</div>
+            <div>
+              <div class="testi-nombre">Nombre y apellido reales</div>
+              <div class="testi-rubro">Rubro / tipo de negocio</div>
             </div>
-            <div class="stamp">✓ 47 facturadas</div>
           </div>
+        </div>
+        <!-- PLACEHOLDER -- reemplazar con un testimonio real antes de publicar -->
+        <div class="testi-card">
+          <p class="testi-quote">Tercer testimonio de ejemplo. Ideal si entre los tres cubrís distintos rubros (ej. uno que vende por Mercado Pago, otro con local físico, un estudio contable que gestiona varios clientes).</p>
+          <div class="testi-persona">
+            <div class="testi-avatar">NN</div>
+            <div>
+              <div class="testi-nombre">Nombre y apellido reales</div>
+              <div class="testi-rubro">Rubro / tipo de negocio</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="plataformas">
+        <p class="plataformas-label">Lee comprobantes y se conecta con</p>
+        <div class="plataformas-fila">
+          <span class="plataforma-chip"><span class="dot-chip"></span>Mercado Pago</span>
+          <span class="plataforma-chip"><span class="dot-chip"></span>Ualá</span>
+          <span class="plataforma-chip"><span class="dot-chip"></span>AstroPay</span>
+          <span class="plataforma-chip"><span class="dot-chip"></span>ARCA</span>
         </div>
       </div>
     </div>
@@ -508,24 +637,182 @@
   </section>
 </main>
 
-<footer>
-  <div class="wrap foot-row">
-    <p>AutoFacturación — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
-    <p>© 2026</p>
+<footer class="foot-corp">
+  <div class="foot-top">
+    <div class="wrap foot-cols">
+      <div class="foot-brand">
+        <a href="/" class="logo">
+          <img src="/static/img/logo-icon.png" class="logo-mark" alt="AutoFacturación">
+          <div class="logo-text">AutoFacturación</div>
+        </a>
+        <p>Facturación electrónica automática para monotributistas y responsables inscriptos. Operamos a nivel nacional desde Río Tercero, Córdoba.</p>
+      </div>
+      <div class="foot-col">
+        <p class="foot-col-title">Producto</p>
+        <ul>
+          <li><a href="#como-funciona">Cómo funciona</a></li>
+          <li><a href="#funciones">Funciones</a></li>
+          <li><a href="#planes">Planes</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <p class="foot-col-title">Cuenta</p>
+        <ul>
+          <li><a href="/registro">Crear cuenta</a></li>
+          <li><a href="/login">Iniciar sesión</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <p class="foot-col-title">Legal y soporte</p>
+        <ul>
+          <li><a href="/terminos">Términos y condiciones</a></li>
+          <li><a href="/privacidad">Política de privacidad</a></li>
+          <li><a href="/seguridad">Seguridad de datos</a></li>
+          <li><a href="/soporte">Contacto de soporte</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <div class="wrap foot-row">
+      <p>AutoFacturación — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+      <p>© 2026</p>
+    </div>
   </div>
 </footer>
 
 <script>
-function enviarWhatsapp(e){
+async function enviarWhatsapp(e){
   e.preventDefault();
   const nombre = document.getElementById('nombre').value.trim();
   const tel = document.getElementById('whatsapp').value.trim();
   // TODO: reemplazar por el número real del negocio (formato 549XXXXXXXXXX)
   const numeroNegocio = "5493513000000";
+
+  // Guarda el contacto en el servidor ANTES de abrir WhatsApp -- así queda
+  // para remarketing aunque la persona después no llegue a escribir de
+  // verdad. "keepalive" ayuda a que el pedido no se corte si el navegador
+  // ya está cambiando de pestaña por el window.open de abajo. Si falla por
+  // algún problema de red puntual, no corta el flujo -- la persona igual
+  // tiene que poder llegar a WhatsApp.
+  try {
+    await fetch('/api/leads/whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, telefono: tel, origen: 'landing_whatsapp' }),
+      keepalive: true,
+    });
+  } catch (err) {
+    // se ignora a propósito -- ver comentario de arriba
+  }
+
   const mensaje = encodeURIComponent(`Hola! Soy ${nombre} (WhatsApp: ${tel}). Tengo una duda sobre AutoFacturación.`);
   window.open(`https://wa.me/${numeroNegocio}?text=${mensaje}`, "_blank");
   return false;
 }
+</script>
+
+<script>
+/* ---------- Animación del hero: lista de comprobantes pasando de
+   "Pendiente" a "Facturado con CAE ✓" en secuencia, en loop. ---------- */
+(function(){
+  const lista = document.getElementById('demoLista');
+  if (!lista) return;
+
+  const filas = Array.from(lista.querySelectorAll('.demo-fila'));
+  const contador = document.getElementById('demoContador');
+  const caeEl = document.getElementById('demoCae');
+  const totalEl = document.getElementById('demoMontoTotal');
+  const total = filas.length;
+
+  function parseMonto(str){
+    return parseInt((str || '').replace(/[^\d]/g, ''), 10) || 0;
+  }
+  function formatoMonto(n){
+    return '$' + n.toLocaleString('es-AR');
+  }
+  function caeFalso(){
+    // Solo para la animación -- nunca es un CAE real.
+    let s = '7';
+    for (let i = 0; i < 13; i++) s += Math.floor(Math.random() * 10);
+    return s;
+  }
+
+  function resetear(){
+    filas.forEach(f => {
+      f.classList.remove('recien-facturado');
+      const estado = f.querySelector('.demo-fila-estado');
+      estado.textContent = 'Pendiente';
+      estado.className = 'demo-fila-estado pendiente';
+    });
+    contador.textContent = `0/${total} facturadas`;
+    caeEl.textContent = '—';
+    totalEl.textContent = '$0 facturados';
+  }
+
+  let timeoutId = null;
+
+  function correrCiclo(){
+    resetear();
+    let acumulado = 0;
+    let i = 0;
+
+    function paso(){
+      if (i >= total) {
+        timeoutId = setTimeout(correrCiclo, 2600); // pausa antes de reiniciar el ciclo
+        return;
+      }
+      const fila = filas[i];
+      const estado = fila.querySelector('.demo-fila-estado');
+
+      estado.textContent = 'Procesando...';
+      estado.className = 'demo-fila-estado procesando';
+
+      timeoutId = setTimeout(() => {
+        estado.textContent = 'Facturado con CAE ✓';
+        estado.className = 'demo-fila-estado facturado';
+        fila.classList.add('recien-facturado');
+
+        acumulado += parseMonto(fila.dataset.monto);
+        contador.textContent = `${i + 1}/${total} facturadas`;
+        caeEl.textContent = caeFalso();
+        totalEl.textContent = formatoMonto(acumulado) + ' facturados';
+
+        i++;
+        timeoutId = setTimeout(paso, 480);
+      }, 520);
+    }
+    paso();
+  }
+
+  // Si la persona prefiere menos movimiento, se muestra el resultado final
+  // ya resuelto en vez de animar -- sin loop infinito de por medio.
+  const prefiereMenosMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefiereMenosMovimiento) {
+    let acumulado = 0;
+    filas.forEach(f => {
+      const estado = f.querySelector('.demo-fila-estado');
+      estado.textContent = 'Facturado con CAE ✓';
+      estado.className = 'demo-fila-estado facturado';
+      acumulado += parseMonto(f.dataset.monto);
+    });
+    contador.textContent = `${total}/${total} facturadas`;
+    caeEl.textContent = caeFalso();
+    totalEl.textContent = formatoMonto(acumulado) + ' facturados';
+  } else {
+    correrCiclo();
+  }
+
+  // Pausa la animación cuando la pestaña no está visible, para no gastar
+  // batería/CPU de gusto en un dispositivo mientras nadie la está mirando.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && timeoutId) {
+      clearTimeout(timeoutId);
+    } else if (!document.hidden && !prefiereMenosMovimiento) {
+      correrCiclo();
+    }
+  });
+})();
 </script>
 
 </body>
