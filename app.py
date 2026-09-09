@@ -38,15 +38,145 @@ login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
 
+# --- Estado en memoria del "Facturar todo lo pendiente" ---
+#
+# IMPORTANTE: todo esto vive en memoria del proceso de Python (un dict y un
+# set comunes), NO en la base de datos. Eso solo funciona bien si el
+# servidor corre con UN SOLO worker de Gunicorn (varios threads adentro de
+# ese único proceso están bien, comparten memoria) -- si corriera con más
+# de un worker, cada uno tendría su propia copia y un pedido que cae en un
+# worker distinto al que está facturando no vería nada de esto (el botón
+# "Detener" fallaría, y la consulta de progreso también). Por eso en Render
+# hace falta tener la variable de entorno GUNICORN_WORKERS=1 (ver
+# entrypoint.sh) -- para compensar la falta de paralelismo entre procesos
+# se puede subir GUNICORN_THREADS en cambio, que sí comparten esta memoria.
+#
 # IDs de empresa que pidieron detener un "Facturar todo lo pendiente" en
-# curso -- se consulta desde adentro del bucle en facturar_todos() (ver
-# más abajo) y se limpia solo al terminar. Vive en memoria del proceso
-# nomás: alcanza porque el servidor corre con threaded=True, así que el
-# pedido de "detener" (otra request) se atiende en paralelo mientras la
-# facturación en lote sigue corriendo en la suya. Si el servidor corriera
-# con más de un worker/proceso, esto NO se compartiría entre ellos -- no es
-# el caso acá (ni en local ni en el dev server de Render tal como está).
+# curso -- se consulta desde adentro del bucle de _facturar_todos_en_segundo_plano
+# (ver más abajo) y se limpia solo al terminar.
 _detener_facturacion_solicitado = set()
+
+# Progreso del lote de facturación en curso (o del último que corrió) por
+# empresa -- lo consulta el frontend con polling para mostrar la barra de
+# avance, y así el usuario puede cerrar la pestaña sin perder nada: el
+# hilo de fondo sigue corriendo en el servidor de todas formas.
+_estado_facturacion_lote = {}  # empresa_id -> dict con el progreso
+_lock_facturacion_lote = threading.Lock()  # protege el dict de arriba entre threads
+
+
+def _estado_inicial_lote(total):
+    return {
+        "en_curso": True,
+        "terminado": False,
+        "total": total,
+        "procesados": 0,
+        "facturados": 0,
+        "errores": 0,
+        "monto_facturado": 0.0,
+        "detenido_por_limite": False,
+        "detenido_manualmente": False,
+        "detalle": [],
+        "error_fatal": None,
+    }
+
+
+def _lote_marcar_progreso(empresa_id, *, facturado=False, error=False, monto_facturado=None, detalle_item=None):
+    """Suma un comprobante ya procesado (facturado o con error) al estado del lote."""
+    with _lock_facturacion_lote:
+        estado = _estado_facturacion_lote.get(empresa_id)
+        if estado is None:
+            return
+        estado["procesados"] += 1
+        if facturado:
+            estado["facturados"] += 1
+        if error:
+            estado["errores"] += 1
+        if monto_facturado is not None:
+            estado["monto_facturado"] = monto_facturado
+        if detalle_item is not None:
+            estado["detalle"].append(detalle_item)
+
+
+def _lote_actualizar_flags(empresa_id, **cambios):
+    with _lock_facturacion_lote:
+        estado = _estado_facturacion_lote.get(empresa_id)
+        if estado is None:
+            return
+        estado.update(cambios)
+
+
+def _facturar_todos_en_segundo_plano(app, empresa_id, comprobante_ids, limite_monto):
+    """
+    Corre el lote completo de facturación en un hilo aparte, para que el
+    pedido HTTP que lo dispara (la ruta facturar_todos, más abajo) pueda
+    responder al toque en vez de tener al navegador esperando los minutos
+    que tarde todo el lote. Gracias a esto, el usuario puede cerrar la
+    pestaña o el navegador entero apenas arranca: este hilo sigue
+    corriendo en el servidor, totalmente independiente del navegador.
+
+    Necesita armar su propio contexto de aplicación (app.app_context())
+    porque corre fuera del ciclo normal de un pedido HTTP -- ahí es donde
+    Flask arma ese contexto solo, pero acá hay que hacerlo a mano para
+    poder usar la base de datos y todo lo demás.
+    """
+    with app.app_context():
+        acumulado = 0.0
+        try:
+            for comprobante_id in comprobante_ids:
+                if empresa_id in _detener_facturacion_solicitado:
+                    _lote_actualizar_flags(empresa_id, detenido_manualmente=True)
+                    break
+
+                comprobante = db.session.get(Comprobante, comprobante_id)
+                if comprobante is None or comprobante.estado not in ("pendiente", "error"):
+                    # se borró o ya se facturó a mano entre que se armó la lista y ahora
+                    continue
+
+                importe = comprobante.importe_total or 0.0
+                if limite_monto is not None and (acumulado + importe) > limite_monto:
+                    _lote_actualizar_flags(empresa_id, detenido_por_limite=True)
+                    break
+
+                conflicto = _comprobante_facturado_con_mismo_id_transaccion(comprobante)
+                if conflicto:
+                    comprobante.estado = "error"
+                    comprobante.error_facturacion = (
+                        f"Ya existe un comprobante facturado (#{conflicto.id}) con el mismo ID de "
+                        "transacción -- no se factura de nuevo para evitar duplicar."
+                    )
+                    db.session.commit()
+                    _lote_marcar_progreso(
+                        empresa_id, error=True,
+                        detalle_item={"id": comprobante.id, "error": comprobante.error_facturacion},
+                    )
+                    continue
+
+                try:
+                    resultado = facturar_comprobante(comprobante)
+                    comprobante.estado = "facturado"
+                    comprobante.error_facturacion = None
+                    comprobante.facturado_en = datetime.utcnow()
+                    if resultado["fecha_ajustada"]:
+                        comprobante.fecha_comprobante = resultado["fecha_usada"]
+                    acumulado += importe
+                    db.session.commit()
+                    _lote_marcar_progreso(empresa_id, facturado=True, monto_facturado=acumulado)
+                except Exception as e:
+                    comprobante.estado = "error"
+                    comprobante.error_facturacion = str(e)
+                    db.session.commit()  # se guarda uno a uno: si se corta a mitad de camino, no se pierde lo ya facturado
+                    _lote_marcar_progreso(
+                        empresa_id, error=True,
+                        detalle_item={"id": comprobante.id, "error": str(e)},
+                    )
+        except Exception as e:
+            # Error inesperado que corta todo el hilo (ej. se cayó la conexión a
+            # la base) -- se guarda para poder avisarle al usuario en vez de
+            # dejar el estado colgado en "en_curso" para siempre.
+            _lote_actualizar_flags(empresa_id, error_fatal=str(e))
+        finally:
+            _detener_facturacion_solicitado.discard(empresa_id)
+            _lote_actualizar_flags(empresa_id, en_curso=False, terminado=True)
 
 DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID", "")
 
@@ -1581,17 +1711,27 @@ def detener_facturacion(empresa_id):
 @login_required
 def facturar_todos(empresa_id):
     """
-    Factura, uno por uno y en orden, todos los comprobantes pendientes (o que
-    habían fallado antes) de esta empresa. Si alguno falla, se guarda su
-    error y se sigue con el siguiente -- no se corta todo por uno solo.
+    Arranca en un hilo de fondo la facturación, uno por uno y en orden, de
+    todos los comprobantes pendientes (o que habían fallado antes) de esta
+    empresa -- ver _facturar_todos_en_segundo_plano más arriba. Este pedido
+    HTTP solo prepara la lista y lanza el hilo; responde al toque, sin
+    esperar a que termine nada, así que el usuario puede cerrar la pestaña
+    o el navegador entero apenas confirma.
 
-    Si viene un "limite_monto" en el body, se para de facturar apenas el
-    PRÓXIMO comprobante haría que el total acumulado supere ese límite --
-    los que queden después quedan sin tocar, tal cual estaban.
+    Si viene un "limite_monto" en el body, el hilo se va a parar de
+    facturar apenas el PRÓXIMO comprobante haría que el total acumulado
+    supere ese límite -- los que queden después quedan sin tocar.
+
+    El progreso se consulta después con GET a .../facturar-todos/estado.
     """
     empresa = current_user.empresas.filter_by(id=empresa_id).first()
     if not empresa:
         return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    with _lock_facturacion_lote:
+        estado_actual = _estado_facturacion_lote.get(empresa.id)
+        if estado_actual and estado_actual.get("en_curso"):
+            return jsonify(ok=False, error="Ya hay una facturación en lote en curso para esta empresa."), 409
 
     datos = request.get_json(silent=True) or {}
     limite_monto = datos.get("limite_monto")
@@ -1610,59 +1750,54 @@ def facturar_todos(empresa_id):
     # Se factura primero lo más atrasado (mismo criterio que en la tabla:
     # fecha de facturación y, a igualdad, fecha del comprobante).
     pendientes = _ordenar_por_fecha_facturacion(pendientes, empresa)
+    pendientes_ids = [c.id for c in pendientes]
+
+    if not pendientes_ids:
+        return jsonify(ok=False, error="No hay comprobantes pendientes para facturar."), 400
 
     # Se limpia por las dudas quede pegado en "true" de una corrida anterior
-    # que haya terminado sin pasar por acá (ej. el servidor se reinició a
-    # mitad de camino) -- cada facturación en lote nueva arranca sin la
+    # que haya terminado sin pasar por el hilo (ej. el servidor se reinició
+    # a mitad de camino) -- cada facturación en lote nueva arranca sin la
     # detención ya pedida de antemano.
     _detener_facturacion_solicitado.discard(empresa.id)
 
-    resumen = {
-        "facturados": 0, "errores": 0, "detalle": [], "detenido_por_limite": False,
-        "detenido_manualmente": False, "monto_facturado": 0.0,
-    }
-    acumulado = 0.0
-    for comprobante in pendientes:
-        if empresa.id in _detener_facturacion_solicitado:
-            resumen["detenido_manualmente"] = True
-            break
+    with _lock_facturacion_lote:
+        _estado_facturacion_lote[empresa.id] = _estado_inicial_lote(len(pendientes_ids))
 
-        importe = comprobante.importe_total or 0.0
-        if limite_monto is not None and (acumulado + importe) > limite_monto:
-            resumen["detenido_por_limite"] = True
-            break
+    threading.Thread(
+        target=_facturar_todos_en_segundo_plano,
+        args=(app, empresa.id, pendientes_ids, limite_monto),
+        daemon=True,
+    ).start()
 
-        conflicto = _comprobante_facturado_con_mismo_id_transaccion(comprobante)
-        if conflicto:
-            comprobante.estado = "error"
-            comprobante.error_facturacion = (
-                f"Ya existe un comprobante facturado (#{conflicto.id}) con el mismo ID de "
-                "transacción -- no se factura de nuevo para evitar duplicar."
-            )
-            resumen["errores"] += 1
-            resumen["detalle"].append({"id": comprobante.id, "error": comprobante.error_facturacion})
-            db.session.commit()
-            continue
+    return jsonify(ok=True, iniciado=True, total=len(pendientes_ids))
 
-        try:
-            resultado = facturar_comprobante(comprobante)
-            comprobante.estado = "facturado"
-            comprobante.error_facturacion = None
-            comprobante.facturado_en = datetime.utcnow()
-            if resultado["fecha_ajustada"]:
-                comprobante.fecha_comprobante = resultado["fecha_usada"]
-            resumen["facturados"] += 1
-            acumulado += importe
-            resumen["monto_facturado"] = acumulado
-        except Exception as e:
-            comprobante.estado = "error"
-            comprobante.error_facturacion = str(e)
-            resumen["errores"] += 1
-            resumen["detalle"].append({"id": comprobante.id, "error": str(e)})
-        db.session.commit()  # se guarda uno a uno: si se corta a mitad de camino, no se pierde lo ya facturado
 
-    _detener_facturacion_solicitado.discard(empresa.id)
-    return jsonify(ok=True, resumen=resumen)
+@app.route("/empresas/<int:empresa_id>/comprobantes/facturar-todos/estado")
+@login_required
+def facturar_todos_estado(empresa_id):
+    """
+    Progreso del lote de facturación en curso (o del resultado del último
+    que corrió) para esta empresa -- lo consulta el frontend con polling
+    mientras "en_curso" es true, para mostrar la barra de avance sin
+    depender de que el navegador siga conectado al pedido original.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    with _lock_facturacion_lote:
+        estado = _estado_facturacion_lote.get(empresa.id)
+        estado_copia = dict(estado) if estado else None
+        if estado_copia is not None:
+            estado_copia["detalle"] = list(estado_copia["detalle"])
+
+    if estado_copia is None:
+        # nunca corrió ningún lote para esta empresa desde que el servidor
+        # arrancó por última vez
+        return jsonify(ok=True, en_curso=False, terminado=False)
+
+    return jsonify(ok=True, **estado_copia)
 
 
 @app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/vista-previa.pdf")
