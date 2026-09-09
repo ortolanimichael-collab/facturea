@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Facturea — Empresas</title>
+<title>AutoFacturación — Empresas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -121,7 +121,7 @@
 <body>
 <header class="app-header">
   <div class="wrap">
-    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <a href="/panel" class="logo"><img src="/static/img/logo-icon.png" alt="AutoFacturación" style="width:26px;height:26px;">AutoFacturación</a>
     <div class="nav-links">
       <a href="/panel">Panel</a>
       <a href="/soporte">Soporte</a>
@@ -294,7 +294,7 @@
 
       <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
         <h2 style="font-size:14px;">Google Drive de esta empresa (opcional)</h2>
-        <p class="desc">Si la conectás, los comprobantes que subas para esta empresa quedan guardados en el Drive de ESA cuenta, no en el servidor de Facturea.</p>
+        <p class="desc">Si la conectás, los comprobantes que subas para esta empresa quedan guardados en el Drive de ESA cuenta, no en el servidor de AutoFacturación.</p>
 
         {% if error_drive %}
         <p class="hint" style="color:var(--danger);">No se pudo conectar: {{ error_drive }}</p>

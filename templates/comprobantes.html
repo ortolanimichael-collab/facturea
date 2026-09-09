@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Facturea — Comprobantes</title>
+<title>AutoFacturación — Comprobantes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -345,7 +345,7 @@
 <body>
 <header class="app-header">
   <div class="wrap">
-    <a href="/panel" class="logo"><span class="dot"></span>facturea</a>
+    <a href="/panel" class="logo"><img src="/static/img/logo-icon.png" alt="AutoFacturación" style="width:26px;height:26px;">AutoFacturación</a>
     <div class="nav-links">
       <a href="/panel">← Panel</a>
       <a href="/empresas/{{ empresa.id }}/editar">Editar empresa</a>
@@ -2318,7 +2318,7 @@ document.getElementById('btnEliminarFacturados').addEventListener('click', () =>
   eliminarEnLote(
     btn,
     `/empresas/${EMPRESA_ID}/comprobantes/eliminar-facturados`,
-    'Esto borra de Facturea TODOS los comprobantes ya facturados de esta empresa (no se puede deshacer). ' +
+    'Esto borra de AutoFacturación TODOS los comprobantes ya facturados de esta empresa (no se puede deshacer). ' +
     'Ojo: esto no anula ni borra las facturas reales que ya emitiste en ARCA, con su CAE -- ' +
     'solo se borra el registro local acá. ¿Confirmás?'
   );
@@ -2329,7 +2329,7 @@ document.getElementById('btnEliminarTodos').addEventListener('click', () => {
   eliminarEnLote(
     btn,
     `/empresas/${EMPRESA_ID}/comprobantes/eliminar-todos`,
-    'Esto borra de Facturea TODOS los comprobantes de esta empresa: pendientes, con error, Y también los ya facturados. ' +
+    'Esto borra de AutoFacturación TODOS los comprobantes de esta empresa: pendientes, con error, Y también los ya facturados. ' +
     'No se puede deshacer. Ojo: esto no anula ni borra las facturas reales que ya emitiste en ARCA, con su CAE -- ' +
     'solo se borra el registro local acá. ¿Confirmás?'
   );
