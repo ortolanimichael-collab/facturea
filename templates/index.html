@@ -281,6 +281,7 @@
   .plans.anual .precio-mensual, .plans.anual .nota-mensual{display:none;}
   .plans.anual .precio-anual, .plans.anual .nota-anual{display:inline;}
   .plan-price-nota{font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:2px;}
+  .plan-anclaje{font-family:var(--sans);font-size:12px;color:var(--blue-deep);font-weight:700;margin-top:8px;line-height:1.4;}
 
   .badge-escasez{
     display:flex;align-items:center;gap:8px;justify-content:center;
@@ -289,6 +290,72 @@
     margin:0 auto 28px;width:fit-content;
   }
   .badge-escasez-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);flex:none;animation:pulso 1.4s ease-in-out infinite;}
+
+  /* ---------- CALCULADORA DE ROI ---------- */
+  .roi-calc{
+    display:grid;grid-template-columns:1.1fr 0.9fr;gap:0;
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--paper-2);
+  }
+  @media (max-width:820px){ .roi-calc{grid-template-columns:1fr;} }
+  .roi-controles{padding:34px 36px;}
+  .roi-control{margin-bottom:30px;}
+  .roi-control:last-child{margin-bottom:0;}
+  .roi-control label{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--ink);display:block;margin-bottom:14px;}
+  .roi-control input[type="range"]{
+    width:100%;height:6px;border-radius:6px;background:var(--line);appearance:none;-webkit-appearance:none;outline:none;
+  }
+  .roi-control input[type="range"]::-webkit-slider-thumb{
+    appearance:none;-webkit-appearance:none;width:22px;height:22px;border-radius:50%;
+    background:var(--blue);border:3px solid #fff;box-shadow:0 2px 8px rgba(15,27,61,0.3);cursor:pointer;
+  }
+  .roi-control input[type="range"]::-moz-range-thumb{
+    width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid #fff;
+    box-shadow:0 2px 8px rgba(15,27,61,0.3);cursor:pointer;
+  }
+  .roi-valor{font-family:var(--sans);font-size:13px;color:var(--blue-deep);font-weight:700;margin-top:10px;}
+  .roi-valor span{font-size:16px;}
+
+  .roi-resultado{
+    background:var(--navy-deep);color:#fff;padding:34px 36px;
+    display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  }
+  .roi-resultado-label{font-family:var(--sans);font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#9FB3D9;font-weight:700;}
+  .roi-resultado-horas{font-family:var(--sans);font-size:34px;font-weight:800;color:#fff;margin:4px 0 2px;}
+  .roi-resultado-autofact{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--blue);margin:4px 0 2px;}
+  .roi-resultado-sub{font-family:var(--sans);font-size:12.5px;color:#B9CBEF;}
+  .roi-divider{width:100%;border-top:1px solid var(--navy-mid);margin:20px 0;}
+
+  /* ---------- INSIGNIA DE SEGURIDAD (debajo del hero-cta) ---------- */
+  .badge-seguridad{
+    display:flex;align-items:flex-start;gap:12px;margin-top:22px;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;max-width:460px;
+  }
+  .badge-seguridad-icono{
+    width:34px;height:34px;border-radius:50%;background:var(--blue-tint);color:var(--blue-deep);
+    display:flex;align-items:center;justify-content:center;flex:none;
+  }
+  .badge-seguridad-titulo{font-family:var(--sans);font-size:13px;font-weight:800;color:var(--ink);}
+  .badge-seguridad-texto{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.5;}
+
+  /* ---------- TESTIMONIOS ESTILO CHAT ---------- */
+  .testi-chat-fondo{
+    background:#0B141A;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size:18px 18px;
+    padding:16px;
+  }
+  .testi-chat-burbuja{
+    background:#1F2C34;color:#E9EDEF;border-radius:0 10px 10px 10px;
+    padding:9px 12px;font-size:13.5px;line-height:1.5;max-width:100%;
+    position:relative;
+  }
+  .testi-chat-hora{
+    display:flex;justify-content:flex-end;align-items:center;gap:4px;
+    margin-top:4px;font-size:10.5px;color:#8696A0;
+  }
 
   /* ---------- SECTION SHELL ---------- */
   section{padding:76px 0;}
@@ -388,19 +455,13 @@
   @media (max-width:820px){ .testi-grid{grid-template-columns:1fr;} }
   .testi-card{
     background:var(--navy);border:1px solid var(--navy-mid);border-radius:14px;
-    padding:22px 22px 20px;display:flex;flex-direction:column;gap:14px;
+    padding:0;overflow:hidden;display:flex;flex-direction:column;
   }
-  .testi-quote{color:#E2E9F7;font-size:14.5px;line-height:1.55;}
-  .testi-quote::before{content:"“";color:var(--blue);font-weight:800;}
-  .testi-quote::after{content:"”";color:var(--blue);font-weight:800;}
-  .testi-persona{display:flex;align-items:center;gap:12px;margin-top:auto;}
-  .testi-avatar{
-    width:42px;height:42px;border-radius:50%;flex:none;
-    display:flex;align-items:center;justify-content:center;
-    background:var(--blue);color:#fff;font-family:var(--sans);font-weight:800;font-size:15px;
-  }
+  .testi-persona{display:flex;align-items:center;gap:12px;padding:16px 20px;}
+  .testi-avatar-foto{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none;border:2px solid var(--navy-mid);}
   .testi-nombre{font-family:var(--sans);font-weight:700;font-size:13.5px;color:#fff;}
   .testi-rubro{font-family:var(--sans);font-size:12px;color:#9FB3D9;}
+  .apellido-oculto{filter:blur(4px);user-select:none;color:#fff;}
 
   .plataformas{margin-top:44px;padding-top:36px;border-top:1px solid var(--navy-mid);}
   .plataformas-label{
@@ -475,10 +536,19 @@
         <h1>Automatizá tu facturación y dejá de perder horas en la página de ARCA.</h1>
         <p class="lead">El software que lee tus comprobantes con inteligencia artificial y factura todo tu mes en 1 clic. Seguro, rápido y sin errores.</p>
         <div class="hero-cta">
-          <a href="/registro" class="btn btn-primary">Crear cuenta gratis</a>
+          <a href="/registro" class="btn btn-primary">Probar 15 días gratis</a>
           <a href="#como-funciona" class="btn btn-ghost">Ver cómo funciona</a>
         </div>
         <p class="hero-note">15 días gratis para probar · sin tarjeta de crédito</p>
+        <div class="badge-seguridad">
+          <div class="badge-seguridad-icono" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 11V8a6 6 0 1112 0v3M5 11h14a1 1 0 011 1v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a1 1 0 011-1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="badge-seguridad-titulo">Seguridad tipo bancario</div>
+            <div class="badge-seguridad-texto">Tu Clave Fiscal se guarda cifrada y nunca se usa para otra cosa que facturar. Si preferís no compartir tu clave principal, podés operar con un Usuario Delegado de ARCA creado solo para esto.</div>
+          </div>
+        </div>
       </div>
 
       <div>
@@ -547,31 +617,46 @@
       </div>
       <div class="testi-grid">
         <div class="testi-card">
-          <p class="testi-quote">Antes perdía mi único día libre, el domingo, tipeando más de 150 comprobantes a mano en la página de ARCA. Ahora arrastro las capturas, reviso 2 minutos, y el sistema liquida todo el mes de un saque. Me ahorra 6 horas de trabajo administrativo por semana.</p>
+          <div class="testi-chat-fondo">
+            <div class="testi-chat-burbuja">
+              Antes perdía mi único día libre, el domingo, tipeando más de 150 comprobantes a mano en la página de ARCA. Ahora arrastro las capturas, reviso 2 minutos, y el sistema liquida todo el mes de un saque. Me ahorra 6 horas de trabajo administrativo por semana.
+              <div class="testi-chat-hora">10:42</div>
+            </div>
+          </div>
           <div class="testi-persona">
-            <div class="testi-avatar">M</div>
+            <img src="/static/img/testimonios/marcos.jpg" class="testi-avatar-foto" alt="Marcos">
             <div>
-              <div class="testi-nombre">Marcos</div>
+              <div class="testi-nombre">Marcos <span class="apellido-oculto">Retamozo</span></div>
               <div class="testi-rubro">Dueño de minimercado</div>
             </div>
           </div>
         </div>
         <div class="testi-card">
-          <p class="testi-quote">Tener el taller lleno de equipos para reparar y encima tener que frenar para hacer facturas C una por una era insostenible. Pasé de demorar 10 minutos por cliente a facturar el lote de la semana entera en 3 clicks. Me liberó la cabeza para enfocarme 100% en el trabajo productivo.</p>
+          <div class="testi-chat-fondo">
+            <div class="testi-chat-burbuja">
+              Tener el taller lleno de equipos para reparar y encima tener que frenar para hacer facturas C una por una era insostenible. Pasé de demorar 10 minutos por cliente a facturar el lote de la semana entera en 3 clicks. Me liberó la cabeza para enfocarme 100% en el trabajo productivo.
+              <div class="testi-chat-hora">18:07</div>
+            </div>
+          </div>
           <div class="testi-persona">
-            <div class="testi-avatar">J</div>
+            <img src="/static/img/testimonios/julian.jpg" class="testi-avatar-foto" alt="Julián">
             <div>
-              <div class="testi-nombre">Julián</div>
+              <div class="testi-nombre">Julián <span class="apellido-oculto">Manzanelli</span></div>
               <div class="testi-rubro">Servicio técnico</div>
             </div>
           </div>
         </div>
         <div class="testi-card">
-          <p class="testi-quote">Manejo más de 200 transferencias mensuales por Mercado Pago y billeteras virtuales. Antes cruzaba datos en Excel a mano con un margen de error altísimo. El sistema automatizó la carga y me ahorra literalmente dos días enteros de trabajo burocrático al mes.</p>
+          <div class="testi-chat-fondo">
+            <div class="testi-chat-burbuja">
+              Manejo más de 200 transferencias mensuales por Mercado Pago y billeteras virtuales. Antes cruzaba datos en Excel a mano con un margen de error altísimo. El sistema automatizó la carga y me ahorra literalmente dos días enteros de trabajo burocrático al mes.
+              <div class="testi-chat-hora">09:15</div>
+            </div>
+          </div>
           <div class="testi-persona">
-            <div class="testi-avatar">S</div>
+            <img src="/static/img/testimonios/sofia.jpg" class="testi-avatar-foto" alt="Sofía">
             <div>
-              <div class="testi-nombre">Sofía</div>
+              <div class="testi-nombre">Sofía <span class="apellido-oculto">Beltrán</span></div>
               <div class="testi-rubro">Tienda online</div>
             </div>
           </div>
@@ -615,6 +700,40 @@
           <div class="step-num">3</div>
           <h3>Facturás el lote entero</h3>
           <p>Un click y entra a ARCA a facturar comprobante por comprobante, solo. Monotributo o Responsable Inscripto, Factura A, B o C — vos seguís con lo tuyo mientras tanto.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="calculadora">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Calculá tu ahorro</p>
+        <h2>¿Cuánto tiempo estás perdiendo facturando a mano?</h2>
+        <p>Movés los controles con tus números reales y mirá la cuenta.</p>
+      </div>
+      <div class="roi-calc">
+        <div class="roi-controles">
+          <div class="roi-control">
+            <label for="roiCantidad">¿Cuántos comprobantes facturás por mes?</label>
+            <input type="range" id="roiCantidad" min="10" max="500" step="10" value="100">
+            <div class="roi-valor"><span id="roiCantidadValor">100</span> comprobantes por mes</div>
+          </div>
+          <div class="roi-control">
+            <label for="roiMinutos">¿Cuánto tarda cada uno, tipeado a mano? (minutos)</label>
+            <input type="range" id="roiMinutos" min="1" max="15" step="1" value="5">
+            <div class="roi-valor"><span id="roiMinutosValor">5</span> minutos por comprobante</div>
+          </div>
+        </div>
+        <div class="roi-resultado">
+          <p class="roi-resultado-label">Hoy estás perdiendo</p>
+          <p class="roi-resultado-horas"><span id="roiHoras">8,3</span> horas al mes</p>
+          <p class="roi-resultado-sub">tipeando facturas a mano en la página de ARCA</p>
+          <div class="roi-divider"></div>
+          <p class="roi-resultado-label">Con AutoFacturación</p>
+          <p class="roi-resultado-autofact">≈ 3 minutos</p>
+          <p class="roi-resultado-sub">subís el lote entero y listo</p>
+          <a href="/registro" class="btn btn-primary" style="margin-top:18px;width:100%;justify-content:center;">Recuperar ese tiempo gratis</a>
         </div>
       </div>
     </div>
@@ -827,6 +946,7 @@
             <span class="nota-mensual">Facturado mes a mes</span>
             <span class="nota-anual">Facturado $500.000 por año</span>
           </p>
+          <p class="plan-anclaje">Menos de lo que cuesta medio día de un empleado haciendo carga de datos — y este no toma vacaciones.</p>
           <p class="plan-empresas">Hasta 5 empresas</p>
           <ul class="plan-list">
             <li>Monotributo y Responsable Inscripto</li>
@@ -869,7 +989,7 @@
         <div>
           <h2>Empezá gratis, sin tarjeta</h2>
           <p>Creá tu cuenta y probá AutoFacturación 15 días sin costo. Subís tus primeros comprobantes, ves cómo arma la planilla, y recién ahí decidís qué plan te sirve.</p>
-          <a href="/registro" class="btn btn-primary" style="margin-top:20px; display:inline-flex; width:auto;">Crear mi cuenta gratis</a>
+          <a href="/registro" class="btn btn-primary" style="margin-top:20px; display:inline-flex; width:auto;">Automatizar mi facturación gratis</a>
         </div>
         <form class="cta-fields" onsubmit="return enviarWhatsapp(event)">
           <p class="form-note" style="margin-bottom:2px;">¿Tenés dudas antes de anotarte? Escribinos:</p>
@@ -888,10 +1008,6 @@
         <h2>Antes de que preguntes</h2>
       </div>
       <div class="faq">
-        <div class="faq-item">
-          <h3>¿Es seguro darle mi Clave Fiscal?</h3>
-          <p>Tu Clave Fiscal se guarda cifrada, nunca como texto plano, y se usa únicamente en el momento de facturar, para nada más. Si aun así preferís no compartir tu Clave Fiscal principal, ARCA te permite crear un <b>usuario delegado</b> (desde "Administrador de Relaciones de Clave Fiscal") con acceso solo al servicio de facturación electrónica — así, si alguna vez querés cortar el acceso, se revoca ese usuario delegado sin tocar tu clave real.</p>
-        </div>
         <div class="faq-item">
           <h3>¿Qué pasa si ARCA se cae?</h3>
           <p>Si los servidores de ARCA no responden en el momento de facturar un comprobante, ese comprobante queda marcado con el error puntual (podés ver el detalle) y sigue disponible como pendiente — no se pierde ni se factura mal. Podés reintentarlo vos mismo con un click, o simplemente correr de nuevo "Facturar todo lo pendiente" más tarde, cuando ARCA vuelva a andar.</p>
@@ -1080,6 +1196,32 @@ async function enviarWhatsapp(e){
       correrCiclo();
     }
   });
+})();
+</script>
+
+<script>
+/* ---------- Calculadora de ROI ---------- */
+(function(){
+  const inputCantidad = document.getElementById('roiCantidad');
+  const inputMinutos = document.getElementById('roiMinutos');
+  const valorCantidad = document.getElementById('roiCantidadValor');
+  const valorMinutos = document.getElementById('roiMinutosValor');
+  const horasEl = document.getElementById('roiHoras');
+  if (!inputCantidad || !inputMinutos) return;
+
+  function recalcular(){
+    const cantidad = parseInt(inputCantidad.value, 10);
+    const minutos = parseInt(inputMinutos.value, 10);
+    valorCantidad.textContent = cantidad;
+    valorMinutos.textContent = minutos;
+
+    const horas = (cantidad * minutos) / 60;
+    horasEl.textContent = horas.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+
+  inputCantidad.addEventListener('input', recalcular);
+  inputMinutos.addEventListener('input', recalcular);
+  recalcular();
 })();
 </script>
 
