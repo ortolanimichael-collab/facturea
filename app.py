@@ -20,7 +20,7 @@ from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user,
 )
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, DIAS_PRUEBA_GRATIS
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, DIAS_PRUEBA_GRATIS
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -439,6 +439,7 @@ def exigir_configuracion():
     rutas_libres = {
         "empresas", "empresas_editar", "empresas_eliminar",
         "soporte", "logout", "static", "suscripcion_vencida",
+        "home", "terminos", "privacidad", "seguridad_datos", "lead_whatsapp",
     }
     if request.endpoint in rutas_libres:
         return
@@ -455,7 +456,10 @@ def exigir_membresia_activa():
     """
     if not current_user.is_authenticated or current_user.puede_usar_el_sistema:
         return
-    rutas_libres = {"suscripcion_vencida", "soporte", "logout", "static"}
+    rutas_libres = {
+        "suscripcion_vencida", "soporte", "logout", "static",
+        "home", "terminos", "privacidad", "seguridad_datos", "lead_whatsapp",
+    }
     if request.endpoint in rutas_libres:
         return
     return redirect(url_for("suscripcion_vencida"))
@@ -488,6 +492,44 @@ def suscripcion_vencida():
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.route("/terminos")
+def terminos():
+    return render_template("terminos.html")
+
+
+@app.route("/privacidad")
+def privacidad():
+    return render_template("privacidad.html")
+
+
+@app.route("/seguridad")
+def seguridad_datos():
+    return render_template("seguridad.html")
+
+
+@app.route("/api/leads/whatsapp", methods=["POST"])
+def lead_whatsapp():
+    """
+    La landing (ver enviarWhatsapp() en templates/index.html) manda acá el
+    nombre y WhatsApp de la persona ANTES de abrir la conversación real --
+    así el contacto queda guardado para remarketing aunque después no
+    llegue a escribir. Es pública a propósito (todavía no hay cuenta en
+    ese punto) y no exige nada obligatorio: si algo viene vacío, igual se
+    guarda lo que haya, para no perder el intento por un campo de más.
+    """
+    datos = request.get_json(silent=True) or {}
+    nombre = (datos.get("nombre") or "").strip()[:200]
+    telefono = (datos.get("telefono") or "").strip()[:60]
+    origen = (datos.get("origen") or "landing_whatsapp").strip()[:50]
+
+    if not nombre and not telefono:
+        return jsonify(ok=False, error="Faltan datos."), 400
+
+    db.session.add(LeadContacto(nombre=nombre, telefono=telefono, origen=origen))
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 # ---------- Cuenta ----------

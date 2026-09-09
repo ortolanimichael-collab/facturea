@@ -385,6 +385,24 @@ class CuilAntiAbuso(db.Model):
     nota_admin = db.Column(db.String(300))  # por si hace falta anotar el motivo del desbloqueo (typo, cliente real, etc.)
 
 
+class LeadContacto(db.Model):
+    """
+    Un renglón por cada persona que dejó nombre + WhatsApp desde el
+    formulario de la landing (sección "Empezá gratis") ANTES de que se
+    abra WhatsApp -- así queda el contacto guardado para remarketing
+    aunque la persona después no llegue a escribir de verdad. Ver
+    /api/leads/whatsapp en app.py, que es quien escribe acá, y
+    enviarWhatsapp() en templates/index.html, que es quien lo llama.
+    """
+    __tablename__ = "leads_contacto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200))
+    telefono = db.Column(db.String(60))
+    origen = db.Column(db.String(50))  # de dónde vino -- "landing_whatsapp" por ahora, por si después se suman más formularios
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 def init_db(app):
     database_url = os.environ.get("DATABASE_URL", "sqlite:///facturea.db")
     if database_url.startswith("postgres://"):
