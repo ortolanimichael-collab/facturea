@@ -63,6 +63,18 @@
   .metodo-form button{font-family:var(--sans);font-weight:700;font-size:11.5px;padding:7px 10px;border-radius:8px;border:1.5px solid var(--navy);background:var(--paper-2);color:var(--navy);cursor:pointer;}
   .metodo-form button:hover{background:var(--navy);color:#fff;}
   .admin-tag{font-family:var(--sans);font-weight:700;font-size:10.5px;color:var(--blue-deep);}
+
+  .seccion-titulo{font-family:var(--sans);font-weight:800;font-size:18px;margin:40px 0 4px;color:var(--ink);}
+  .seccion-sub{color:var(--muted);font-size:13.5px;margin-bottom:16px;}
+  .estado-cuil{font-family:var(--sans);font-weight:700;font-size:11px;padding:4px 10px;border-radius:20px;display:inline-block;}
+  .estado-cuil.bloqueado{background:var(--danger-tint);color:var(--danger);}
+  .estado-cuil.desbloqueado{background:var(--blue-tint);color:var(--blue-deep);}
+  .estado-cuil.sin-conflicto{background:var(--paper);color:var(--muted);}
+  .nota-form{display:flex;gap:6px;align-items:center;}
+  .nota-form input{font-family:var(--sans);font-size:12px;padding:7px 9px;border-radius:8px;border:1.5px solid var(--line);width:150px;background:var(--paper-2);color:var(--ink);}
+  .nota-form input:focus{outline:none;border-color:var(--blue);}
+  .btn-mini.desbloquear{background:var(--navy);}
+  .sin-registros{color:var(--muted);font-size:13.5px;padding:20px;text-align:center;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;}
 </style>
 </head>
 <body>
@@ -123,6 +135,55 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <p class="seccion-titulo">CUILs con prueba gratis repetida</p>
+  <p class="seccion-sub">Un renglón por cada CUIL de ARCA que se usó alguna vez para facturar. La mayoría van a decir "Sin conflicto" (son el uso normal del dueño de siempre) -- el que diga "Bloqueando otra cuenta" es un CUIL que reapareció en una cuenta distinta a la que lo usó primero, y a esa cuenta nueva no la deja facturar hasta que pague (o hasta que lo desbloquees acá, por ejemplo si fue un error de tipeo).</p>
+
+  {% if cuils_bloqueados %}
+  <table>
+    <thead>
+      <tr>
+        <th>CUIL</th>
+        <th>Primera cuenta que lo usó</th>
+        <th>Primera empresa</th>
+        <th>Primera vez</th>
+        <th>Estado</th>
+        <th>Nota</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cuils_bloqueados %}
+      <tr>
+        <td>{{ c.cuil }}</td>
+        <td>{{ c.primer_usuario_email or "—" }}</td>
+        <td>{{ c.primera_empresa_nombre or "—" }}</td>
+        <td>{{ c.primera_vez_en.strftime("%d/%m/%Y") if c.primera_vez_en else "—" }}</td>
+        <td>
+          {% if c.desbloqueado %}
+          <span class="estado-cuil desbloqueado">Desbloqueado</span>
+          {% elif c.usado_por_otra_cuenta %}
+          <span class="estado-cuil bloqueado">Bloqueando otra cuenta</span>
+          {% else %}
+          <span class="estado-cuil sin-conflicto">Sin conflicto</span>
+          {% endif %}
+        </td>
+        <td>{{ c.nota_admin or "—" }}</td>
+        <td>
+          {% if c.usado_por_otra_cuenta and not c.desbloqueado %}
+          <form class="nota-form" method="POST" action="/admin/cuils/{{ c.id }}/desbloquear">
+            <input type="text" name="nota_admin" placeholder="motivo (opcional)">
+            <button type="submit" class="btn-mini desbloquear">Desbloquear</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="sin-registros">Todavía no hay ningún CUIL registrado por este control.</p>
+  {% endif %}
 </div>
 </body>
 </html>
