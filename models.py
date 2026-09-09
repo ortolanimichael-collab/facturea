@@ -40,6 +40,15 @@ class Usuario(UserMixin, db.Model):
     fecha_vencimiento = db.Column(db.DateTime)
     metodo_pago = db.Column(db.String(150))  # nota libre por ahora: "transferencia", "efectivo", etc.
 
+    # True apenas se le confirma UNA renovación de pago real (ver
+    # sincronizar_membresia() en app.py, que la marca la primera vez que
+    # panel-membresías avisa una renovación). El período de prueba inicial
+    # de 15 días que se carga solo al registrarse NUNCA prende esta bandera
+    # -- se usa justamente para distinguir "todavía en la prueba gratis" de
+    # "en algún momento pagó de verdad", que es lo que decide si se le
+    # perdona el bloqueo por CUIL repetido (ver CuilAntiAbuso más abajo).
+    tuvo_pago_alguna_vez = db.Column(db.Boolean, default=False)
+
     es_admin = db.Column(db.Boolean, default=False)
     activo = db.Column(db.Boolean, default=True)  # para suspender manualmente sin borrar la cuenta
 
@@ -338,6 +347,42 @@ class RegistroSubida(db.Model):
     archivo_ruta = db.Column(db.String(400))  # solo para "duplicado": la imagen del INTENTO, para compararla con la original
     archivo_drive_id = db.Column(db.String(100))  # igual que en Comprobante, si esa empresa tiene Drive conectado
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CuilAntiAbuso(db.Model):
+    """
+    Un renglón por cada CUIL que alguna vez se usó para facturar de verdad
+    (no en modo prueba) en CUALQUIER empresa de CUALQUIER cuenta -- se
+    guarda para siempre, aunque después se borre la empresa o la cuenta
+    original, justamente para que alguien no pueda "resetear" su prueba
+    gratis dándose de baja y anotándose de nuevo con otro email pero el
+    mismo CUIL real.
+
+    No tiene ForeignKey de verdad hacia Usuario/Empresa a propósito -- son
+    solo una referencia informativa para vos (para ver en el panel de admin
+    de dónde salió el primer uso), y así el renglón sobrevive sin problema
+    aunque esa cuenta o empresa se borren después.
+
+    La regla que se aplica con esto (ver _chequear_cuil_no_abusado en
+    app.py, y de dónde se llama): la PRIMERA vez que se ve un CUIL en todo
+    el sistema, se deja pasar y factura con la prueba gratis normal de esa
+    cuenta. Si ese mismo CUIL aparece de nuevo en una cuenta DISTINTA a la
+    que lo usó primero, esa cuenta nueva no puede facturar ese CUIL a menos
+    que ya haya pagado alguna vez de verdad (Usuario.tuvo_pago_alguna_vez) o
+    que vos lo desbloquees a mano.
+    """
+    __tablename__ = "cuils_antiabuso"
+
+    id = db.Column(db.Integer, primary_key=True)
+    cuil = db.Column(db.String(20), unique=True, nullable=False, index=True)
+
+    primera_vez_en = db.Column(db.DateTime, default=datetime.utcnow)
+    primer_usuario_id = db.Column(db.Integer)  # sin ForeignKey a propósito -- ver docstring de arriba
+    primer_usuario_email = db.Column(db.String(200))  # copia textual, para poder mostrarlo en el admin aunque esa cuenta ya no exista
+    primera_empresa_nombre = db.Column(db.String(200))  # idem, copia textual del nombre_interno de esa empresa
+
+    desbloqueado = db.Column(db.Boolean, default=False)  # override manual desde el admin -- ver /admin
+    nota_admin = db.Column(db.String(300))  # por si hace falta anotar el motivo del desbloqueo (typo, cliente real, etc.)
 
 
 def init_db(app):

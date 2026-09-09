@@ -20,7 +20,7 @@ from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user,
 )
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, DIAS_PRUEBA_GRATIS
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, DIAS_PRUEBA_GRATIS
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -1087,6 +1087,56 @@ def _comprobante_facturado_con_mismo_id_transaccion(comprobante):
     ).first()
 
 
+def _chequear_cuil_no_abusado(empresa):
+    """
+    Anti-abuso de "prueba gratis infinita": evita que alguien reuse el
+    mismo CUIL real (el de ARCA, empresa.cuil_arca) en cuentas nuevas, una
+    atrás de otra, para no pagar nunca -- ver CuilAntiAbuso en models.py
+    para la explicación completa de la regla.
+
+    Se llama SOLO al facturar de verdad (nunca en modo_prueba, que no emite
+    nada real) -- así una cuenta nueva puede seguir cargando la empresa y
+    subiendo/revisando comprobantes sin problema, y el corte aparece recién
+    en el paso que de verdad importa.
+
+    Devuelve None si puede facturar sin problema (y de paso registra el
+    CUIL en la lista si es la primera vez que se ve en todo el sistema), o
+    un mensaje de error listo para mostrar si está bloqueado.
+    """
+    cuil = (empresa.cuil_arca or "").strip()
+    if not cuil:
+        return None  # no debería pasar (hace falta CUIL para facturar), pero por las dudas no es este chequeo el que lo tiene que avisar
+
+    registro = CuilAntiAbuso.query.filter_by(cuil=cuil).first()
+
+    if registro is None:
+        # Primera vez que se ve este CUIL en TODO el sistema -- se registra
+        # y se deja pasar, usa la prueba gratis normal de esta cuenta.
+        db.session.add(CuilAntiAbuso(
+            cuil=cuil,
+            primer_usuario_id=empresa.usuario_id,
+            primer_usuario_email=empresa.usuario.email,
+            primera_empresa_nombre=empresa.nombre_interno,
+        ))
+        db.session.commit()
+        return None
+
+    if registro.desbloqueado:
+        return None  # vos lo destrabaste a mano desde el admin (típicamente: fue un error de tipeo la primera vez)
+
+    if registro.primer_usuario_id == empresa.usuario_id:
+        return None  # es la MISMA cuenta que lo usó la primera vez -- no hay abuso, es su propio CUIL de siempre
+
+    if empresa.usuario.tuvo_pago_alguna_vez:
+        return None  # esta cuenta (aunque sea otra distinta a la original) ya pagó de verdad alguna vez -- no hace falta seguir bloqueándola
+
+    return (
+        f"El CUIL {cuil} ya usó el período de prueba gratis antes, en otra cuenta "
+        f"(desde {registro.primer_usuario_email or 'otra cuenta'}). Para facturar con este CUIL "
+        "hace falta una suscripción paga."
+    )
+
+
 @app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/facturar", methods=["POST"])
 @login_required
 def facturar(empresa_id, comprobante_id):
@@ -1108,6 +1158,11 @@ def facturar(empresa_id, comprobante_id):
         ), 400
 
     modo_prueba = bool((request.get_json(silent=True) or {}).get("modo_prueba"))
+
+    if not modo_prueba:
+        error_cuil = _chequear_cuil_no_abusado(empresa)
+        if error_cuil:
+            return jsonify(ok=False, error=error_cuil, modo_prueba=modo_prueba), 403
 
     try:
         resultado = facturar_comprobante(comprobante, modo_prueba=modo_prueba)
@@ -1736,6 +1791,10 @@ def facturar_todos(empresa_id):
     if not empresa:
         return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
 
+    error_cuil = _chequear_cuil_no_abusado(empresa)
+    if error_cuil:
+        return jsonify(ok=False, error=error_cuil), 403
+
     with _lock_facturacion_lote:
         estado_actual = _estado_facturacion_lote.get(empresa.id)
         if estado_actual and estado_actual.get("en_curso"):
@@ -1846,7 +1905,20 @@ def soporte():
 @admin_required
 def admin_panel():
     usuarios = Usuario.query.order_by(Usuario.fecha_registro.desc()).all()
-    return render_template("admin.html", usuarios=usuarios)
+    cuils_bloqueados = CuilAntiAbuso.query.order_by(CuilAntiAbuso.primera_vez_en.desc()).all()
+    for c in cuils_bloqueados:
+        # Se registra TODO CUIL la primera vez que se usa (ver
+        # _chequear_cuil_no_abusado), no solo los que terminan generando un
+        # conflicto real -- así que acá se calcula, al vuelo, si HOY existe
+        # alguna otra cuenta (distinta a la que lo usó primero) con una
+        # empresa cargada con este mismo CUIL. Si no hay ninguna, este
+        # renglón es un registro normal sin nada que bloquear todavía.
+        otra_empresa = Empresa.query.filter(
+            Empresa.cuil_arca == c.cuil,
+            Empresa.usuario_id != c.primer_usuario_id,
+        ).first()
+        c.usado_por_otra_cuenta = bool(otra_empresa)
+    return render_template("admin.html", usuarios=usuarios, cuils_bloqueados=cuils_bloqueados)
 
 
 @app.route("/admin/renovar/<int:usuario_id>", methods=["POST"])
@@ -1856,6 +1928,12 @@ def admin_renovar(usuario_id):
     usuario = db.session.get(Usuario, usuario_id)
     if usuario:
         usuario.renovar(dias=30)
+        # Una renovación manual desde acá también es un pago real (vos la
+        # cargaste a mano típicamente después de recibir una transferencia)
+        # -- cuenta igual que una renovación que llega sola desde
+        # panel-membresías (ver sincronizar_membresia) para el anti-abuso
+        # por CUIL repetido.
+        usuario.tuvo_pago_alguna_vez = True
         db.session.commit()
     return redirect(url_for("admin_panel"))
 
@@ -1867,6 +1945,26 @@ def admin_metodo_pago(usuario_id):
     usuario = db.session.get(Usuario, usuario_id)
     if usuario:
         usuario.metodo_pago = request.form.get("metodo_pago", "").strip()
+        db.session.commit()
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/cuils/<int:cuil_id>/desbloquear", methods=["POST"])
+@login_required
+@admin_required
+def admin_cuil_desbloquear(cuil_id):
+    """
+    Override manual del anti-abuso por CUIL repetido (ver CuilAntiAbuso en
+    models.py y _chequear_cuil_no_abusado en app.py) -- para cuando el
+    bloqueo fue en realidad un falso positivo (error de tipeo la primera
+    vez, un cliente real que necesita retomar su propio CUIL, etc.).
+    """
+    registro = db.session.get(CuilAntiAbuso, cuil_id)
+    if registro:
+        registro.desbloqueado = True
+        nota = request.form.get("nota_admin", "").strip()
+        if nota:
+            registro.nota_admin = nota
         db.session.commit()
     return redirect(url_for("admin_panel"))
 
@@ -1893,6 +1991,14 @@ def sincronizar_membresia():
 
     if data.get("fecha_vencimiento"):
         usuario.fecha_vencimiento = datetime.fromisoformat(data["fecha_vencimiento"])
+        # OJO: esto asume que panel-membresías SOLO llama a este endpoint
+        # ante una renovación de pago real -- nunca para la prueba gratis
+        # inicial (esa se carga directo en registro(), sin pasar por acá).
+        # Si en algún momento panel-membresías también terminara llamando
+        # esto para otra cosa que no sea un pago real, esta marca se
+        # ensuciaría y el anti-abuso por CUIL (ver _chequear_cuil_no_abusado)
+        # dejaría pasar cuentas que en realidad nunca pagaron.
+        usuario.tuvo_pago_alguna_vez = True
     if "activo" in data:
         usuario.activo = bool(data["activo"])
 
