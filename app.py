@@ -846,12 +846,19 @@ def _parse_fecha_ddmmaaaa(fecha_str):
 def _ordenar_por_fecha_facturacion(comprobantes, empresa):
     """
     Ordena una lista de Comprobante de más vieja a más nueva -- primero por
-    fecha de facturación (la que realmente se va a escribir en ARCA, la
-    misma que calcula calcular_fecha_facturacion), y a igualdad de esa
-    fecha, por fecha del comprobante real. Así se factura/se muestra primero
-    lo más atrasado. De paso, deja cargado c.fecha_facturacion_ajustada en
-    cada fila (se usa para mostrarla en la tabla, no hace falta recalcularla
-    después).
+    la fecha REAL del comprobante (la de la operación en sí), y a igualdad
+    de esa fecha, por la fecha de facturación ajustada (la que realmente se
+    va a escribir en ARCA, la misma que calcula calcular_fecha_facturacion)
+    como desempate. Así se factura/se muestra primero lo más atrasado según
+    cuándo pasó la operación de verdad.
+
+    Ojo: antes se ordenaba al revés (primero por fecha de facturación
+    ajustada) -- eso funcionaba mal cuando había una fecha_facturacion_manual
+    cargada a mano, porque esa fecha puede no tener nada que ver con la
+    fecha real de la operación y desordenaba todo el criterio de "más
+    atrasado primero". De paso, esta función deja cargado
+    c.fecha_facturacion_ajustada en cada fila (se usa para mostrarla en la
+    tabla, no hace falta recalcularla después).
 
     Las filas sin fecha válida (no debería pasar, pero por las dudas) quedan
     al final, no se pierden.
@@ -870,9 +877,9 @@ def _ordenar_por_fecha_facturacion(comprobantes, empresa):
                 pass  # fecha con formato inesperado -- se deja en None, la tabla muestra "—"
 
     def _clave(c):
-        clave_facturacion = _parse_fecha_ddmmaaaa(c.fecha_facturacion_ajustada) or datetime.max
         clave_comprobante = _parse_fecha_ddmmaaaa(c.fecha_comprobante) or datetime.max
-        return (clave_facturacion, clave_comprobante)
+        clave_facturacion = _parse_fecha_ddmmaaaa(c.fecha_facturacion_ajustada) or datetime.max
+        return (clave_comprobante, clave_facturacion)
 
     return sorted(comprobantes, key=_clave)
 
@@ -889,10 +896,11 @@ def comprobantes(empresa_id):
         .all()
     )
 
-    # Se ordena de más vieja a más nueva por fecha de facturación (y a
-    # igualdad, por fecha del comprobante) -- así en pantalla, y también al
-    # facturar todo en lote, se atiende primero lo más atrasado. Esto ya
-    # calcula fecha_facturacion_ajustada de paso (ver la función).
+    # Se ordena de más vieja a más nueva por fecha REAL del comprobante (y a
+    # igualdad, por la fecha de facturación ajustada) -- así en pantalla, y
+    # también al facturar todo en lote, se atiende primero lo más atrasado
+    # según cuándo pasó la operación de verdad. Esto ya calcula
+    # fecha_facturacion_ajustada de paso (ver la función).
     filas = _ordenar_por_fecha_facturacion(filas, empresa)
 
     for c in filas:
