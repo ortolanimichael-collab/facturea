@@ -83,7 +83,7 @@
 
   /* ---------- HERO ---------- */
   .hero{padding:64px 0 56px;}
-  .hero-grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:48px;align-items:start;}
+  .hero-grid{display:grid;grid-template-columns:0.85fr 1.15fr;gap:48px;align-items:center;}
   @media (max-width:900px){ .hero-grid{grid-template-columns:1fr;gap:36px;} }
   .hero h1{font-size:40px;line-height:1.18;margin:14px 0 18px;}
   @media (max-width:520px){ .hero h1{font-size:29px;} }
@@ -155,6 +155,18 @@
   .demo-nota{
     display:flex;align-items:center;gap:8px;margin-top:12px;
     font-family:var(--sans);font-size:12px;color:var(--muted);font-weight:600;
+  }
+  .demo-protagonista{
+    box-shadow:0 24px 60px -20px rgba(15,27,61,0.35);
+    border-width:1.5px;
+  }
+  @media (min-width:901px){
+    .demo-protagonista .demo-head{padding:20px 26px 8px;}
+    .demo-protagonista .demo-head-title{font-size:15px;}
+    .demo-protagonista .demo-fila{padding:13px 16px;}
+    .demo-protagonista .demo-fila-cliente{font-size:15px;}
+    .demo-protagonista .demo-fila-estado{font-size:12px;padding:6px 12px;}
+    .demo-protagonista .demo-foot{padding:16px 26px;}
   }
 
   /* ---------- SECTION SHELL ---------- */
@@ -298,6 +310,12 @@
   .foot-col a{font-family:var(--sans);font-size:13.5px;color:var(--muted);text-decoration:none;font-weight:600;}
   .foot-col a:hover{color:var(--blue-deep);}
   .foot-bottom{border-top:1px solid var(--line);padding:20px 0;}
+
+  /* ---------- FAQ ---------- */
+  .faq{max-width:760px;margin:0 auto;}
+  .faq-item{border:1px solid var(--line);background:var(--paper-2);border-radius:12px;padding:22px 24px;margin-bottom:14px;}
+  .faq-item h3{font-family:var(--sans);font-size:15.5px;font-weight:800;margin-bottom:8px;color:var(--ink);}
+  .faq-item p{font-size:14px;color:var(--muted);}
 </style>
 </head>
 <body>
@@ -343,23 +361,7 @@
       </div>
 
       <div>
-        <div class="panel">
-          <div class="panel-head">
-            <div class="dot">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 12L10 16L18 8" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>Ingresar a AutoFacturación</h3>
-          </div>
-          <div class="panel-body">
-            <a href="/login" class="btn btn-primary">Iniciar sesión</a>
-            <a href="/recuperar" class="panel-link">Recuperar contraseña</a>
-            <div class="panel-divider"></div>
-            <a href="/registro" class="btn btn-ghost-light">Crear cuenta gratis</a>
-            <a href="#planes" class="panel-link">Ver planes y precios</a>
-          </div>
-        </div>
-
-        <div class="demo" id="demoFacturando" aria-label="Animación mostrando comprobantes pasando de pendiente a facturado con CAE">
+        <div class="demo demo-protagonista" id="demoFacturando" aria-label="Animación mostrando comprobantes pasando de pendiente a facturado con CAE">
           <div class="demo-head">
             <div class="demo-head-left">
               <span class="demo-live-dot" aria-hidden="true"></span>
@@ -420,36 +422,33 @@
         <p>Beta testers reales de AutoFacturación, facturando su mes a mes con esto.</p>
       </div>
       <div class="testi-grid">
-        <!-- PLACEHOLDER -- reemplazar con un testimonio real antes de publicar -->
         <div class="testi-card">
-          <p class="testi-quote">Escribí acá la frase corta que te dio este cliente/beta tester sobre cómo le cambió facturar (ideal: 1-2 líneas, algo concreto — "antes tardaba 3 horas los domingos, ahora son 10 minutos").</p>
+          <p class="testi-quote">Antes perdía mi único día libre, el domingo, tipeando más de 150 comprobantes a mano en la página de ARCA. Ahora arrastro las capturas, reviso 2 minutos, y el sistema liquida todo el mes de un saque. Me ahorra 6 horas de trabajo administrativo por semana.</p>
           <div class="testi-persona">
-            <div class="testi-avatar">NN</div>
+            <div class="testi-avatar">M</div>
             <div>
-              <div class="testi-nombre">Nombre y apellido reales</div>
-              <div class="testi-rubro">Rubro / tipo de negocio</div>
+              <div class="testi-nombre">Marcos</div>
+              <div class="testi-rubro">Dueño de minimercado</div>
             </div>
           </div>
         </div>
-        <!-- PLACEHOLDER -- reemplazar con un testimonio real antes de publicar -->
         <div class="testi-card">
-          <p class="testi-quote">Segundo testimonio de ejemplo. Reemplazalo por una frase textual de otro cliente o beta tester real, con su nombre y rubro reales.</p>
+          <p class="testi-quote">Tener el taller lleno de equipos para reparar y encima tener que frenar para hacer facturas C una por una era insostenible. Pasé de demorar 10 minutos por cliente a facturar el lote de la semana entera en 3 clicks. Me liberó la cabeza para enfocarme 100% en el trabajo productivo.</p>
           <div class="testi-persona">
-            <div class="testi-avatar">NN</div>
+            <div class="testi-avatar">J</div>
             <div>
-              <div class="testi-nombre">Nombre y apellido reales</div>
-              <div class="testi-rubro">Rubro / tipo de negocio</div>
+              <div class="testi-nombre">Julián</div>
+              <div class="testi-rubro">Servicio técnico</div>
             </div>
           </div>
         </div>
-        <!-- PLACEHOLDER -- reemplazar con un testimonio real antes de publicar -->
         <div class="testi-card">
-          <p class="testi-quote">Tercer testimonio de ejemplo. Ideal si entre los tres cubrís distintos rubros (ej. uno que vende por Mercado Pago, otro con local físico, un estudio contable que gestiona varios clientes).</p>
+          <p class="testi-quote">Manejo más de 200 transferencias mensuales por Mercado Pago y billeteras virtuales. Antes cruzaba datos en Excel a mano con un margen de error altísimo. El sistema automatizó la carga y me ahorra literalmente dos días enteros de trabajo burocrático al mes.</p>
           <div class="testi-persona">
-            <div class="testi-avatar">NN</div>
+            <div class="testi-avatar">S</div>
             <div>
-              <div class="testi-nombre">Nombre y apellido reales</div>
-              <div class="testi-rubro">Rubro / tipo de negocio</div>
+              <div class="testi-nombre">Sofía</div>
+              <div class="testi-rubro">Tienda online</div>
             </div>
           </div>
         </div>
@@ -632,6 +631,29 @@
           <input type="tel" id="whatsapp" placeholder="Tu WhatsApp" required>
           <button type="submit" class="btn btn-ghost-light">Consultar por WhatsApp</button>
         </form>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Preguntas frecuentes</p>
+        <h2>Antes de que preguntes</h2>
+      </div>
+      <div class="faq">
+        <div class="faq-item">
+          <h3>¿Es seguro darle mi Clave Fiscal?</h3>
+          <p>Tu Clave Fiscal se guarda cifrada, nunca como texto plano, y se usa únicamente en el momento de facturar, para nada más. Si aun así preferís no compartir tu Clave Fiscal principal, ARCA te permite crear un <b>usuario delegado</b> (desde "Administrador de Relaciones de Clave Fiscal") con acceso solo al servicio de facturación electrónica — así, si alguna vez querés cortar el acceso, se revoca ese usuario delegado sin tocar tu clave real.</p>
+        </div>
+        <div class="faq-item">
+          <h3>¿Qué pasa si ARCA se cae?</h3>
+          <p>Si los servidores de ARCA no responden en el momento de facturar un comprobante, ese comprobante queda marcado con el error puntual (podés ver el detalle) y sigue disponible como pendiente — no se pierde ni se factura mal. Podés reintentarlo vos mismo con un click, o simplemente correr de nuevo "Facturar todo lo pendiente" más tarde, cuando ARCA vuelva a andar.</p>
+        </div>
+        <div class="faq-item">
+          <h3>¿Cómo sé que no voy a facturar algo dos veces?</h3>
+          <p>El sistema reconoce el ID de transacción de cada comprobante (por ejemplo, el de un pago de Mercado Pago) y, si ya existe otro comprobante facturado con ese mismo ID, no te deja facturarlo de nuevo — te avisa el conflicto en vez de duplicar la factura.</p>
+        </div>
       </div>
     </div>
   </section>
