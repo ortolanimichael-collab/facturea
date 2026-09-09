@@ -381,6 +381,7 @@
     <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
   </div>
   <span class="msg" id="mercadopagoMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="facturacionMsg" style="display:none;margin:-8px 0 8px;"></span>
 
   <div id="resumen" class="resumen"></div>
 
@@ -1323,7 +1324,94 @@ document.querySelectorAll('.btn-probar').forEach(btn => {
   });
 });
 
-async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
+/* ---------- Facturación en lote: dispara un hilo en el servidor y
+   consulta el progreso por polling, para que se pueda cerrar la pestaña
+   o el navegador entero sin cortar nada -- sigue corriendo del lado del
+   servidor, totalmente aparte del navegador. ---------- */
+
+let pollingFacturacion = null;
+
+function formatoMonto(n) {
+  return `$${(n || 0).toLocaleString('es-AR')}`;
+}
+
+function asegurarPollingFacturacion() {
+  if (!pollingFacturacion) {
+    pollingFacturacion = setInterval(consultarEstadoFacturacion, 2000);
+  }
+}
+
+function detenerPollingFacturacion() {
+  if (pollingFacturacion) {
+    clearInterval(pollingFacturacion);
+    pollingFacturacion = null;
+  }
+}
+
+function actualizarUiProgresoFacturacion(estado) {
+  const btnFacturarTodo = document.getElementById('btnFacturarTodo');
+  const btnFacturarMonto = document.getElementById('btnFacturarMontoCargado');
+  const btnDetener = document.getElementById('btnDetenerFacturacion');
+  const msg = document.getElementById('facturacionMsg');
+
+  btnFacturarTodo.disabled = true;
+  btnFacturarMonto.disabled = true;
+  btnFacturarTodo.textContent = 'Facturando...';
+  btnFacturarMonto.textContent = 'Facturando...';
+  if (btnDetener.style.display === 'none') {
+    btnDetener.style.display = 'inline-block';
+    btnDetener.disabled = false;
+    btnDetener.textContent = 'Detener';
+  }
+  msg.style.display = 'block';
+  msg.textContent =
+    `Facturando ${estado.procesados}/${estado.total} · Facturados: ${estado.facturados} · ` +
+    `Errores: ${estado.errores} · Monto: ${formatoMonto(estado.monto_facturado)} — ` +
+    `podés cerrar esta pestaña o el navegador entero, sigue corriendo en el servidor.`;
+}
+
+async function consultarEstadoFacturacion() {
+  let data;
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos/estado`);
+    data = await r.json();
+  } catch (e) {
+    return; // fallo de red puntual -- se reintenta solo en la próxima vuelta del intervalo
+  }
+  if (!data.ok) return;
+
+  if (data.en_curso) {
+    actualizarUiProgresoFacturacion(data);
+    return;
+  }
+
+  if (!data.terminado) return; // nunca corrió ningún lote todavía -- nada que mostrar
+
+  // Terminó (recién ahora, mientras estábamos consultando activamente).
+  detenerPollingFacturacion();
+  document.getElementById('facturacionMsg').style.display = 'none';
+  document.getElementById('btnDetenerFacturacion').style.display = 'none';
+
+  if (data.error_fatal) {
+    alert(
+      'La facturación en lote se cortó por un error inesperado: ' + data.error_fatal +
+      '\n\nLo que ya se había facturado antes de cortarse quedó guardado; revisá la tabla.'
+    );
+  } else {
+    const corte = data.detenido_por_limite
+      ? '\n\nSe detuvo porque el próximo comprobante superaba el límite cargado. Quedaron comprobantes sin facturar.'
+      : data.detenido_manualmente
+      ? '\n\nSe detuvo porque se tocó "Detener". Quedaron comprobantes sin facturar.'
+      : '';
+    alert(
+      `Listo. Facturados: ${data.facturados} · Errores: ${data.errores} · ` +
+      `Monto facturado: ${formatoMonto(data.monto_facturado)}${corte}`
+    );
+  }
+  window.location.reload();
+}
+
+async function facturarTodosConLimite(btn, limiteMonto) {
   const cantidadPendientes = document.querySelectorAll('.btn-facturar').length;
   if (!cantidadPendientes) {
     alert('No hay comprobantes pendientes para facturar.');
@@ -1331,20 +1419,18 @@ async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
   }
 
   const mensajeLimite = limiteMonto
-    ? ` Se va a detener apenas el acumulado facturado llegue a $${limiteMonto.toLocaleString('es-AR')}.`
+    ? ` Se va a detener apenas el acumulado facturado llegue a ${formatoMonto(limiteMonto)}.`
     : '';
   const ok = confirm(
     `Esto va a facturar los comprobantes pendientes de esta empresa, UNO POR UNO, contra ARCA real. ` +
-    `Cada uno genera una factura real con CAE. No se puede deshacer.${mensajeLimite} ¿Confirmás?`
+    `Cada uno genera una factura real con CAE. No se puede deshacer.${mensajeLimite} ` +
+    `Podés cerrar esta pestaña o el navegador entero una vez que arranque -- sigue corriendo en el servidor. ¿Confirmás?`
   );
   if (!ok) return;
 
-  const btnDetener = document.getElementById('btnDetenerFacturacion');
+  const textoOriginal = btn.textContent;
   btn.disabled = true;
-  btn.textContent = 'Facturando... no cierres esta pestaña';
-  btnDetener.style.display = 'inline-block';
-  btnDetener.disabled = false;
-  btnDetener.textContent = 'Detener';
+  btn.textContent = 'Iniciando...';
   try {
     const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos`, {
       method: 'POST',
@@ -1352,22 +1438,42 @@ async function facturarTodosConLimite(btn, limiteMonto, textoBotonOriginal) {
       body: JSON.stringify({ limite_monto: limiteMonto }),
     });
     const data = await r.json();
-    if (data.ok) {
-      const corte = data.resumen.detenido_por_limite
-        ? `\n\nSe detuvo porque el próximo comprobante superaba el límite de $${limiteMonto.toLocaleString('es-AR')}. Quedaron comprobantes sin facturar.`
-        : data.resumen.detenido_manualmente
-        ? `\n\nSe detuvo porque tocaste "Detener". Quedaron comprobantes sin facturar.`
-        : '';
-      alert(`Listo. Facturados: ${data.resumen.facturados} · Errores: ${data.resumen.errores} · Monto facturado: $${data.resumen.monto_facturado.toLocaleString('es-AR')}${corte}`);
-    } else {
-      alert('Error: ' + data.error);
+    if (!data.ok) {
+      alert('No se pudo arrancar: ' + data.error);
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+      return;
     }
   } catch (e) {
     alert('No se pudo conectar con el servidor.');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    return;
   }
-  btnDetener.style.display = 'none';
-  window.location.reload();
+
+  // Arrancó bien del lado del servidor -- desde acá en más, el progreso se
+  // sigue por polling, no importa si se cierra esta pestaña.
+  asegurarPollingFacturacion();
+  consultarEstadoFacturacion();
 }
+
+// Si había un lote corriendo de antes (se cerró la pestaña, o se recargó
+// la página, a mitad de camino), retoma mostrando el progreso apenas
+// carga -- pero solo si de verdad sigue en curso; si ya había terminado
+// de una corrida pasada, no hay nada que avisar de nuevo.
+(async () => {
+  let data;
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos/estado`);
+    data = await r.json();
+  } catch (e) {
+    return;
+  }
+  if (data.ok && data.en_curso) {
+    actualizarUiProgresoFacturacion(data);
+    asegurarPollingFacturacion();
+  }
+})();
 
 document.getElementById('btnDetenerFacturacion').addEventListener('click', async () => {
   const btnDetener = document.getElementById('btnDetenerFacturacion');
