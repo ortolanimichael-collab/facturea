@@ -5,59 +5,165 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoFacturación — Crear cuenta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFEDE2; --paper-2:#F7F5EC; --ink:#21261F; --muted:#66665C;
-    --teal:#0F6E56; --teal-deep:#085041; --stamp:#A32D2D; --line: rgba(33,38,31,0.16);
-    --mono: "IBM Plex Mono", monospace; --sans: "Manrope", sans-serif;
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --line-navy: rgba(255,255,255,0.16);
+    --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);}
-  .wrap{max-width:1120px;margin:0 auto;padding:32px 24px 80px;}
-  .logo{font-family:var(--mono);font-weight:700;font-size:19px;display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);}
-  .logo .dot{width:9px;height:9px;background:var(--teal);border-radius:50%;}
-  .card{max-width:420px;margin:60px auto;background:var(--paper-2);border:1.5px solid var(--ink);border-radius:2px;padding:32px;}
-  h1{font-family:var(--mono);font-size:22px;margin-bottom:6px;}
-  p.sub{color:var(--muted);font-size:13.5px;margin-bottom:24px;}
-  label{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-bottom:5px;margin-top:14px;}
-  input{width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:3px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);}
-  input:focus{outline:none;border-color:var(--teal);}
-  .btn{
-    display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
-    font-family:var(--mono);font-weight:600;font-size:14px;padding:12px 18px;border-radius:3px;
-    cursor:pointer;border:1.5px solid var(--teal-deep);background:var(--teal);color:#F7F5EC;margin-top:22px;
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
   }
-  .link-alt{display:block;text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
-  .link-alt a{color:var(--teal-deep);font-weight:600;text-decoration:none;}
-  .flash{font-family:var(--mono);font-size:12.5px;padding:10px 14px;border-radius:3px;margin-bottom:16px;background:#F5DEDE;color:var(--stamp);}
-  .trial-note{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:18px;text-align:center;}
+  a{color:inherit;}
+  img,svg{display:block;max-width:100%;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:var(--sans);font-weight:700;font-size:14.5px;
+    padding:13px 24px;border-radius:8px;
+    text-decoration:none;cursor:pointer;border:1.5px solid transparent;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  .btn:hover{filter:brightness(1.06);}
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--blue);color:#FFFFFF;}
+  .btn-primary:hover{background:var(--blue-deep);}
+
+  /* ---------- HEADER (igual que index.html) ---------- */
+  header{position:sticky;top:0;z-index:50;}
+  .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
+  .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-mark{width:32px;height:32px;flex:none;}
+  .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
+  .logo-sub{font-size:11px;color:#9FB3D9;letter-spacing:0.04em;margin-top:1px;}
+  .nav-auth{display:flex;gap:14px;align-items:center;}
+  .nav-auth a:not(.btn){font-family:var(--sans);font-size:13.5px;font-weight:600;text-decoration:none;color:#D6E1F5;}
+  .nav-auth a:not(.btn):hover{color:#fff;}
+  @media (max-width:480px){ .logo-sub{display:none;} }
+
+  /* ---------- AUTH CARD (mismo componente .panel del hero de index.html) ---------- */
+  .auth-shell{flex:1;display:flex;align-items:center;justify-content:center;padding:56px 24px;}
+  .auth-wrap{width:100%;max-width:440px;}
+  .panel{
+    background:var(--navy-deep);
+    border-radius:14px;
+    overflow:hidden;
+    color:#fff;
+    border:1px solid var(--navy-mid);
+  }
+  .panel-head{display:flex;align-items:center;gap:10px;padding:24px 26px 4px;}
+  .panel-head .dot{width:30px;height:30px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;flex:none;}
+  .panel-head h1{color:#fff;font-size:19px;font-weight:800;font-family:var(--sans);letter-spacing:-0.01em;}
+  .panel-sub{padding:0 26px;color:#B9CBEF;font-size:13.5px;margin-top:4px;}
+  .panel-body{padding:20px 26px 26px;}
+
+  .form-label{
+    font-family:var(--sans);font-size:11.5px;font-weight:700;letter-spacing:0.04em;
+    text-transform:uppercase;color:#9FB3D9;display:block;margin:16px 0 6px;
+  }
+  .form-label:first-of-type{margin-top:0;}
+  .panel-body input{
+    width:100%;font-family:var(--sans);font-size:14.5px;padding:11px 14px;border-radius:8px;
+    border:1.5px solid var(--navy-mid);background:var(--navy);color:#fff;
+  }
+  .panel-body input::placeholder{color:#8194BC;}
+  .panel-body input:focus{outline:none;border-color:var(--blue);}
+
+  .panel .btn-primary{width:100%;justify-content:center;margin-top:22px;}
+  .panel-divider{border-top:1px solid var(--navy-mid);margin:18px 0 14px;}
+  .panel-link{display:block;text-align:center;font-size:13.5px;font-weight:600;color:#B9CBEF;text-decoration:none;padding:6px 0;}
+  .panel-link:hover{color:#fff;}
+  .trial-note{font-family:var(--sans);font-size:12px;color:#8194BC;margin-top:16px;text-align:center;font-weight:600;}
+
+  .flash{
+    font-family:var(--sans);font-size:13px;padding:11px 14px;border-radius:8px;margin-bottom:16px;
+    background:rgba(211,71,71,0.18);color:#FFD3D3;border:1px solid rgba(255,120,120,0.35);
+  }
+
+  footer{padding:24px 0;border-top:1px solid var(--line);background:var(--paper-2);}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <a href="/" class="logo"><img src="/static/img/logo-icon.png" alt="AutoFacturación" style="width:26px;height:26px;">AutoFacturación</a>
-  <div class="card">
-    <h1>Creá tu cuenta</h1>
-    <p class="sub">Empezá a facturar sin tipear un solo dato a mano.</p>
 
-    {% if error %}<div class="flash">{{ error }}</div>{% endif %}
+<header>
+  <div class="bar-top">
+    <div class="wrap">
+      <a href="/" class="logo">
+        <img src="/static/img/logo-icon.png" class="logo-mark" alt="AutoFacturación">
+        <div>
+          <div class="logo-text">AutoFacturación</div>
+          <div class="logo-sub">Facturación electrónica automática</div>
+        </div>
+      </a>
+      <nav class="nav-auth">
+        <a href="/login">¿Ya tenés cuenta? Iniciar sesión</a>
+      </nav>
+    </div>
+  </div>
+</header>
 
-    <form method="POST">
-      <label>Nombre o razón social</label>
-      <input type="text" name="nombre" required>
+<div class="auth-shell">
+  <div class="auth-wrap">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="dot">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 12L10 16L18 8" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h1>Creá tu cuenta</h1>
+      </div>
+      <p class="panel-sub">Empezá a facturar sin tipear un solo dato a mano.</p>
+      <div class="panel-body">
+        {% if error %}<div class="flash">{{ error }}</div>{% endif %}
 
-      <label>Email</label>
-      <input type="email" name="email" required>
+        <form method="POST">
+          <label class="form-label">Nombre o razón social</label>
+          <input type="text" name="nombre" required>
 
-      <label>Contraseña</label>
-      <input type="password" name="password" required minlength="6">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" required>
 
-      <button type="submit" class="btn">Crear cuenta</button>
-    </form>
-    <p class="trial-note">Arrancás con 15 días de prueba, sin tarjeta.</p>
-    <p class="link-alt">¿Ya tenés cuenta? <a href="/login">Iniciar sesión</a></p>
+          <label class="form-label">Contraseña</label>
+          <input type="password" name="password" required minlength="6">
+
+          <button type="submit" class="btn btn-primary">Crear cuenta</button>
+        </form>
+        <p class="trial-note">Arrancás con 15 días de prueba, sin tarjeta.</p>
+        <div class="panel-divider"></div>
+        <a href="/login" class="panel-link">¿Ya tenés cuenta? Iniciar sesión</a>
+      </div>
+    </div>
   </div>
 </div>
+
+<footer>
+  <div class="wrap foot-row">
+    <p>AutoFacturación — facturación automática para monotributistas y responsables inscriptos · Río Tercero, Córdoba</p>
+    <p>© 2026</p>
+  </div>
+</footer>
+
 </body>
 </html>
