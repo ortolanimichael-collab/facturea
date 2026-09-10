@@ -19,6 +19,8 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for, s
 from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, DIAS_PRUEBA_GRATIS
 import drive_sync
@@ -34,6 +36,26 @@ import mercadopago_cliente
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "clave-de-desarrollo-cambiar-en-produccion")
 init_db(app)
+
+# Rate limiting por IP -- pensado sobre todo para /api/demo/leer-comprobante
+# (el demo público de la landing que corre OCR real sin login: sin esto,
+# cualquiera podría mandar pedidos en cadena y consumir la cuota de
+# procesamiento del servidor con bots o pruebas masivas). Guarda los
+# contadores EN MEMORIA del proceso -- por eso, para que cuente bien,
+# necesita que el servidor corra con un solo worker de Gunicorn
+# (GUNICORN_WORKERS=1, ver entrypoint.sh), lo mismo que ya hacía falta para
+# que el progreso de "Facturar todo lo pendiente" funcionara bien entre
+# pedidos. Si en algún momento se pasa a más de un worker, esto necesita
+# guardarse en algo compartido (ej. Redis) para seguir contando correcto.
+limiter = Limiter(key_func=get_remote_address, app=app, storage_uri="memory://")
+
+
+@app.errorhandler(429)
+def limite_de_pedidos_superado(e):
+    # Respuesta en JSON (no el HTML por defecto de Flask-Limiter) porque
+    # todas las rutas que tienen un límite son endpoints de API que el
+    # frontend consume con fetch() y espera json().
+    return jsonify(ok=False, error="Demasiados intentos. Esperá un momento y probá de nuevo."), 429
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
@@ -518,6 +540,7 @@ def seguridad_datos():
 
 
 @app.route("/api/leads/whatsapp", methods=["POST"])
+@limiter.limit("20 per hour")
 def lead_whatsapp():
     """
     La landing (ver enviarWhatsapp() en templates/index.html) manda acá el
@@ -541,6 +564,7 @@ def lead_whatsapp():
 
 
 @app.route("/api/demo/leer-comprobante", methods=["POST"])
+@limiter.limit("2 per minute;5 per hour;15 per day")
 def demo_leer_comprobante():
     """
     Demo público de la landing (sección "Probalo con tu propio
@@ -557,10 +581,9 @@ def demo_leer_comprobante():
     sentido mostrar en una vista previa) -- no todo el diccionario interno
     del lector.
 
-    OJO: esta ruta es pública y hace OCR (trabajo pesado de CPU) sin
-    login ni límite de uso -- alguien podría mandar pedidos en cadena para
-    saturar el servidor. Si se ve abuso real, conviene sumarle un límite de
-    pedidos por IP (por ejemplo con Flask-Limiter), que hoy no está.
+    Limitada a 2 por minuto / 5 por hora / 15 por día por IP (ver el
+    decorador @limiter.limit arriba) -- así nadie puede saturar el servidor
+    de OCR mandando pedidos en cadena o subidas de prueba masivas.
     """
     archivo = request.files.get("archivo")
     if not archivo or not archivo.filename:
@@ -603,6 +626,7 @@ def demo_leer_comprobante():
 
 
 @app.route("/api/leads/demo", methods=["POST"])
+@limiter.limit("20 per hour")
 def lead_demo():
     """
     El email que deja la persona en la landing DESPUÉS de ver el resultado
