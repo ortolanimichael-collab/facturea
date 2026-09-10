@@ -5,6 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoFacturación — Facturación masiva y procesamiento automatizado de comprobantes</title>
 <meta name="description" content="AutoFacturación lee tus comprobantes de Mercado Pago, transferencias y bancos, y ejecuta la emisión masiva de comprobantes electrónicos ante la plataforma web de la ARCA. Para monotributistas y responsables inscriptos.">
+
+<!-- Open Graph / WhatsApp, Facebook, LinkedIn, etc.: genera la tarjeta de
+     vista previa cuando se comparte el link. Los valores de "og:image" y
+     "og:url" son absolutos a propósito -- las apps que arman la vista
+     previa (WhatsApp incluido) no siempre resuelven bien una ruta relativa. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://facturea-yzzx.onrender.com/">
+<meta property="og:site_name" content="AutoFacturación">
+<meta property="og:locale" content="es_AR">
+<meta property="og:title" content="AutoFacturación — Facturación masiva y procesamiento automatizado de comprobantes">
+<meta property="og:description" content="Plataforma SaaS que procesa comprobantes mediante visión artificial y ejecuta la emisión masiva de comprobantes electrónicos ante la ARCA. Para monotributistas y responsables inscriptos.">
+<meta property="og:image" content="https://facturea-yzzx.onrender.com/static/img/logo-full.png">
+
+<!-- Twitter/X usa sus propias etiquetas (no lee Open Graph siempre) -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AutoFacturación — Facturación masiva y procesamiento automatizado de comprobantes">
+<meta name="twitter:description" content="Plataforma SaaS que procesa comprobantes mediante visión artificial y ejecuta la emisión masiva de comprobantes electrónicos ante la ARCA.">
+<meta name="twitter:image" content="https://facturea-yzzx.onrender.com/static/img/logo-full.png">
+
+<!-- Favicon -->
+<link rel="icon" href="/static/img/logo-icon.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1081,7 +1103,7 @@ async function enviarWhatsapp(e){
   const nombre = document.getElementById('nombre').value.trim();
   const tel = document.getElementById('whatsapp').value.trim();
   // TODO: reemplazar por el número real del negocio (formato 549XXXXXXXXXX)
-  const numeroNegocio = "5493513000000";
+  const numeroNegocio = "5493571618367";
 
   // Guarda el contacto en el servidor ANTES de abrir WhatsApp -- así queda
   // para remarketing aunque la persona después no llegue a escribir de
