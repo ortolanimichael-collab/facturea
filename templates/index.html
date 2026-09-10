@@ -244,7 +244,14 @@
   }
 
   .demo-upload-resultado{background:var(--paper-2);border:1.5px solid var(--blue);border-radius:14px;padding:24px;}
-  .demo-upload-resultado-titulo{font-family:var(--sans);font-weight:800;font-size:15px;color:#1C8A50;margin-bottom:14px;}
+  .demo-upload-resultado-cabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .demo-upload-resultado-titulo{font-family:var(--sans);font-weight:800;font-size:15px;color:#1C8A50;margin-bottom:0;}
+  .btn-mini-ghost{
+    font-family:var(--sans);font-weight:700;font-size:12.5px;color:var(--blue-deep);
+    background:transparent;border:1.5px solid var(--blue-deep);border-radius:8px;
+    padding:6px 12px;cursor:pointer;white-space:nowrap;transition:background .15s ease, color .15s ease;
+  }
+  .btn-mini-ghost:hover{background:var(--blue-deep);color:#fff;}
   .demo-upload-cta{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);}
   .demo-upload-cta-texto{font-family:var(--sans);font-size:13.5px;color:var(--muted);margin-bottom:10px;}
   .demo-upload-form{display:flex;gap:8px;flex-wrap:wrap;}
@@ -797,7 +804,10 @@
         </div>
 
         <div class="demo-upload-resultado" id="demoResultado" style="display:none;">
-          <p class="demo-upload-resultado-titulo">✓ Esto es lo que encontramos</p>
+          <div class="demo-upload-resultado-cabecera">
+            <p class="demo-upload-resultado-titulo">✓ Esto es lo que encontramos</p>
+            <button type="button" class="btn-mini-ghost" id="btnOtroComprobante">Subir otro comprobante</button>
+          </div>
           <table class="mock-tabla-limpia">
             <tbody>
               <tr><td>Monto</td><td class="valor" id="resMonto">—</td></tr>
@@ -1270,6 +1280,24 @@ async function enviarWhatsapp(e){
     errorEl.textContent = msg;
     errorEl.style.display = 'block';
   }
+
+  function reiniciarDemo(){
+    // Vuelve a la zona de arrastre en blanco -- limpia el archivo elegido
+    // (si no se limpia el <input>, el navegador no dispara "change" al
+    // elegir el MISMO archivo dos veces seguidas) y el email que haya
+    // quedado cargado de un intento anterior.
+    inputArchivo.value = '';
+    if (formEmail) {
+      const emailInput = document.getElementById('emailDemo');
+      if (emailInput) emailInput.value = '';
+      const boton = formEmail.querySelector('button');
+      if (boton) { boton.disabled = false; boton.textContent = 'Facturarlo ante ARCA'; }
+    }
+    mostrarSoloUno(dropZone);
+  }
+
+  const btnOtro = document.getElementById('btnOtroComprobante');
+  if (btnOtro) btnOtro.addEventListener('click', reiniciarDemo);
 
   async function procesarArchivo(archivo){
     if (!archivo) return;
