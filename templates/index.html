@@ -87,6 +87,7 @@
   header{position:sticky;top:0;z-index:50;}
   .bar-top{background:var(--navy-deep);border-bottom:2px solid var(--blue);}
   .bar-top .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;}
+  .bar-top-right{display:flex;align-items:center;gap:14px;}
   .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
   .logo-mark{width:32px;height:32px;flex:none;}
   .logo-text{font-family:var(--sans);font-weight:800;font-size:19px;letter-spacing:-0.01em;color:#FFFFFF;}
@@ -101,7 +102,20 @@
   .nav-links{display:flex;gap:28px;align-items:center;padding:12px 24px;}
   .nav-links a{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;text-decoration:none;color:#C9D5EE;}
   .nav-links a:hover{color:#fff;}
-  @media (max-width:720px){ .nav-links{display:none;} }
+  .nav-toggle{display:none;}
+  @media (max-width:720px){
+    .nav-toggle{
+      display:flex;align-items:center;justify-content:center;
+      width:36px;height:36px;background:transparent;border:1.5px solid rgba(255,255,255,0.3);
+      border-radius:8px;cursor:pointer;padding:0;flex:none;
+    }
+    .nav-links{
+      flex-direction:column;align-items:flex-start;gap:0;padding:0;
+      max-height:0;overflow:hidden;transition:max-height .25s ease;
+    }
+    .nav-links.abierto{max-height:280px;padding:6px 0;}
+    .nav-links a{width:100%;padding:13px 24px;border-top:1px solid rgba(255,255,255,0.1);}
+  }
 
   /* ---------- HERO ---------- */
   .hero{padding:64px 0 56px;position:relative;}
@@ -387,8 +401,9 @@
   }
 
   /* ---------- SECTION SHELL ---------- */
-  section{padding:76px 0;}
+  section{padding:108px 0;}
   section.alt{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  @media (max-width:720px){ section{padding:64px 0;} }
   .section-head{max-width:640px;margin-bottom:48px;}
   .section-head h2{font-size:28px;margin-top:10px;}
   .section-head p{color:var(--muted);font-size:15.5px;margin-top:12px;}
@@ -475,7 +490,8 @@
   .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
 
   /* ---------- TESTIMONIOS Y AUTORIDAD ---------- */
-  .testimonios{padding:56px 0;background:var(--navy-deep);position:relative;}
+  .testimonios{padding:108px 0;background:var(--navy-deep);position:relative;}
+  @media (max-width:720px){ .testimonios{padding:64px 0;} }
   .testimonios .section-head{margin-bottom:36px;}
   .testimonios .eyebrow{color:var(--blue);}
   .testimonios .section-head h2{color:#fff;}
@@ -541,14 +557,19 @@
           <div class="logo-sub">Plataforma de Automatización e Integración Fiscal</div>
         </div>
       </a>
-      <nav class="nav-auth">
-        <a href="/login">Iniciar sesión</a>
-        <a href="/registro" class="btn btn-primary">Crear cuenta</a>
-      </nav>
+      <div class="bar-top-right">
+        <nav class="nav-auth">
+          <a href="/login">Iniciar sesión</a>
+          <a href="/registro" class="btn btn-primary">Crear cuenta</a>
+        </nav>
+        <button type="button" class="nav-toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6H20M4 12H20M4 18H20" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </div>
   </div>
   <div class="bar-nav">
-    <div class="wrap nav-links">
+    <div class="wrap nav-links" id="navLinks">
       <a href="#como-funciona">Proceso</a>
       <a href="#funciones">Funcionalidades</a>
       <a href="#para-quien">Perfiles de Uso</a>
@@ -561,219 +582,114 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div>
-        <p class="eyebrow">Facturación Electrónica · Soluciones para Monotributistas y Responsables Inscriptos</p>
-        <h1>Automatice la emisión de comprobantes fiscales y elimine la carga operativa en el Portal Oficial de la ARCA.</h1>
-        <p class="lead">Plataforma SaaS que procesa comprobantes mediante visión artificial y ejecuta la emisión masiva por lotes en minutos. Máxima precisión e integración fiscal.</p>
+        <p class="eyebrow">Facturación automática en Argentina</p>
+        <h1>Facturá cientos de comprobantes de Mercado Pago y bancos en 3 clics (sin tocar la web de ARCA).</h1>
+        <p class="lead">AutoFacturación lee tus comprobantes, extrae los montos automáticamente y emite tus facturas A, B o C masivamente con CAE. Ahorrá hasta 10 horas de burocracia cada mes.</p>
         <div class="hero-cta">
-          <a href="/registro" class="btn btn-primary">Iniciar prueba gratuita de 15 días</a>
-          <a href="#como-funciona" class="btn btn-ghost">Ver demostración de la plataforma</a>
+          <a href="/registro" class="btn btn-primary">Probar gratis por 15 días — Subí tu primer comprobante</a>
+          <a href="#como-funciona" class="btn btn-ghost">Ver cómo funciona</a>
         </div>
-        <p class="hero-note">15 días gratis para probar · sin tarjeta de crédito</p>
+        <p class="hero-note">Configuración en 3 minutos · Sin tarjeta de crédito · Funciona con Monotributo y RI</p>
         <div class="badge-seguridad">
           <div class="badge-seguridad-icono" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 11V8a6 6 0 1112 0v3M5 11h14a1 1 0 011 1v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a1 1 0 011-1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div>
             <div class="badge-seguridad-titulo">Cifrado y seguridad de nivel bancario</div>
-            <div class="badge-seguridad-texto">Sus credenciales se resguardan bajo estrictos protocolos de encriptación. Si prefiere no compartir su Clave Fiscal principal, puede operar bajo el esquema de Delegación de Servicios de la ARCA (Usuario Delegado), creado exclusivamente para este fin.</div>
+            <div class="badge-seguridad-texto">Sus credenciales se resguardan bajo estrictos protocolos de encriptación. Si prefiere no compartir su Clave Fiscal principal, puede operar bajo el esquema de Delegación de Servicios de la ARCA (Usuario Delegado).</div>
           </div>
         </div>
       </div>
 
       <div>
-        <div class="demo demo-protagonista" id="demoFacturando" aria-label="Animación mostrando comprobantes pasando de pendiente a facturado con CAE">
-          <div class="demo-head">
-            <div class="demo-head-left">
-              <span class="demo-live-dot" aria-hidden="true"></span>
-              <span class="demo-head-title">Procesamiento y emisión de lote — Período Septiembre</span>
-            </div>
-            <span class="demo-head-count" id="demoContador">0 de 6 comprobantes emitidos</span>
-          </div>
-          <div class="demo-lista" id="demoLista">
-            <div class="demo-fila" data-monto="$14.500">
-              <span class="demo-fila-cliente">Celeste R.</span>
-              <span class="demo-fila-monto">$14.500</span>
-              <span class="demo-fila-estado pendiente">Pendiente</span>
-            </div>
-            <div class="demo-fila" data-monto="$8.200">
-              <span class="demo-fila-cliente">Martín A.</span>
-              <span class="demo-fila-monto">$8.200</span>
-              <span class="demo-fila-estado pendiente">Pendiente</span>
-            </div>
-            <div class="demo-fila" data-monto="$22.900">
-              <span class="demo-fila-cliente">Kiosco Del Sol</span>
-              <span class="demo-fila-monto">$22.900</span>
-              <span class="demo-fila-estado pendiente">Pendiente</span>
-            </div>
-            <div class="demo-fila" data-monto="$5.750">
-              <span class="demo-fila-cliente">Julieta P.</span>
-              <span class="demo-fila-monto">$5.750</span>
-              <span class="demo-fila-estado pendiente">Pendiente</span>
-            </div>
-            <div class="demo-fila" data-monto="$31.400">
-              <span class="demo-fila-cliente">Distribuidora Norte</span>
-              <span class="demo-fila-monto">$31.400</span>
-              <span class="demo-fila-estado pendiente">Pendiente</span>
-            </div>
-            <div class="demo-fila" data-monto="$11.100">
-              <span class="demo-fila-cliente">Bruno S.</span>
-              <span class="demo-fila-monto">$11.100</span>
-              <span class="demo-fila-estado pendiente">Pendiente</span>
-            </div>
-          </div>
-          <div class="demo-foot">
-            <span class="demo-foot-cae">Último CAE: <b id="demoCae">—</b></span>
-            <span class="demo-foot-cae" id="demoMontoTotal">$0 facturados</span>
-          </div>
-        </div>
-        <p class="demo-nota">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 12L10 16L18 8" stroke="#1C8A50" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Demostración en tiempo real del motor de procesamiento masivo y validación de CAE.
+        <p class="hero-demo-label">
+          <span class="demo-live-dot" aria-hidden="true"></span>
+          Probalo ahora mismo, sin crear cuenta
         </p>
+        <div class="demo-upload demo-upload-hero" id="demoUpload">
+          <div class="demo-upload-zona" id="dropZone">
+            <input type="file" id="inputArchivoDemo" accept=".jpg,.jpeg,.png,.pdf" hidden>
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 4V16M12 4L7 9M12 4L17 9" stroke="#28A9E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 16V18C4 19.1 4.9 20 6 20H18C19.1 20 20 19.1 20 18V16" stroke="#28A9E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <p class="demo-upload-titulo">Arrastre o seleccione un comprobante para su análisis</p>
+            <p class="demo-upload-sub">Soporta formatos JPG, PNG y PDF (hasta 8 MB)</p>
+          </div>
+
+          <div class="demo-upload-cargando" id="demoCargando" style="display:none;">
+            <span class="demo-live-dot" aria-hidden="true"></span>
+            Leyendo tu comprobante...
+          </div>
+
+          <div class="demo-upload-resultado" id="demoResultado" style="display:none;">
+            <div class="demo-upload-resultado-cabecera">
+              <p class="demo-upload-resultado-titulo">✓ Datos extraídos por el motor de visión artificial</p>
+              <button type="button" class="btn-mini-ghost" id="btnOtroComprobante">Subir otro comprobante</button>
+            </div>
+            <table class="mock-tabla-limpia">
+              <tbody>
+                <tr><td>Monto</td><td class="valor" id="resMonto">—</td></tr>
+                <tr><td>Fecha</td><td class="valor" id="resFecha">—</td></tr>
+                <tr><td>Medio de pago</td><td class="valor" id="resMedioPago">—</td></tr>
+                <tr><td>N° de movimiento</td><td class="valor" id="resIdTransaccion">—</td></tr>
+              </tbody>
+            </table>
+            <div class="demo-upload-cta">
+              <p class="demo-upload-cta-texto">Dejá tu email y te llevamos directo a crear la cuenta para facturar esto ante ARCA:</p>
+              <form class="demo-upload-form" id="formEmailDemo">
+                <input type="email" id="emailDemo" placeholder="tu@email.com" required>
+                <button type="submit" class="btn btn-primary">Facturarlo ante ARCA</button>
+              </form>
+            </div>
+          </div>
+
+          <p class="demo-upload-error" id="demoError" style="display:none;"></p>
+        </div>
       </div>
     </div>
     <svg class="divisor-curvo" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0,0 C480,58 960,58 1440,0 L1440,60 L0,60 Z" fill="#0F1B3D"></path>
     </svg>
   </section>
-
-  <section class="testimonios">
+  <section id="integraciones" class="franja-integraciones alt">
     <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Casos de Éxito y Validación Comercial</p>
-        <h2>Resultados verificados en empresas y profesionales</h2>
-        <p>Opiniones de contribuyentes que optimizaron su flujo de facturación mensual.</p>
-      </div>
-      <div class="testi-grid">
-        <div class="testi-card">
-          <div class="testi-chat-fondo">
-            <div class="testi-chat-burbuja">
-              Antes perdía mi único día libre, el domingo, tipeando más de 150 comprobantes a mano en la página de ARCA. Ahora arrastro las capturas, reviso 2 minutos, y el sistema liquida todo el mes de un saque. Me ahorra 6 horas de trabajo administrativo por semana.
-              <div class="testi-chat-hora">10:42</div>
-            </div>
-          </div>
-          <div class="testi-persona">
-            <img src="/static/img/testimonios/marcos.jpg" class="testi-avatar-foto" alt="Marcos">
-            <div>
-              <div class="testi-nombre">Marcos <span class="apellido-oculto">Retamozo</span></div>
-              <div class="testi-rubro">Dueño de minimercado</div>
-            </div>
-          </div>
-        </div>
-        <div class="testi-card">
-          <div class="testi-chat-fondo">
-            <div class="testi-chat-burbuja">
-              Tener el taller lleno de equipos para reparar y encima tener que frenar para hacer facturas C una por una era insostenible. Pasé de demorar 10 minutos por cliente a facturar el lote de la semana entera en 3 clicks. Me liberó la cabeza para enfocarme 100% en el trabajo productivo.
-              <div class="testi-chat-hora">18:07</div>
-            </div>
-          </div>
-          <div class="testi-persona">
-            <img src="/static/img/testimonios/julian.jpg" class="testi-avatar-foto" alt="Julián">
-            <div>
-              <div class="testi-nombre">Julián <span class="apellido-oculto">Manzanelli</span></div>
-              <div class="testi-rubro">Servicio técnico</div>
-            </div>
-          </div>
-        </div>
-        <div class="testi-card">
-          <div class="testi-chat-fondo">
-            <div class="testi-chat-burbuja">
-              Manejo más de 200 transferencias mensuales por Mercado Pago y billeteras virtuales. Antes cruzaba datos en Excel a mano con un margen de error altísimo. El sistema automatizó la carga y me ahorra literalmente dos días enteros de trabajo burocrático al mes.
-              <div class="testi-chat-hora">09:15</div>
-            </div>
-          </div>
-          <div class="testi-persona">
-            <img src="/static/img/testimonios/sofia.jpg" class="testi-avatar-foto" alt="Sofía">
-            <div>
-              <div class="testi-nombre">Sofía <span class="apellido-oculto">Beltrán</span></div>
-              <div class="testi-rubro">Tienda online</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="plataformas">
-        <p class="plataformas-label">Lee comprobantes y se conecta con</p>
-        <div class="plataformas-fila">
-          <span class="plataforma-chip"><span class="dot-chip"></span>Mercado Pago</span>
-          <span class="plataforma-chip"><span class="dot-chip"></span>Ualá</span>
-          <span class="plataforma-chip"><span class="dot-chip"></span>AstroPay</span>
-          <span class="plataforma-chip"><span class="dot-chip"></span>ARCA</span>
-        </div>
-      </div>
-    </div>
-    <svg class="divisor-curvo" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M0,0 C480,58 960,58 1440,0 L1440,60 L0,60 Z" fill="#FFFFFF"></path>
-    </svg>
-  </section>
-
-  <section id="como-funciona" class="alt">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Proceso</p>
-        <h2>Proceso operativo en 3 etapas integradas</h2>
-        <p>Elimine el tipeo manual en hojas de cálculo y el ingreso individual en el sistema de la ARCA. Nuestra arquitectura automatiza la lectura, conciliación y emisión fiscal.</p>
-      </div>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <h3>Carga masiva o sincronización de API</h3>
-          <p>Cargue archivos en lote sin importar su origen, o integre directamente las API de sus billeteras virtuales y entidades financieras.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <h3>Conciliación y auditoría de datos</h3>
-          <p>El motor OCR extrae automáticamente montos, fechas e identificadores. Acceda a una grilla de control para auditar y ajustar los registros previo a la emisión.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <h3>Emisión masiva e integración fiscal</h3>
-          <p>En un solo comando, el sistema procesa la nómina directamente contra los servidores de la ARCA, emitiendo comprobantes (Factura A, B o C) con CAE individualizado.</p>
-        </div>
+      <p class="integraciones-label">Lee comprobantes de estas plataformas, y factura automáticamente contra ARCA</p>
+      <div class="integraciones-fila">
+        <span class="integracion-chip">ARCA</span>
+        <span class="integracion-chip">Mercado Pago</span>
+        <span class="integracion-chip">Ualá</span>
+        <span class="integracion-chip">Banco Galicia</span>
+        <span class="integracion-chip">BBVA</span>
+        <span class="integracion-chip">Santander</span>
       </div>
     </div>
   </section>
-
-  <section id="calculadora">
+  <section id="dolor">
     <div class="wrap">
       <div class="section-head">
-        <p class="eyebrow">Estimación de Eficiencia Operativa</p>
-        <h2>¿Cuál es el costo operativo de su proceso de facturación manual?</h2>
-        <p>Movés los controles con tus números reales y mirá la cuenta.</p>
+        <p class="eyebrow">El problema real</p>
+        <h2>De domingos perdidos tipeando, a un proceso de minutos</h2>
+        <p>Facturar a mano no solo consume horas: multiplica el riesgo de error en cada comprobante.</p>
       </div>
-      <div class="roi-calc">
-        <div class="roi-controles">
-          <div class="roi-control">
-            <label for="roiCantidad">¿Cuántos comprobantes facturás por mes?</label>
-            <input type="range" id="roiCantidad" min="10" max="500" step="10" value="100">
-            <div class="roi-valor"><span id="roiCantidadValor">100</span> comprobantes por mes</div>
-          </div>
-          <div class="roi-control">
-            <label for="roiMinutos">Tiempo promedio de procesamiento manual por comprobante (minutos)</label>
-            <input type="range" id="roiMinutos" min="1" max="15" step="1" value="5">
-            <div class="roi-valor"><span id="roiMinutosValor">5</span> minutos por comprobante</div>
-          </div>
-        </div>
-        <div class="roi-resultado">
-          <p class="roi-resultado-label">Carga operativa actual</p>
-          <p class="roi-resultado-horas"><span id="roiHoras">8,3</span> horas al mes</p>
-          <p class="roi-resultado-sub">dedicadas a la transcripción manual en el Portal Web de la ARCA</p>
-          <div class="roi-divider"></div>
-          <p class="roi-resultado-label">Con AutoFacturación</p>
-          <p class="roi-resultado-autofact">~3 minutos</p>
-          <p class="roi-resultado-sub">mediante ejecución batch automatizada</p>
-          <a href="/registro" class="btn btn-primary" style="margin-top:18px;width:100%;justify-content:center;">Recuperar ese tiempo gratis</a>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <section id="probalo">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Probalo ahora, sin crear cuenta</p>
-        <h2>Conversión de documentos no estructurados en registros fiscales listos para emisión</h2>
-        <p>Mirá el ejemplo de abajo, y después probá con un comprobante tuyo — es gratis y podés ver el resultado antes de registrarte.</p>
+      <div class="antes-despues">
+        <div class="antes-despues-col antes">
+          <p class="antes-despues-titulo">❌ Antes</p>
+          <ul class="lista-check lista-check-antes">
+            <li>Cargar cada comprobante a mano, uno por uno, en la web de ARCA</li>
+            <li>Cruzar datos en Excel con un margen de error altísimo</li>
+            <li>Perder el fin de semana en tareas administrativas</li>
+          </ul>
+        </div>
+        <div class="antes-despues-col despues">
+          <p class="antes-despues-titulo">✓ Con AutoFacturación</p>
+          <ul class="lista-check">
+            <li>Subís el lote completo de comprobantes de una sola vez</li>
+            <li>El sistema extrae y valida los datos automáticamente</li>
+            <li>Facturás todo el mes en minutos, no en horas</li>
+          </ul>
+        </div>
       </div>
 
       <div class="comparativa">
@@ -808,50 +724,35 @@
           </table>
         </div>
       </div>
-
-      <div class="demo-upload" id="demoUpload">
-        <div class="demo-upload-zona" id="dropZone">
-          <input type="file" id="inputArchivoDemo" accept=".jpg,.jpeg,.png,.pdf" hidden>
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 4V16M12 4L7 9M12 4L17 9" stroke="#28A9E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M4 16V18C4 19.1 4.9 20 6 20H18C19.1 20 20 19.1 20 18V16" stroke="#28A9E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <p class="demo-upload-titulo">Arrastre o seleccione un comprobante para su análisis</p>
-          <p class="demo-upload-sub">Soporta formatos JPG, PNG y PDF (hasta 8 MB)</p>
+      <p class="dolor-nota">¿Ya probaste la zona de arriba? Así es exactamente lo que pasa por dentro.</p>
+    </div>
+  </section>
+  <section id="como-funciona" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Proceso</p>
+        <h2>Proceso operativo en 3 etapas integradas</h2>
+        <p>Elimine el tipeo manual en hojas de cálculo y el ingreso individual en el sistema de la ARCA. Nuestra arquitectura automatiza la lectura, conciliación y emisión fiscal.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Carga masiva o sincronización de API</h3>
+          <p>Cargue archivos en lote sin importar su origen, o integre directamente las API de sus billeteras virtuales y entidades financieras.</p>
         </div>
-
-        <div class="demo-upload-cargando" id="demoCargando" style="display:none;">
-          <span class="demo-live-dot" aria-hidden="true"></span>
-          Leyendo tu comprobante...
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Conciliación y auditoría de datos</h3>
+          <p>El motor OCR extrae automáticamente montos, fechas e identificadores. Acceda a una grilla de control para auditar y ajustar los registros previo a la emisión.</p>
         </div>
-
-        <div class="demo-upload-resultado" id="demoResultado" style="display:none;">
-          <div class="demo-upload-resultado-cabecera">
-            <p class="demo-upload-resultado-titulo">✓ Datos extraídos por el motor de visión artificial</p>
-            <button type="button" class="btn-mini-ghost" id="btnOtroComprobante">Subir otro comprobante</button>
-          </div>
-          <table class="mock-tabla-limpia">
-            <tbody>
-              <tr><td>Monto</td><td class="valor" id="resMonto">—</td></tr>
-              <tr><td>Fecha</td><td class="valor" id="resFecha">—</td></tr>
-              <tr><td>Medio de pago</td><td class="valor" id="resMedioPago">—</td></tr>
-              <tr><td>N° de movimiento</td><td class="valor" id="resIdTransaccion">—</td></tr>
-            </tbody>
-          </table>
-          <div class="demo-upload-cta">
-            <p class="demo-upload-cta-texto">Dejá tu email y te llevamos directo a crear la cuenta para facturar esto ante ARCA:</p>
-            <form class="demo-upload-form" id="formEmailDemo">
-              <input type="email" id="emailDemo" placeholder="tu@email.com" required>
-              <button type="submit" class="btn btn-primary">Facturarlo ante ARCA</button>
-            </form>
-          </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Emisión masiva e integración fiscal</h3>
+          <p>En un solo comando, el sistema procesa la nómina directamente contra los servidores de la ARCA, emitiendo comprobantes (Factura A, B o C) con CAE individualizado.</p>
         </div>
-
-        <p class="demo-upload-error" id="demoError" style="display:none;"></p>
       </div>
     </div>
   </section>
-
   <section id="funciones">
     <div class="wrap">
       <div class="section-head">
@@ -872,9 +773,12 @@
         </div>
         <div class="feature">
           <div class="feature-icon">A·B</div>
-          <h3>Soporte Multi-régimen Fiscal</h3>
-          <p>Emisión de Facturas C para Monotributistas. Facturas A y B con discriminación automática de alícuotas de IVA para Responsables Inscriptos — actualmente en etapa final de validación, con revisión manual sin cargo adicional.</p>
+          <h3>Emisión en ARCA multi-régimen</h3>
+          <p>Facturas C para Monotributistas. Facturas A y B con IVA discriminado para Responsables Inscriptos — en etapa final de validación, con revisión manual sin cargo adicional.</p>
         </div>
+      </div>
+
+      <div class="features features-extra" id="featuresExtra">
         <div class="feature">
           <div class="feature-icon">✓</div>
           <h3>Revisión antes de facturar</h3>
@@ -887,13 +791,15 @@
         </div>
         <div class="feature">
           <div class="feature-icon">🔒</div>
-          <h3>Tus datos, en tu propia cuenta</h3>
+          <h3>Tus datos, en tu propia cuenta (Google Drive)</h3>
           <p>Cada empresa puede guardar sus comprobantes en su propio Google Drive, y la Clave Fiscal siempre queda cifrada.</p>
         </div>
       </div>
+      <button type="button" class="btn-ver-mas" id="btnVerMasFunciones" aria-expanded="false" aria-controls="featuresExtra">
+        + Ver 3 funciones más (revisión antes de facturar, uso desde el celular, Google Drive)
+      </button>
     </div>
   </section>
-
   <section id="para-quien" class="alt">
     <div class="wrap">
       <div class="section-head">
@@ -920,7 +826,98 @@
       </div>
     </div>
   </section>
-
+  <section id="calculadora">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Estimación de Eficiencia Operativa</p>
+        <h2>¿Cuál es el costo operativo de su proceso de facturación manual?</h2>
+        <p>Movés los controles con tus números reales y mirá la cuenta.</p>
+      </div>
+      <div class="roi-calc">
+        <div class="roi-controles">
+          <div class="roi-control">
+            <label for="roiCantidad">¿Cuántos comprobantes facturás por mes?</label>
+            <input type="range" id="roiCantidad" min="10" max="500" step="10" value="100">
+            <div class="roi-valor"><span id="roiCantidadValor">100</span> comprobantes por mes</div>
+          </div>
+          <div class="roi-control">
+            <label for="roiMinutos">Tiempo promedio de procesamiento manual por comprobante (minutos)</label>
+            <input type="range" id="roiMinutos" min="1" max="15" step="1" value="5">
+            <div class="roi-valor"><span id="roiMinutosValor">5</span> minutos por comprobante</div>
+          </div>
+        </div>
+        <div class="roi-resultado">
+          <p class="roi-resultado-label">Carga operativa actual</p>
+          <p class="roi-resultado-horas"><span id="roiHoras">8,3</span> horas al mes</p>
+          <p class="roi-resultado-sub">dedicadas a la transcripción manual en el Portal Web de la ARCA</p>
+          <div class="roi-divider"></div>
+          <p class="roi-resultado-label">Con AutoFacturación</p>
+          <p class="roi-resultado-autofact">~3 minutos</p>
+          <p class="roi-resultado-sub">mediante ejecución batch automatizada</p>
+          <a href="/registro" class="btn btn-primary" style="margin-top:18px;width:100%;justify-content:center;">Recuperar ese tiempo gratis</a>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="testimonios">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Casos de Éxito y Validación Comercial</p>
+        <h2>Resultados verificados en empresas y profesionales</h2>
+        <p>Opiniones de contribuyentes que optimizaron su flujo de facturación mensual.</p>
+      </div>
+      <div class="testi-grid">
+        <div class="testi-card">
+          <div class="testi-chat-fondo">
+            <div class="testi-chat-burbuja">
+              Antes perdía mi único día libre, el domingo, tipeando más de 150 comprobantes a mano en la página de ARCA. Ahora arrastro las capturas, reviso 2 minutos, y el sistema liquida todo el mes de un saque. Me ahorra 6 horas de trabajo administrativo por semana.
+              <div class="testi-chat-hora">10:42</div>
+            </div>
+          </div>
+          <div class="testi-persona">
+            <img src="/static/img/testimonios/marcos.jpg" class="testi-avatar-foto" alt="Marcos">
+            <div>
+              <div class="testi-nombre">Marcos</div>
+              <div class="testi-rubro">Dueño de minimercado</div>
+            </div>
+          </div>
+        </div>
+        <div class="testi-card">
+          <div class="testi-chat-fondo">
+            <div class="testi-chat-burbuja">
+              Tener el taller lleno de equipos para reparar y encima tener que frenar para hacer facturas C una por una era insostenible. Pasé de demorar 10 minutos por cliente a facturar el lote de la semana entera en 3 clicks. Me liberó la cabeza para enfocarme 100% en el trabajo productivo.
+              <div class="testi-chat-hora">18:07</div>
+            </div>
+          </div>
+          <div class="testi-persona">
+            <img src="/static/img/testimonios/julian.jpg" class="testi-avatar-foto" alt="Julián">
+            <div>
+              <div class="testi-nombre">Julián</div>
+              <div class="testi-rubro">Servicio técnico</div>
+            </div>
+          </div>
+        </div>
+        <div class="testi-card">
+          <div class="testi-chat-fondo">
+            <div class="testi-chat-burbuja">
+              Manejo más de 200 transferencias mensuales por Mercado Pago y billeteras virtuales. Antes cruzaba datos en Excel a mano con un margen de error altísimo. El sistema automatizó la carga y me ahorra literalmente dos días enteros de trabajo burocrático al mes.
+              <div class="testi-chat-hora">09:15</div>
+            </div>
+          </div>
+          <div class="testi-persona">
+            <img src="/static/img/testimonios/sofia.jpg" class="testi-avatar-foto" alt="Sofía">
+            <div>
+              <div class="testi-nombre">Sofía</div>
+              <div class="testi-rubro">Tienda online</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <svg class="divisor-curvo" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,0 C480,58 960,58 1440,0 L1440,60 L0,60 Z" fill="#FFFFFF"></path>
+    </svg>
+  </section>
   <section id="planes">
     <div class="wrap">
       <div class="section-head">
@@ -1014,7 +1011,6 @@
       <p class="plans-note">La facturación automática para Responsable Inscripto está en su etapa final de pruebas — mientras tanto, se factura con revisión manual, sin cargo extra. Por eso estos son precios de lanzamiento: van a subir cuando el producto salga de esta etapa beta.</p>
     </div>
   </section>
-
   <section id="sumarme" class="alt">
     <div class="wrap">
       <div class="cta-box">
@@ -1032,7 +1028,6 @@
       </div>
     </div>
   </section>
-
   <section id="faq">
     <div class="wrap">
       <div class="section-head">
@@ -1041,12 +1036,22 @@
       </div>
       <div class="faq">
         <div class="faq-item">
-          <h3>¿Cómo gestiona la plataforma las interrupciones en los servicios de la ARCA?</h3>
-          <p>En caso de indisponibilidad temporal en los servidores de la ARCA, el comprobante se clasifica en estado pendiente con el detalle técnico del rechazo. El usuario puede reintentar la transmisión individual o ejecutar nuevamente la emisión masiva del lote una vez restablecido el servicio oficial.</p>
+          <button type="button" class="faq-pregunta" aria-expanded="false">
+            <span>¿Cómo gestiona la plataforma las interrupciones en los servicios de la ARCA?</span>
+            <svg class="faq-flecha" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="faq-respuesta">
+            <p>En caso de indisponibilidad temporal en los servidores de la ARCA, el comprobante se clasifica en estado pendiente con el detalle técnico del rechazo. El usuario puede reintentar la transmisión individual o ejecutar nuevamente la emisión masiva del lote una vez restablecido el servicio oficial.</p>
+          </div>
         </div>
         <div class="faq-item">
-          <h3>¿Qué mecanismos previenen la duplicación accidental de comprobantes?</h3>
-          <p>El sistema reconoce el ID de transacción de cada comprobante (por ejemplo, el de un pago de Mercado Pago) y, si ya existe otro comprobante facturado con ese mismo ID, no te deja facturarlo de nuevo — te avisa el conflicto en vez de duplicar la factura.</p>
+          <button type="button" class="faq-pregunta" aria-expanded="false">
+            <span>¿Qué mecanismos previenen la duplicación accidental de comprobantes?</span>
+            <svg class="faq-flecha" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="faq-respuesta">
+            <p>El sistema reconoce el ID de transacción de cada comprobante (por ejemplo, el de un pago de Mercado Pago) y, si ya existe otro comprobante facturado con ese mismo ID, no te deja facturarlo de nuevo — te avisa el conflicto en vez de duplicar la factura.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -1126,109 +1131,6 @@ async function enviarWhatsapp(e){
   window.open(`https://wa.me/${numeroNegocio}?text=${mensaje}`, "_blank");
   return false;
 }
-</script>
-
-<script>
-/* ---------- Animación del hero: lista de comprobantes pasando de
-   "Pendiente" a "Emitido con CAE asignado ✓" en secuencia, en loop. ---------- */
-(function(){
-  const lista = document.getElementById('demoLista');
-  if (!lista) return;
-
-  const filas = Array.from(lista.querySelectorAll('.demo-fila'));
-  const contador = document.getElementById('demoContador');
-  const caeEl = document.getElementById('demoCae');
-  const totalEl = document.getElementById('demoMontoTotal');
-  const total = filas.length;
-
-  function parseMonto(str){
-    return parseInt((str || '').replace(/[^\d]/g, ''), 10) || 0;
-  }
-  function formatoMonto(n){
-    return '$' + n.toLocaleString('es-AR');
-  }
-  function caeFalso(){
-    // Solo para la animación -- nunca es un CAE real.
-    let s = '7';
-    for (let i = 0; i < 13; i++) s += Math.floor(Math.random() * 10);
-    return s;
-  }
-
-  function resetear(){
-    filas.forEach(f => {
-      f.classList.remove('recien-facturado');
-      const estado = f.querySelector('.demo-fila-estado');
-      estado.textContent = 'Pendiente';
-      estado.className = 'demo-fila-estado pendiente';
-    });
-    contador.textContent = `0 de ${total} comprobantes emitidos`;
-    caeEl.textContent = '—';
-    totalEl.textContent = '$0 emitidos';
-  }
-
-  let timeoutId = null;
-
-  function correrCiclo(){
-    resetear();
-    let acumulado = 0;
-    let i = 0;
-
-    function paso(){
-      if (i >= total) {
-        timeoutId = setTimeout(correrCiclo, 2600); // pausa antes de reiniciar el ciclo
-        return;
-      }
-      const fila = filas[i];
-      const estado = fila.querySelector('.demo-fila-estado');
-
-      estado.textContent = 'Emitiendo...';
-      estado.className = 'demo-fila-estado procesando';
-
-      timeoutId = setTimeout(() => {
-        estado.textContent = 'Emitido con CAE asignado ✓';
-        estado.className = 'demo-fila-estado facturado';
-        fila.classList.add('recien-facturado');
-
-        acumulado += parseMonto(fila.dataset.monto);
-        contador.textContent = `${i + 1} de ${total} comprobantes emitidos`;
-        caeEl.textContent = caeFalso();
-        totalEl.textContent = formatoMonto(acumulado) + ' emitidos';
-
-        i++;
-        timeoutId = setTimeout(paso, 480);
-      }, 520);
-    }
-    paso();
-  }
-
-  // Si la persona prefiere menos movimiento, se muestra el resultado final
-  // ya resuelto en vez de animar -- sin loop infinito de por medio.
-  const prefiereMenosMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (prefiereMenosMovimiento) {
-    let acumulado = 0;
-    filas.forEach(f => {
-      const estado = f.querySelector('.demo-fila-estado');
-      estado.textContent = 'Emitido con CAE asignado ✓';
-      estado.className = 'demo-fila-estado facturado';
-      acumulado += parseMonto(f.dataset.monto);
-    });
-    contador.textContent = `${total} de ${total} comprobantes emitidos`;
-    caeEl.textContent = caeFalso();
-    totalEl.textContent = formatoMonto(acumulado) + ' emitidos';
-  } else {
-    correrCiclo();
-  }
-
-  // Pausa la animación cuando la pestaña no está visible, para no gastar
-  // batería/CPU de gusto en un dispositivo mientras nadie la está mirando.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && timeoutId) {
-      clearTimeout(timeoutId);
-    } else if (!document.hidden && !prefiereMenosMovimiento) {
-      correrCiclo();
-    }
-  });
-})();
 </script>
 
 <script>
@@ -1392,6 +1294,61 @@ async function enviarWhatsapp(e){
       window.location.href = '/registro?email=' + encodeURIComponent(email);
     });
   }
+})();
+</script>
+
+<script>
+/* ---------- Menú hamburguesa (mobile) ---------- */
+(function(){
+  const btn = document.getElementById('navToggle');
+  const links = document.getElementById('navLinks');
+  if (!btn || !links) return;
+
+  btn.addEventListener('click', () => {
+    const abierto = links.classList.toggle('abierto');
+    btn.setAttribute('aria-expanded', String(abierto));
+  });
+
+  // Si tocan un link del menú, se cierra solo (evita que quede abierto
+  // tapando la sección a la que acaban de saltar).
+  links.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      links.classList.remove('abierto');
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
+</script>
+
+<script>
+/* ---------- FAQ en acordeón ---------- */
+(function(){
+  document.querySelectorAll('.faq-item').forEach(item => {
+    const boton = item.querySelector('.faq-pregunta');
+    if (!boton) return;
+    boton.addEventListener('click', () => {
+      const abierto = item.classList.toggle('abierto');
+      boton.setAttribute('aria-expanded', String(abierto));
+    });
+  });
+})();
+</script>
+
+<script>
+/* ---------- "Ver 3 funciones más" (Funcionalidades) ---------- */
+(function(){
+  const btn = document.getElementById('btnVerMasFunciones');
+  const extra = document.getElementById('featuresExtra');
+  if (!btn || !extra) return;
+
+  const textoCerrado = btn.textContent;
+  const textoAbierto = 'Ver menos';
+
+  btn.addEventListener('click', () => {
+    const abierto = extra.classList.toggle('abierto');
+    btn.setAttribute('aria-expanded', String(abierto));
+    btn.textContent = abierto ? textoAbierto : textoCerrado;
+  });
 })();
 </script>
 
