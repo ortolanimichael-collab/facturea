@@ -1908,6 +1908,102 @@ def registro_agregar_manual(empresa_id, registro_id):
     return jsonify(ok=True, comprobante_id=comprobante.id)
 
 
+@app.route("/empresas/<int:empresa_id>/comprobantes/agregar-manual", methods=["POST"])
+@login_required
+def comprobantes_agregar_manual(empresa_id):
+    """
+    Carga uno o varios comprobantes "a mano", sin pasar por ningún archivo ni
+    por el lector -- el usuario elige directamente fecha y monto de cada uno
+    (y, si la empresa es Responsable Inscripto, la alícuota de IVA). Arrancan
+    con el resto de los valores por defecto de la Empresa, mismo criterio que
+    registro_agregar_manual(), y quedan como cualquier otro comprobante
+    pendiente: se pueden revisar/editar en Revisión Manual antes de facturar.
+
+    Espera JSON: {"filas": [{"fecha": "dd/mm/aaaa", "monto": 1234.5,
+    "alicuota": "21"}, ...]}. "alicuota" se ignora si la empresa es
+    Monotributo (no discrimina IVA); si falta, se usa la primera alícuota
+    configurada en la empresa.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    datos = request.get_json(silent=True) or {}
+    filas = datos.get("filas")
+    if not isinstance(filas, list) or not filas:
+        return jsonify(ok=False, error="No se recibió ninguna fila para cargar."), 400
+    if len(filas) > 200:
+        return jsonify(ok=False, error="Máximo 200 comprobantes por carga."), 400
+
+    dias_atras = empresa.config_dias_atras_fecha_emision or 10
+    fecha_default = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
+    alicuota_default = (empresa.config_alicuota_iva or "").split(",")[0] or None
+    condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else ""
+    tipo_comprobante_default = (empresa.config_tipo_comprobante or "").split(",")[0]
+
+    if empresa.config_descripcion_aleatoria:
+        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    else:
+        opciones_descripcion = []
+
+    creados = []
+    for i, fila in enumerate(filas, start=1):
+        fecha = str(fila.get("fecha") or fecha_default).strip()
+        try:
+            datetime.strptime(fecha, "%d/%m/%Y")
+        except ValueError:
+            return jsonify(ok=False, error=f"Fila {i}: la fecha \"{fecha}\" no es válida (formato dd/mm/aaaa)."), 400
+
+        try:
+            monto = float(str(fila.get("monto", 0)).replace(",", "."))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, error=f"Fila {i}: el monto no es un número válido."), 400
+        if monto < 0:
+            return jsonify(ok=False, error=f"Fila {i}: el monto no puede ser negativo."), 400
+
+        descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+
+        if empresa.tipo_contribuyente == "Responsable Inscripto":
+            alicuota = fila.get("alicuota") or alicuota_default
+            # Si la descripción elegida tiene su propia alícuota configurada,
+            # esa tiene prioridad (mismo criterio que el resto del sistema).
+            alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(descripcion_elegida)
+            if alicuota_de_la_descripcion is not None:
+                alicuota = alicuota_de_la_descripcion
+        else:
+            alicuota = None  # Monotributo no discrimina IVA -- se ignora aunque venga cargada
+
+        comprobante = Comprobante(
+            usuario_id=current_user.id,
+            empresa_id=empresa.id,
+            id_transaccion=None,  # cargado a mano -- no participa de la detección de duplicados
+            punto_venta=empresa.config_punto_venta,
+            tipo_comprobante=tipo_comprobante_default,
+            concepto=concepto_efectivo(fecha, empresa.config_concepto, dias_atras),
+            alicuota_iva=alicuota,
+            descripcion=descripcion_elegida,
+            unidad_medida=empresa.config_unidad_medida,
+            precio_unitario=monto,
+            tipo_documento="DNI",
+            cuit_receptor="",
+            nombre_razon_social="CONSUMIDOR FINAL",
+            fecha_comprobante=fecha,
+            medio_pago_detectado="Transferencia",
+            condicion_iva=empresa.config_condicion_iva,
+            condicion_venta=condicion_venta_default,
+            fecha_desde=fecha,
+            fecha_hasta=fecha,
+            importe_total=monto,
+            cantidad=1.0,
+            archivo_origen="Carga manual",
+        )
+        db.session.add(comprobante)
+        creados.append(comprobante)
+
+    db.session.commit()
+    return jsonify(ok=True, cantidad=len(creados), ids=[c.id for c in creados])
+
+
 @app.route("/empresas/<int:empresa_id>/comprobantes/detener-facturacion", methods=["POST"])
 @login_required
 def detener_facturacion(empresa_id):
