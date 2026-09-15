@@ -139,14 +139,54 @@ def elegir_punto_de_venta_y_tipo_comprobante(ventana, punto_venta, texto_tipo_co
     el cliente configuró) y ARCA puede mandar por un flujo de pasos
     distinto según qué tipo haya quedado seleccionado.
 
-    El punto de venta se elige por VALOR interno (ej: "1"), porque ese
+    El punto de venta se elige por VALOR interno (ej: "4"), porque ese
     desplegable muestra la dirección completa en el texto y es más frágil
-    matchear por texto. El tipo de comprobante se elige por el TEXTO visible
-    (ej: "Factura C"), porque no tenemos mapeados los códigos numéricos
-    internos de cada tipo -- esto también evita tener que armar un mapa a
-    mano para las variantes MiPyMEs (FCE) el día que algún cliente las use.
+    matchear por texto. Pero ARCA no siempre devuelve ese valor en el mismo
+    formato: algunas cuentas lo dan tal cual ("2"), otras con ceros a la
+    izquierda a 5 dígitos ("00004") -- confirmado que cambió entre una
+    grabación vieja y una empresa nueva en la versión v5.0.2 de RCEL, y que
+    antes rompía en silencio: Playwright se quedaba esperando a que
+    apareciera una opción con el valor exacto configurado, sin avisar que
+    en realidad el problema era solo de formato, hasta tirar timeout a los
+    30 segundos. Por eso acá no se asume ningún formato fijo: se leen TODAS
+    las opciones reales del <select> y se elige la que coincide en valor
+    NUMÉRICO con el punto de venta configurado (comparando como int, así
+    "4" y "00004" matchean igual). Si de verdad no hay ninguna que
+    coincida, se corta con un error claro que lista las opciones reales,
+    en vez de dejar que Playwright se quede esperando hasta el timeout.
+
+    El tipo de comprobante se elige por el TEXTO visible (ej: "Factura C"),
+    porque no tenemos mapeados los códigos numéricos internos de cada tipo
+    -- esto también evita tener que armar un mapa a mano para las
+    variantes MiPyMEs (FCE) el día que algún cliente las use.
     """
-    ventana.locator("#puntodeventa").select_option(punto_venta)
+    select_punto_venta = ventana.locator("#puntodeventa")
+    select_punto_venta.wait_for(state="visible", timeout=45000)
+
+    valor_real = None
+    valores_disponibles = []
+    for opcion in select_punto_venta.locator("option").all():
+        valor_opcion = (opcion.get_attribute("value") or "").strip()
+        if not valor_opcion:
+            continue  # la opción "Seleccionar..." u otra sin valor real -- se ignora
+        valores_disponibles.append(valor_opcion)
+        try:
+            coincide = int(valor_opcion) == int(str(punto_venta).strip())
+        except ValueError:
+            continue  # valor no numérico -- no puede ser un punto de venta real
+        if coincide:
+            valor_real = valor_opcion
+            break
+
+    if valor_real is None:
+        raise ValueError(
+            f"El punto de venta configurado (\"{punto_venta}\") no aparece entre las opciones reales "
+            f"que ARCA muestra para esta empresa ahora mismo: {', '.join(valores_disponibles) or '(ninguna disponible)'}. "
+            "Revisá 'Punto de venta por defecto' en la configuración de la empresa, o si hace falta "
+            "habilitar ese punto de venta en ARCA (Administración de puntos de venta y domicilios)."
+        )
+
+    select_punto_venta.select_option(valor_real)
     ventana.locator("#universocomprobante").select_option(label=texto_tipo_comprobante)
     ventana.get_by_role("button", name="Continuar >").click()
 
