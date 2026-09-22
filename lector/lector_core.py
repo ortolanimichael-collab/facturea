@@ -1,5 +1,7 @@
 import pytesseract
 from PIL import Image, ImageOps, ImageEnhance
+import cv2
+import numpy as np
 import os
 import pandas as pd
 import re
@@ -89,6 +91,29 @@ def preprocesar_imagen_oscura(ruta):
     img = img.point(lambda x: 0 if x < 180 else 255)
     return img
 
+def preprocesar_imagen_cupon_pos(ruta):
+    """
+    Preprocesamiento para FOTOS de un cupón de papel de POS/datáfono (ej.
+    Payway) -- muy distinto a una captura de pantalla de una app: tiene
+    ruido fotográfico, luz pareja pero no uniforme (sombras, pliegues del
+    papel) y, en el caso de Payway, un watermark diagonal celeste "SIN
+    VALIDEZ FISCAL" superpuesto. El binarizado simple de umbral fijo que
+    usa preprocesar_imagen() (pensado para capturas de pantalla, siempre
+    parejas) daba texto casi ilegible acá -- se probó contra dos cupones
+    reales y esta combinación (escala 3x + reducción de ruido + umbral
+    ADAPTATIVO, que ajusta el corte blanco/negro por zona en vez de uno
+    fijo para toda la imagen) fue la única que leyó bien el total, el tipo
+    de tarjeta y el número de cupón/autorización en los dos.
+    """
+    img = cv2.imread(ruta, cv2.IMREAD_GRAYSCALE)
+    img = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    img = cv2.fastNlMeansDenoising(img, h=10)
+    return cv2.adaptiveThreshold(
+        img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,
+        blockSize=35, C=10,
+    )
+
+
 def detectar_fondo_oscuro(ruta):
     """
     Retorna True si la imagen tiene fondo predominantemente oscuro.
@@ -176,8 +201,12 @@ def _detectar_medio_pago(texto):
     últimos dígitos que muestra el comprobante (nunca el número completo de
     la tarjeta -- eso no lo ve ni siquiera el que cobra, por seguridad).
     """
+    # El sufijo "o" queda opcional ([oa]?) porque algunos POS (confirmado con
+    # un cupón real de Payway) imprimen la palabra en inglés sin traducir --
+    # "MASTERCARD DEBIT TERMINADA EN 9004" en vez de "...débito...". Sin esto,
+    # "debit" no matcheaba porque el patrón exigía la palabra completa "débito".
     patron = re.search(
-        r'([A-Za-záéíóúüñÁÉÍÓÚÜÑ]+)\s+(d[eé]bito|cr[eé]dito)\s+terminada\s+en\s+(\d+)',
+        r'([A-Za-záéíóúüñÁÉÍÓÚÜÑ]+)\s+(d[eé]bit[oa]?|cr[eé]dit[oa]?)\s+terminada\s+en\s+(\d+)',
         texto, re.IGNORECASE,
     )
     if patron:
@@ -198,8 +227,8 @@ def _detectar_medio_pago(texto):
     # los últimos dígitos detrás de un enmascarado con asteriscos, no la
     # frase "terminada en X".
     patron_pos = re.search(
-        r'Tarjeta\s+([A-Za-záéíóúüñÁÉÍÓÚÜÑ]+)\s+(d[eé]bito|cr[eé]dito)\b'
-        r'(?:\s+(?:d[eé]bito|cr[eé]dito))?'
+        r'Tarjeta\s+([A-Za-záéíóúüñÁÉÍÓÚÜÑ]+)\s+(d[eé]bit[oa]?|cr[eé]dit[oa]?)\b'
+        r'(?:\s+(?:d[eé]bit[oa]?|cr[eé]dit[oa]?))?'
         r'\s*\*{1,2}\s*(\d{3,6})\b',
         texto, re.IGNORECASE,
     )
@@ -1051,6 +1080,48 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
         es_brubank = 'brubank' in texto
         es_lemon   = 'lemon' in texto or 'digifin' in texto
 
+        # ── DETECCIÓN CUPÓN DE POS (Payway y similares) ─────────────────────
+        # Cupón físico de un posnet/datáfono (Payway confirmado con un
+        # comprobante real) por una venta cobrada con tarjeta -- NO es una
+        # transferencia ni un pago de Mercado Pago. Muestra el nombre y CUIT
+        # del COMERCIO (nuestro propio cliente, el que cobra), un total, y
+        # "<Marca> Débito/Crédito terminada en <últimos dígitos>", pero NUNCA
+        # el nombre de quien pagó con la tarjeta -- eso no lo ve ni siquiera
+        # el comercio. Se identifica por "payway" (la marca del cupón) o,
+        # para otros procesadores de POS que no digan "payway" pero repitan
+        # el mismo layout, por tener juntas las tres etiquetas típicas de un
+        # cupón de tarjeta: "cupón", "autorización" y "terminal".
+        es_payway = 'payway' in texto
+        es_ticket_pos_tarjeta = es_payway or (
+            ('cupón' in texto or 'cupon' in texto)
+            and ('autorización' in texto or 'autorizacion' in texto)
+            and 'terminal' in texto
+        )
+
+        # Si la primera pasada (preprocesamiento pensado para capturas de
+        # pantalla de apps) no encontró ningún indicio de cupón de POS, se
+        # prueba una segunda pasada con preprocesamiento para FOTOS de papel
+        # -- confirmado necesario con cupones reales de Payway, donde la
+        # primera pasada devolvía texto casi ilegible (por el watermark
+        # diagonal y las sombras/pliegues del papel) y ni siquiera llegaba a
+        # reconocer la palabra "payway". Si esta segunda pasada tampoco
+        # encuentra nada, se seguía de largo como cualquier imagen no
+        # reconocida (mismo comportamiento que antes de este cambio).
+        if not es_ticket_pos_tarjeta:
+            texto_cupon_pos = pytesseract.image_to_string(
+                preprocesar_imagen_cupon_pos(ruta_imagen), lang='spa', config='--psm 6'
+            ).lower()
+            es_payway_v2 = 'payway' in texto_cupon_pos
+            es_ticket_pos_tarjeta = es_payway_v2 or (
+                ('cupón' in texto_cupon_pos or 'cupon' in texto_cupon_pos)
+                and ('autorización' in texto_cupon_pos or 'autorizacion' in texto_cupon_pos)
+                and 'terminal' in texto_cupon_pos
+            )
+            if es_ticket_pos_tarjeta:
+                texto = texto_cupon_pos
+                es_payway = es_payway_v2
+                print(f"  🎫 [Ticket-POS] Detectado en segunda pasada (preprocesamiento de foto de papel).")
+
         # ── DETECCIÓN BANCO SIN NOMBRE (formato "Detalle" con Débito/Crédito) ─
         # Capturas del tipo: pantalla "Detalle" con campos Movimiento, Fecha, Débito, Crédito.
         # No tienen logo ni nombre de banco. Se identifican por la combinación de:
@@ -1112,6 +1183,16 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
             uala_id_pattern = r'[il]d\.?\s*op\.?\s*[\s\n]*([a-z0-9]{10,40})'
             match_uala = re.search(uala_id_pattern, texto_sin_cbus)
 
+            # Prioridad especial: cupón de POS/Payway -- no tiene ningún ID
+            # largo tipo COELSA/Ualá, así que se arma con Nro. cupón +
+            # Nro. autorización (+ Terminal si está) -- entre los tres alcanza
+            # para no chocar con otro cupón de otro día/monto. Se busca ANTES
+            # que el "Plan B" alfanumérico general de más abajo porque, sin
+            # esto, ese plan B podía llegar a agarrar el CUIT del comercio (si
+            # el OCR lo lee pegado sin guiones) como si fuera el ID.
+            match_payway_cupon = re.search(r'cup[oó]n[\s\n:]*?(\d{2,8})\b', texto_sin_cbus)
+            match_payway_autorizacion = re.search(r'autorizaci[oó]n[\s\n:]*?(\d{2,10})\b', texto_sin_cbus)
+
             # Prioridad especial: Santander "Nº comprobante  71544747"
             # Se busca número puro de 5-12 dígitos tras la etiqueta
             # Patrón ampliado: cubre nº/n°/no/n/n2/nro/num/n°. seguido de 'comprobante'
@@ -1143,6 +1224,11 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                 nro_movimiento = match_santander_num
             elif match_uala:
                 nro_movimiento = match_uala.group(1).upper()
+            elif match_payway_cupon and match_payway_autorizacion:
+                m_terminal_payway = re.search(r'terminal[\s\n:]*?(\d{4,10})\b', texto_sin_cbus)
+                terminal_id = m_terminal_payway.group(1) if m_terminal_payway else "SINTERMINAL"
+                nro_movimiento = f"POS-{terminal_id}-{match_payway_cupon.group(1)}-{match_payway_autorizacion.group(1)}"
+                print(f"  🔑 [Ticket-POS] ID armado con terminal+cupón+autorización: {nro_movimiento}")
             elif match_coelsa:
                 nro_movimiento = match_coelsa.group(1).upper()
             else:
@@ -1331,6 +1417,15 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                         print(f"  👤 [Nivel2-Ambiguo] Nombre extraído fuera de bloque Origen ('{linea[:25]}'): {nombre_razon_social}")
                         break
 
+        # ── CUPÓN DE POS/PAYWAY: nunca hay nombre de quien pagó ─────────────
+        # Un cupón de posnet muestra el nombre del COMERCIO (nuestro propio
+        # cliente), nunca el del titular de la tarjeta -- ni el comercio lo
+        # ve. Si ninguno de los niveles de arriba encontró nombre (lo normal
+        # acá), se carga directo como Consumidor Final en vez de dejar
+        # "No detectado" literal en el comprobante.
+        if es_ticket_pos_tarjeta and nombre_razon_social == "No detectado":
+            nombre_razon_social = "CONSUMIDOR FINAL"
+
         # ── BUSQUEDA DE CUIT ─────────────────────────────────────────────────
         # OJO: el patrón tiene un grupo de captura, así que se usa finditer
         # (no findall) para quedarse con el match COMPLETO de cada CUIT
@@ -1367,8 +1462,12 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
 
         # Último recurso: primer CUIT del documento (comportamiento anterior,
         # sólo se usa si no se pudo ubicar el nombre del receptor o el CUIT
-        # cercano a él).
-        if cuit == "0" and cuit_match:
+        # cercano a él). Se excluye un cupón de POS/Payway a propósito: el
+        # ÚNICO CUIT que aparece ahí es el del propio COMERCIO (nuestro
+        # cliente, bajo la etiqueta "CUIT:" al lado del nombre del negocio),
+        # nunca el de quien pagó con la tarjeta -- cargarlo como CUIT
+        # receptor sería asignarle la factura a la propia empresa.
+        if cuit == "0" and cuit_match and not es_ticket_pos_tarjeta:
             cuit = str(cuit_match.group().replace("-", "").replace(".", "").strip())
 
         # Otro CUIT/CUIL encontrado en la imagen (probablemente el emisor, ya
@@ -1463,10 +1562,32 @@ def extraer_datos_de_imagen(ruta_imagen, fecha_interfaz, cuit_propio_cliente="")
                         match_fecha = re.search(rf'(\d{{1,2}})\s+de\s+{mes_nombre}', texto)
                         if match_fecha:
                             dia = match_fecha.group(1).zfill(2)
-                            fecha_servicio = f"{dia}/{mes_num}/2026" 
+                            fecha_servicio = f"{dia}/{mes_num}/2026"
                             fecha_detectada = True
                             break
-        
+
+        # ── RESCATE DE FECHA para cupón de POS/Payway ───────────────────────
+        # El umbral adaptativo que hace legible el resto del cupón a veces
+        # (confirmado con un cupón real) pega las barras "/" de la fecha con
+        # los dígitos vecinos ("21/09/26" sale como "210926..." sin barras),
+        # y ningún patrón de arriba matchea sin barras. Con --psm 4 (asume
+        # bloques de texto separados en vez de texto disperso) esas barras sí
+        # se leyeron bien en la práctica, a costa de leer peor otros campos
+        # (por eso no se usa --psm 4 desde el principio) -- se prueba SOLO
+        # para rescatar la fecha, sin tocar ningún otro dato ya extraído.
+        if es_ticket_pos_tarjeta and not fecha_detectada:
+            texto_fecha_pos = pytesseract.image_to_string(
+                preprocesar_imagen_cupon_pos(ruta_imagen), lang='spa', config='--psm 4'
+            ).lower()
+            match_fecha_pos = re.search(r'\b(\d{1,2})[/](\d{1,2})[/](\d{2})\b', texto_fecha_pos)
+            if match_fecha_pos:
+                dia  = match_fecha_pos.group(1).zfill(2)
+                mes  = match_fecha_pos.group(2).zfill(2)
+                anio = "20" + match_fecha_pos.group(3)
+                fecha_servicio = f"{dia}/{mes}/{anio}"
+                fecha_detectada = True
+                print(f"  📅 [Ticket-POS] Fecha rescatada con --psm 4: {fecha_servicio}")
+
         # --- BUSQUEDA DE MONTO Y CENTAVOS (MEJORADA) ---
         importe_encontrado = 0.0
         monto_total_texto = ""
