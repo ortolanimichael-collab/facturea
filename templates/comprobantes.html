@@ -3,6 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+// Agrega el token CSRF a todos los fetch() que no sean GET/HEAD, sin tener
+// que tocar cada llamada una por una -- necesario porque el servidor ahora
+// exige ese token en cualquier POST (protección contra CSRF).
+(function () {
+  var token = document.querySelector('meta[name="csrf-token"]').content;
+  var fetchOriginal = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    var metodo = (init.method || 'GET').toUpperCase();
+    if (metodo !== 'GET' && metodo !== 'HEAD') {
+      init.headers = new Headers(init.headers || {});
+      if (!init.headers.has('X-CSRFToken')) {
+        init.headers.set('X-CSRFToken', token);
+      }
+    }
+    return fetchOriginal.call(this, input, init);
+  };
+})();
+</script>
 <title>AutoFacturación — Comprobantes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -119,34 +140,6 @@
   .form-agregar-manual .msg{font-family:var(--sans);font-weight:600;font-size:12px;}
   .form-agregar-manual .msg.error{color:var(--danger);}
   .form-agregar-manual .msg.success{color:var(--blue-deep);}
-
-  /* ---------- Modal: agregar comprobantes manuales ---------- */
-  #overlayCargaManual{
-    display:none;position:fixed;inset:0;background:rgba(15,27,61,0.55);z-index:1100;
-    align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;
-  }
-  .modal-carga-manual{
-    background:var(--paper-2);border-radius:14px;max-width:760px;width:100%;
-    box-shadow:0 12px 40px rgba(0,0,0,0.25);
-  }
-  .modal-carga-manual-header{
-    display:flex;align-items:center;justify-content:space-between;padding:18px 22px;
-    border-bottom:1px solid var(--line);
-  }
-  .modal-carga-manual-header h2{font-family:var(--sans);font-weight:800;font-size:16px;color:var(--ink);}
-  .btn-cerrar-modal{background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px;}
-  .btn-cerrar-modal:hover{color:var(--ink);}
-  .form-agregar-manual.en-modal{border-top:none;padding:20px 22px 22px;max-height:70vh;overflow-y:auto;}
-  .fila-carga-manual{
-    display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap;
-    border-bottom:1px dashed var(--line);padding-bottom:10px;
-  }
-  .fila-carga-manual .num-fila{font-family:var(--sans);font-weight:700;font-size:12px;color:var(--muted);width:22px;padding-bottom:9px;}
-  .fila-carga-manual > div{flex:1;min-width:130px;}
-  .fila-carga-manual select{
-    width:100%;font-family:var(--sans);font-size:13px;padding:9px 10px;border-radius:8px;
-    border:1.5px solid var(--line);background:#fff;color:var(--ink);
-  }
 
   .listas-nombres{margin-top:16px;display:flex;flex-direction:column;gap:8px;}
   .listas-nombres details{
@@ -402,7 +395,6 @@
     {% if empresa.tiene_mercadopago_conectado() %}
     <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
     {% endif %}
-    <button id="btnAbrirCargaManual" class="btn" style="background:var(--navy-mid);border-color:var(--navy-mid);">Agregar comprobante manual</button>
     <button id="btnFacturarTodo" class="btn btn-facturar-todo">Facturar todo lo pendiente</button>
     <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
     <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
@@ -413,32 +405,6 @@
   <span class="msg" id="facturacionMsg" style="display:none;margin:-8px 0 8px;"></span>
 
   <div id="resumen" class="resumen"></div>
-
-  <div id="overlayCargaManual">
-    <div class="modal-carga-manual">
-      <div class="modal-carga-manual-header">
-        <h2>Agregar comprobantes manuales</h2>
-        <button type="button" id="btnCerrarCargaManual" class="btn-cerrar-modal">&times;</button>
-      </div>
-      <div class="form-agregar-manual en-modal">
-        <div class="fila">
-          <div>
-            <label>Cantidad de comprobantes</label>
-            <input type="number" id="cantidadCargaManual" min="1" max="200" value="1">
-          </div>
-          <div class="acciones" style="align-self:flex-end;padding-bottom:2px;">
-            <button type="button" id="btnGenerarFilasCargaManual" class="btn">Generar filas</button>
-          </div>
-        </div>
-        <div id="filasCargaManual"></div>
-        <div class="acciones" style="margin-top:14px;">
-          <button type="button" id="btnGuardarCargaManual" class="btn" disabled>Guardar comprobantes</button>
-          <button type="button" id="btnCancelarCargaManual" class="btn-cancelar">Cancelar</button>
-          <span class="msg" id="msgCargaManual"></span>
-        </div>
-      </div>
-    </div>
-  </div>
 
   {% set opciones_tipo_comprobante_ri = [
     "Factura A", "Nota de Débito A", "Nota de Crédito A", "Recibo A",
@@ -1790,119 +1756,6 @@ document.getElementById('btnSubir').addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Subir y leer';
-  }
-});
-
-// ---------- Agregar comprobantes manuales ----------
-const overlayCargaManual = document.getElementById('overlayCargaManual');
-const btnAbrirCargaManual = document.getElementById('btnAbrirCargaManual');
-const btnCerrarCargaManual = document.getElementById('btnCerrarCargaManual');
-const btnCancelarCargaManual = document.getElementById('btnCancelarCargaManual');
-const btnGenerarFilasCargaManual = document.getElementById('btnGenerarFilasCargaManual');
-const btnGuardarCargaManual = document.getElementById('btnGuardarCargaManual');
-const filasCargaManualDiv = document.getElementById('filasCargaManual');
-const msgCargaManual = document.getElementById('msgCargaManual');
-
-function hoyMenosDias(dias) {
-  const d = new Date();
-  d.setDate(d.getDate() - dias);
-  return d.toISOString().split('T')[0]; // yyyy-mm-dd, formato nativo de <input type=date>
-}
-
-function generarFilasCargaManual() {
-  const cantidad = Math.max(1, Math.min(200, parseInt(document.getElementById('cantidadCargaManual').value, 10) || 1));
-  filasCargaManualDiv.innerHTML = '';
-  const fechaDefault = hoyMenosDias(10);
-
-  for (let i = 1; i <= cantidad; i++) {
-    const fila = document.createElement('div');
-    fila.className = 'fila-carga-manual';
-
-    let alicuotaHtml = '';
-    if (ES_RESPONSABLE_INSCRIPTO) {
-      const opciones = Object.entries(MAPA_ALICUOTA_ETIQUETAS)
-        .map(([valor, etiqueta]) => `<option value="${valor}">${etiqueta}</option>`).join('');
-      alicuotaHtml = `<div><label>Alícuota IVA</label><select class="cm-alicuota">${opciones}</select></div>`;
-    }
-
-    fila.innerHTML = `
-      <span class="num-fila">${i}.</span>
-      <div><label>Fecha</label><input type="date" class="cm-fecha" value="${fechaDefault}"></div>
-      <div><label>Monto ($)</label><input type="number" class="cm-monto" min="0" step="0.01" placeholder="0.00"></div>
-      ${alicuotaHtml}
-    `;
-    filasCargaManualDiv.appendChild(fila);
-  }
-  btnGuardarCargaManual.disabled = false;
-  msgCargaManual.textContent = '';
-  msgCargaManual.className = 'msg';
-}
-
-btnAbrirCargaManual.addEventListener('click', () => {
-  overlayCargaManual.style.display = 'flex';
-  document.getElementById('cantidadCargaManual').value = 1;
-  generarFilasCargaManual();
-});
-
-function cerrarCargaManual() {
-  overlayCargaManual.style.display = 'none';
-}
-btnCerrarCargaManual.addEventListener('click', cerrarCargaManual);
-btnCancelarCargaManual.addEventListener('click', cerrarCargaManual);
-btnGenerarFilasCargaManual.addEventListener('click', generarFilasCargaManual);
-
-btnGuardarCargaManual.addEventListener('click', async () => {
-  const filas = Array.from(filasCargaManualDiv.querySelectorAll('.fila-carga-manual')).map((filaEl) => {
-    const fechaISO = filaEl.querySelector('.cm-fecha').value; // yyyy-mm-dd
-    const [anio, mes, dia] = fechaISO ? fechaISO.split('-') : ['', '', ''];
-    const fechaArg = fechaISO ? `${dia}/${mes}/${anio}` : '';
-    const montoEl = filaEl.querySelector('.cm-monto');
-    const alicuotaEl = filaEl.querySelector('.cm-alicuota');
-    return {
-      fecha: fechaArg,
-      monto: montoEl.value,
-      alicuota: alicuotaEl ? alicuotaEl.value : undefined,
-    };
-  });
-
-  if (filas.some((f) => !f.fecha)) {
-    msgCargaManual.textContent = 'Completá la fecha de todas las filas.';
-    msgCargaManual.className = 'msg error';
-    return;
-  }
-  if (filas.some((f) => f.monto === '' || Number(f.monto) < 0)) {
-    msgCargaManual.textContent = 'Completá un monto válido en todas las filas.';
-    msgCargaManual.className = 'msg error';
-    return;
-  }
-
-  btnGuardarCargaManual.disabled = true;
-  btnGuardarCargaManual.textContent = 'Guardando...';
-  msgCargaManual.textContent = '';
-  msgCargaManual.className = 'msg';
-
-  try {
-    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/agregar-manual`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filas }),
-    });
-    const data = await r.json();
-    if (!r.ok || !data.ok) {
-      msgCargaManual.textContent = data.error || 'No se pudieron guardar los comprobantes.';
-      msgCargaManual.className = 'msg error';
-      btnGuardarCargaManual.disabled = false;
-      btnGuardarCargaManual.textContent = 'Guardar comprobantes';
-      return;
-    }
-    msgCargaManual.textContent = `${data.cantidad} comprobante(s) agregado(s). Recargando...`;
-    msgCargaManual.className = 'msg success';
-    setTimeout(() => window.location.reload(), 900);
-  } catch (e) {
-    msgCargaManual.textContent = 'No se pudo conectar con el servidor.';
-    msgCargaManual.className = 'msg error';
-    btnGuardarCargaManual.disabled = false;
-    btnGuardarCargaManual.textContent = 'Guardar comprobantes';
   }
 });
 

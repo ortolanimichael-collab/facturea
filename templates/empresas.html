@@ -3,6 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+// Agrega el token CSRF a todos los fetch() que no sean GET/HEAD, sin tener
+// que tocar cada llamada una por una -- necesario porque el servidor ahora
+// exige ese token en cualquier POST (protección contra CSRF).
+(function () {
+  var token = document.querySelector('meta[name="csrf-token"]').content;
+  var fetchOriginal = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    var metodo = (init.method || 'GET').toUpperCase();
+    if (metodo !== 'GET' && metodo !== 'HEAD') {
+      init.headers = new Headers(init.headers || {});
+      if (!init.headers.has('X-CSRFToken')) {
+        init.headers.set('X-CSRFToken', token);
+      }
+    }
+    return fetchOriginal.call(this, input, init);
+  };
+})();
+</script>
 <title>AutoFacturación — Empresas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -155,6 +176,7 @@
         {% endif %}
         <a href="/empresas/{{ e.id }}/editar">Editar</a>
         <form method="POST" action="/empresas/{{ e.id }}/eliminar" onsubmit="return confirm('¿Eliminar esta empresa y perder el acceso a sus comprobantes?');" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="eliminar">Eliminar</button>
         </form>
       </div>
@@ -227,6 +249,7 @@
     <p class="desc">{{ "Modificá los datos de facturación de esta empresa." if empresa else "Cargá una empresa/cliente que representás en ARCA. Podés agregar todas las que necesites." }}</p>
 
     <form method="POST" action="{{ '/empresas/' + empresa.id|string + '/editar' if empresa else '/empresas' }}" id="formEmpresa">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="fila-2">
         <div class="campo">
           <label>Nombre interno (como la vas a identificar vos)</label>

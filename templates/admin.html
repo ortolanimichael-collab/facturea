@@ -122,12 +122,14 @@
         <td><span class="estado {{ u.estado }}">{{ u.estado }}</span></td>
         <td>
           <form class="metodo-form" method="POST" action="/admin/metodo_pago/{{ u.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="metodo_pago" value="{{ u.metodo_pago or '' }}" placeholder="ej: transferencia">
             <button type="submit">Guardar</button>
           </form>
         </td>
         <td>
           <form method="POST" action="/admin/renovar/{{ u.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-mini">Renovar 30 días</button>
           </form>
         </td>
@@ -172,6 +174,7 @@
         <td>
           {% if c.usado_por_otra_cuenta and not c.desbloqueado %}
           <form class="nota-form" method="POST" action="/admin/cuils/{{ c.id }}/desbloquear">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="nota_admin" placeholder="motivo (opcional)">
             <button type="submit" class="btn-mini desbloquear">Desbloquear</button>
           </form>

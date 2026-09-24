@@ -139,6 +139,7 @@
         {% if error %}<div class="flash">{{ error }}</div>{% endif %}
 
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label class="form-label">Nombre o razón social</label>
           <input type="text" name="nombre" required>
 
