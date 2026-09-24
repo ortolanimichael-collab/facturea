@@ -442,6 +442,18 @@ def init_db(app):
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
 
+    # Fuerza el driver psycopg2 (el que está instalado, ver requirements.txt)
+    # en vez de dejar que SQLAlchemy elija uno por default. Sin esto, una
+    # versión nueva de SQLAlchemy puede intentar "psycopg" (la versión 3,
+    # un paquete distinto que NO está instalado) con una URL genérica
+    # "postgresql://" -- eso es justo lo que rompió el deploy en Render
+    # ("ModuleNotFoundError: No module named 'psycopg'"), aunque nadie haya
+    # tocado esta parte del código: Render reinstala las dependencias en
+    # cada build, y una actualización de SQLAlchemy alcanzó para cambiar
+    # ese comportamiento por default de un día para el otro.
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     db.init_app(app)

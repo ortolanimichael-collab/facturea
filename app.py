@@ -69,6 +69,46 @@ init_db(app)
 # navegador) se eximen más abajo con @csrf.exempt.
 csrf = CSRFProtect(app)
 
+# Cookies de sesión más duras: "Secure" hace que el navegador nunca la
+# mande por HTTP sin cifrar, y "SameSite=Lax" es una capa extra contra CSRF
+# (además de los tokens de arriba). En local (FLASK_DEBUG=1, sin HTTPS)
+# "Secure" se desactiva para no romper el desarrollo en localhost.
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+
+# Forzar HTTPS: en Render esto ya lo maneja la plataforma, pero si el
+# proyecto se despliega en el VPS propio (ver docker-compose.yml) nada más
+# lo garantizaba -- un visitante podía entrar por HTTP y viajar sin cifrar.
+# Wsgi corre detrás de un proxy (Render, o Nginx en el VPS) que termina el
+# TLS y manda "X-Forwarded-Proto", así que se usa ProxyFix para que Flask
+# sepa que el pedido original SÍ era HTTPS, y se redirige el que no lo sea.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+
+@app.before_request
+def _forzar_https():
+    if os.environ.get("FLASK_DEBUG") == "1":
+        return  # desarrollo local, sin HTTPS
+    if request.is_secure or request.headers.get("X-Forwarded-Proto", "http") == "https":
+        return
+    url_https = request.url.replace("http://", "https://", 1)
+    return redirect(url_https, code=301)
+
+
+@app.after_request
+def _headers_de_seguridad(response):
+    # HSTS: le dice al navegador que, de acá a un año, ni siquiera intente
+    # HTTP con este dominio -- así queda protegido incluso si algún link
+    # viejo o un usuario escribe "http://" a mano.
+    if os.environ.get("FLASK_DEBUG") != "1":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
+
 # Rate limiting por IP -- pensado sobre todo para /api/demo/leer-comprobante
 # (el demo público de la landing que corre OCR real sin login: sin esto,
 # cualquiera podría mandar pedidos en cadena y consumir la cuota de
@@ -84,10 +124,33 @@ limiter = Limiter(key_func=get_remote_address, app=app, storage_uri="memory://")
 
 @app.errorhandler(429)
 def limite_de_pedidos_superado(e):
-    # Respuesta en JSON (no el HTML por defecto de Flask-Limiter) porque
-    # todas las rutas que tienen un límite son endpoints de API que el
-    # frontend consume con fetch() y espera json().
+    # La mayoría de las rutas con límite son endpoints de API que el
+    # frontend consume con fetch() y esperan json(), así que ese sigue
+    # siendo el default -- pero /login y /registro son formularios HTML
+    # normales (ver los @limiter.limit agregados ahí), y devolverles JSON
+    # crudo se ve como una página rota en vez de un aviso entendible.
+    if request.path in ("/login", "/registro"):
+        plantilla = "login.html" if request.path == "/login" else "registro.html"
+        return render_template(plantilla, error="Demasiados intentos. Esperá un momento y probá de nuevo."), 429
     return jsonify(ok=False, error="Demasiados intentos. Esperá un momento y probá de nuevo."), 429
+
+
+@app.errorhandler(404)
+def pagina_no_encontrada(e):
+    # Para las rutas de API (que el frontend consume con fetch/json()) se
+    # mantiene la respuesta JSON de siempre; para todo lo demás (una URL
+    # mal tipeada, un link viejo) se muestra una página 404 propia en vez
+    # de la pantalla genérica de Flask.
+    if request.path.startswith("/api/"):
+        return jsonify(ok=False, error="No encontrado."), 404
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def error_interno(e):
+    if request.path.startswith("/api/"):
+        return jsonify(ok=False, error="Ocurrió un error interno."), 500
+    return render_template("500.html"), 500
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
@@ -571,6 +634,60 @@ def seguridad_datos():
     return render_template("seguridad.html")
 
 
+SITIO_URL_BASE = os.environ.get("SITIO_URL_BASE", "https://facturea-yzzx.onrender.com")
+
+GA4_MEASUREMENT_ID = os.environ.get("GA4_MEASUREMENT_ID", "")
+
+
+@app.context_processor
+def _inyectar_ga4():
+    # Disponible como {{ ga4_measurement_id }} en cualquier template -- si
+    # la variable de entorno no está seteada, queda vacío y el script de
+    # Google Analytics simplemente no se imprime (ver templates/index.html).
+    return {"ga4_measurement_id": GA4_MEASUREMENT_ID}
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    contenido = (
+        "User-agent: *\n"
+        "Allow: /$\n"
+        "Allow: /terminos\n"
+        "Allow: /privacidad\n"
+        "Allow: /seguridad\n"
+        "Allow: /login\n"
+        "Allow: /registro\n"
+        # Todo lo que es panel interno de un usuario logueado no tiene nada
+        # que hacer en los resultados de Google -- son páginas privadas con
+        # datos de facturación de cada cliente.
+        "Disallow: /panel\n"
+        "Disallow: /empresas\n"
+        "Disallow: /comprobantes\n"
+        "Disallow: /soporte\n"
+        "Disallow: /admin\n"
+        "Disallow: /api/\n"
+        "Disallow: /google-drive/\n"
+        "Disallow: /mercadopago/\n"
+        f"\nSitemap: {SITIO_URL_BASE}/sitemap.xml\n"
+    )
+    return contenido, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    paginas_publicas = ["/", "/terminos", "/privacidad", "/seguridad", "/login", "/registro"]
+    items = "".join(
+        f"  <url><loc>{SITIO_URL_BASE}{ruta}</loc></url>\n" for ruta in paginas_publicas
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{items}"
+        "</urlset>\n"
+    )
+    return xml, 200, {"Content-Type": "application/xml; charset=utf-8"}
+
+
 @app.route("/api/leads/whatsapp", methods=["POST"])
 @limiter.limit("20 per hour")
 def lead_whatsapp():
@@ -583,6 +700,15 @@ def lead_whatsapp():
     guarda lo que haya, para no perder el intento por un campo de más.
     """
     datos = request.get_json(silent=True) or {}
+
+    # Honeypot antispam: "sitio_web" es un campo oculto para humanos (con
+    # CSS, ver templates/index.html) que ningún visitante real llega a
+    # completar -- solo un bot que rellena todos los inputs del formulario
+    # sin fijarse cuáles se ven. Si viene con algo, se descarta en
+    # silencio (200 igual, para no darle pistas al bot de qué falló).
+    if (datos.get("sitio_web") or "").strip():
+        return jsonify(ok=True)
+
     nombre = (datos.get("nombre") or "").strip()[:200]
     telefono = (datos.get("telefono") or "").strip()[:60]
     origen = (datos.get("origen") or "landing_whatsapp").strip()[:50]
@@ -669,6 +795,10 @@ def lead_demo():
     aunque después no termine de crear la cuenta.
     """
     datos = request.get_json(silent=True) or {}
+
+    if (datos.get("sitio_web") or "").strip():  # honeypot antispam, ver lead_whatsapp()
+        return jsonify(ok=True)
+
     email = (datos.get("email") or "").strip().lower()[:200]
     if not email or "@" not in email:
         return jsonify(ok=False, error="Ingresá un email válido."), 400
