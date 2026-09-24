@@ -2465,6 +2465,53 @@ def registros_nuevos_para_panel():
     })
 
 
+@csrf.exempt
+@app.route("/api/interno/uso-comprobantes", methods=["GET"])
+def uso_comprobantes_para_panel():
+    """
+    Panel de membresías llama ACÁ (misma clave compartida que los demás
+    endpoints /api/interno/...) para traer, de un saque, cuántos
+    comprobantes procesó cada usuario -- así la vista de "Tráfico" del
+    panel puede mostrar uso real dentro de Facturea, no solo si alguien
+    hizo login.
+
+    Devuelve, por usuario: comprobantes de ESTE mes (lo que cuenta contra
+    el límite de su plan, ver PLANES en models.py) y el total histórico.
+    """
+    clave_recibida = request.headers.get("X-Webhook-Secret", "")
+    if not _clave_webhook_valida(clave_recibida):
+        return jsonify({"error": "no autorizado"}), 401
+
+    inicio_mes = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    totales_por_usuario = dict(
+        db.session.query(Comprobante.usuario_id, db.func.count(Comprobante.id))
+        .group_by(Comprobante.usuario_id)
+        .all()
+    )
+    este_mes_por_usuario = dict(
+        db.session.query(Comprobante.usuario_id, db.func.count(Comprobante.id))
+        .filter(Comprobante.creado_en >= inicio_mes)
+        .group_by(Comprobante.usuario_id)
+        .all()
+    )
+
+    usuarios = Usuario.query.all()
+    return jsonify({
+        "ok": True,
+        "usuarios": [
+            {
+                "email": u.email,
+                "plan": u.plan,
+                "comprobantes_este_mes": este_mes_por_usuario.get(u.id, 0),
+                "comprobantes_total": totales_por_usuario.get(u.id, 0),
+                "limite_comprobantes_mensual": u.limite_comprobantes_mensual,
+            }
+            for u in usuarios
+        ],
+    })
+
+
 # ---------- Utilidad para crear el primer administrador ----------
 
 @app.cli.command("crear-admin")
