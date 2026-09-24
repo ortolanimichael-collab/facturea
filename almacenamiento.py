@@ -31,7 +31,16 @@ def guardar_archivo_persistente(ruta_origen, nombre_original, empresa):
     carpeta_empresa = os.path.join(UPLOADS_DIR, f"empresa_{empresa.id}")
     os.makedirs(carpeta_empresa, exist_ok=True)
 
-    ext = nombre_original.rsplit(".", 1)[-1].lower() if "." in nombre_original else ""
+    # La extensión sale del nombre de archivo que manda el navegador, así
+    # que no hay que confiar en que venga "limpia" -- se la valida contra
+    # una lista fija (las únicas que el sistema realmente procesa) y se
+    # descarta cualquier caracter que no sea alfanumérico, para que nunca
+    # pueda colar un "/" o un ".." y afectar la ruta de destino.
+    EXTENSIONES_PERMITIDAS = {"png", "jpg", "jpeg", "pdf"}
+    ext_cruda = nombre_original.rsplit(".", 1)[-1].lower() if "." in nombre_original else ""
+    ext = "".join(c for c in ext_cruda if c.isalnum())
+    if ext not in EXTENSIONES_PERMITIDAS:
+        ext = ""
     nombre_final = f"{uuid.uuid4().hex}.{ext}" if ext else uuid.uuid4().hex
     ruta_destino = os.path.join(carpeta_empresa, nombre_final)
 

@@ -8,5 +8,5 @@ echo "Arrancando el servidor..."
 exec gunicorn app:app \
     --bind 0.0.0.0:10000 \
     --timeout 300 \
-    --workers "${GUNICORN_WORKERS:-2}" \
+    --workers "${GUNICORN_WORKERS:-1}" \
     --threads "${GUNICORN_THREADS:-4}"

@@ -11,14 +11,44 @@ db = SQLAlchemy()
 DIAS_PRUEBA_GRATIS = 15  # al registrarse, arranca con este período antes de que vos le renueves
 
 
+_FERNET_CACHE = None
+
+
 def _fernet():
     """
-    Usa la variable de entorno ENCRYPTION_KEY para cifrar/descifrar la Clave Fiscal
-    de los clientes que no tienen certificado WSFE (Grupo B). Si no está configurada,
-    usa una clave fija de desarrollo (NUNCA usar esto en producción real).
+    Usa la variable de entorno ENCRYPTION_KEY para cifrar/descifrar la Clave
+    Fiscal de ARCA, el token de Google Drive y el de Mercado Pago de cada
+    empresa. Antes, si faltaba, caía en una clave fija hardcodeada acá en el
+    código (visible para cualquiera que lea el repo -- que es público), lo
+    que dejaba todos esos secretos tan expuestos como si estuvieran en texto
+    plano. Ahora, si falta, frena el arranque con un error en vez de usar
+    una clave conocida.
+
+    Para levantar el proyecto en desarrollo local sin tener que generar una
+    clave real cada vez, se puede setear ENCRYPTION_KEY_DEV_FALLBACK=1 --
+    eso sí usa una clave fija, pero solo si se la pide explícitamente (y
+    nunca hay que prenderlo en producción).
     """
-    clave = os.environ.get("ENCRYPTION_KEY", "z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1I=")
-    return Fernet(clave.encode())
+    global _FERNET_CACHE
+    if _FERNET_CACHE is not None:
+        return _FERNET_CACHE
+
+    clave = os.environ.get("ENCRYPTION_KEY")
+    if not clave:
+        if os.environ.get("ENCRYPTION_KEY_DEV_FALLBACK") == "1":
+            clave = "z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1z1I="
+        else:
+            raise RuntimeError(
+                "Falta la variable de entorno ENCRYPTION_KEY (necesaria para "
+                "cifrar la Clave Fiscal de ARCA y los tokens de Drive/Mercado "
+                "Pago). Generala con: python3 -c \"from cryptography.fernet "
+                "import Fernet; print(Fernet.generate_key().decode())\" y "
+                "cargala en el entorno. Para desarrollo local sin datos "
+                "reales, se puede setear ENCRYPTION_KEY_DEV_FALLBACK=1 en su "
+                "lugar (NUNCA en producción)."
+            )
+    _FERNET_CACHE = Fernet(clave.encode())
+    return _FERNET_CACHE
 
 
 class Usuario(UserMixin, db.Model):

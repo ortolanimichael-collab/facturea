@@ -12,6 +12,7 @@ Requiere 3 variables de entorno (se consiguen en Google Cloud Console):
 """
 import os
 import io
+import secrets
 
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
@@ -63,24 +64,31 @@ def _permitir_http_en_localhost():
 def generar_url_autorizacion(empresa_id):
     """
     Arma el link al que hay que mandar al usuario para que autorice el
-    acceso. "state" lleva el id de la empresa, para saber a cuál conectar
-    cuando Google nos devuelva al callback.
+    acceso. "state" lleva el id de la empresa MÁS un nonce aleatorio
+    (empresa_id:nonce), para saber a cuál conectar cuando Google nos
+    devuelva al callback Y para poder validar que el callback realmente
+    vino de un flujo que este mismo servidor inició (si "state" fuera solo
+    el id de empresa, cualquiera podría adivinarlo/armarlo a mano -- quien
+    llama a esta función tiene que guardar el nonce devuelto en la sesión
+    del navegador y exigir que coincida en el callback, igual que ya se
+    hace con Mercado Pago).
 
-    Devuelve (url, code_verifier) -- Google exige un "code_verifier" (PKCE)
-    que se genera acá y tiene que ser EL MISMO cuando se procese el
+    Devuelve (url, code_verifier, nonce) -- Google exige un "code_verifier"
+    (PKCE) que se genera acá y tiene que ser EL MISMO cuando se procese el
     callback más adelante. Como son dos pedidos HTTP separados, quien llama
     a esta función tiene que guardar el code_verifier en algún lado (la
     sesión del navegador, por ejemplo) y pasárselo a procesar_callback().
     """
     _permitir_http_en_localhost()
+    nonce = secrets.token_urlsafe(24)
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=_redirect_uri())
     url, _ = flow.authorization_url(
         access_type="offline",       # para que Google mande un refresh_token, no solo uno temporal
         prompt="consent",            # fuerza a mostrar la pantalla de permisos siempre (si no, a veces Google no manda refresh_token en logins repetidos)
-        state=str(empresa_id),
+        state=f"{empresa_id}:{nonce}",
         include_granted_scopes="true",
     )
-    return url, flow.code_verifier
+    return url, flow.code_verifier, nonce
 
 
 def procesar_callback(url_completa_del_callback, code_verifier):

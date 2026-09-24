@@ -2,6 +2,8 @@ import os
 import io
 import random
 import re
+import secrets
+import hmac
 import tempfile
 import threading
 import requests
@@ -21,6 +23,7 @@ from flask_login import (
 )
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
 
 from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, DIAS_PRUEBA_GRATIS
 import drive_sync
@@ -34,8 +37,37 @@ import google_drive_cliente
 import mercadopago_cliente
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "clave-de-desarrollo-cambiar-en-produccion")
+
+_secret_key = os.environ.get("SECRET_KEY")
+if not _secret_key:
+    # Antes esto caía en una clave fija hardcodeada en el código (visible en
+    # el repo público), lo que permitía falsificar cookies de sesión de
+    # cualquier usuario -- incluido un admin -- si alguna vez se desplegaba
+    # sin la variable de entorno cargada. Ahora, si falta, se genera una
+    # clave aleatoria en cada arranque: no persiste entre reinicios (las
+    # sesiones activas se cierran solas), pero nunca es una clave conocida
+    # ni predecible. Lo correcto sigue siendo definir SECRET_KEY de verdad.
+    _secret_key = secrets.token_hex(32)
+    print("[ALERTA DE SEGURIDAD] SECRET_KEY no está configurada en el entorno -- "
+          "se generó una clave aleatoria temporal para este arranque. Esto invalida "
+          "sesiones activas en cada reinicio y NO debe usarse así en producción: "
+          "definí SECRET_KEY en las variables de entorno.")
+app.config["SECRET_KEY"] = _secret_key
+
+# Límite global de tamaño de subida (25 MB): sin esto, cualquiera podía
+# mandar un cuerpo de request de tamaño arbitrario (foto/PDF gigante, o
+# directamente basura) y agotar memoria/disco/CPU del servidor.
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+
 init_db(app)
+
+# Protección CSRF: sin esto, cualquier página maliciosa podía hacer que el
+# navegador de un usuario logueado mandara un POST a Facturea (borrar una
+# empresa, desconectar Drive/Mercado Pago, editar configuración) con solo
+# que la víctima la visite, aprovechando que el navegador manda la cookie
+# de sesión sola. Los endpoints internos server-to-server (sin sesión de
+# navegador) se eximen más abajo con @csrf.exempt.
+csrf = CSRFProtect(app)
 
 # Rate limiting por IP -- pensado sobre todo para /api/demo/leer-comprobante
 # (el demo público de la landing que corre OCR real sin login: sin esto,
@@ -605,6 +637,8 @@ def demo_leer_comprobante():
     with tempfile.TemporaryDirectory() as tmp:
         ruta_local = os.path.join(tmp, archivo.filename)
         archivo.save(ruta_local)
+        if not procesador._contenido_coincide_con_extension(ruta_local, ext):
+            return jsonify(ok=False, error="El archivo no parece ser un JPG/PNG/PDF válido."), 400
         try:
             if ext == "pdf":
                 datos = lector_core.extraer_datos_de_pdf(ruta_local, fecha_hoy)
@@ -647,6 +681,7 @@ def lead_demo():
 # ---------- Cuenta ----------
 
 @app.route("/registro", methods=["GET", "POST"])
+@limiter.limit("10 per hour;20 per day")
 def registro():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -674,6 +709,7 @@ def registro():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute;30 per hour")
 def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -854,15 +890,25 @@ def empresa_drive_conectar(empresa_id):
         return redirect(url_for("empresas"))
     if not google_drive_cliente.esta_configurado():
         return "Google Drive todavía no está configurado en este servidor (faltan las variables de entorno GOOGLE_OAUTH_*).", 400
-    url, code_verifier = google_drive_cliente.generar_url_autorizacion(empresa.id)
+    url, code_verifier, nonce = google_drive_cliente.generar_url_autorizacion(empresa.id)
     session["drive_code_verifier"] = code_verifier
+    session["drive_state_nonce"] = nonce
     return redirect(url)
 
 
 @app.route("/google-drive/callback")
 @login_required
 def google_drive_callback():
-    empresa_id = request.args.get("state")
+    state_recibido = request.args.get("state", "")
+    empresa_id, _, nonce_recibido = state_recibido.partition(":")
+    nonce_guardado = session.pop("drive_state_nonce", None)
+    # El nonce tiene que coincidir EXACTO con el que se generó al armar el
+    # link de autorización -- si no, alguien está mandando un callback que
+    # no salió de un flujo iniciado por este servidor (protección CSRF del
+    # flujo OAuth, igual que ya se hace con Mercado Pago).
+    if not nonce_guardado or not nonce_recibido or not hmac.compare_digest(nonce_recibido, nonce_guardado):
+        return redirect(url_for("empresas", error_drive="No se pudo validar el pedido de conexión. Probá de nuevo."))
+
     empresa = current_user.empresas.filter_by(id=empresa_id).first() if empresa_id else None
     if not empresa:
         return redirect(url_for("empresas"))
@@ -1908,102 +1954,6 @@ def registro_agregar_manual(empresa_id, registro_id):
     return jsonify(ok=True, comprobante_id=comprobante.id)
 
 
-@app.route("/empresas/<int:empresa_id>/comprobantes/agregar-manual", methods=["POST"])
-@login_required
-def comprobantes_agregar_manual(empresa_id):
-    """
-    Carga uno o varios comprobantes "a mano", sin pasar por ningún archivo ni
-    por el lector -- el usuario elige directamente fecha y monto de cada uno
-    (y, si la empresa es Responsable Inscripto, la alícuota de IVA). Arrancan
-    con el resto de los valores por defecto de la Empresa, mismo criterio que
-    registro_agregar_manual(), y quedan como cualquier otro comprobante
-    pendiente: se pueden revisar/editar en Revisión Manual antes de facturar.
-
-    Espera JSON: {"filas": [{"fecha": "dd/mm/aaaa", "monto": 1234.5,
-    "alicuota": "21"}, ...]}. "alicuota" se ignora si la empresa es
-    Monotributo (no discrimina IVA); si falta, se usa la primera alícuota
-    configurada en la empresa.
-    """
-    empresa = current_user.empresas.filter_by(id=empresa_id).first()
-    if not empresa:
-        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
-
-    datos = request.get_json(silent=True) or {}
-    filas = datos.get("filas")
-    if not isinstance(filas, list) or not filas:
-        return jsonify(ok=False, error="No se recibió ninguna fila para cargar."), 400
-    if len(filas) > 200:
-        return jsonify(ok=False, error="Máximo 200 comprobantes por carga."), 400
-
-    dias_atras = empresa.config_dias_atras_fecha_emision or 10
-    fecha_default = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
-    alicuota_default = (empresa.config_alicuota_iva or "").split(",")[0] or None
-    condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else ""
-    tipo_comprobante_default = (empresa.config_tipo_comprobante or "").split(",")[0]
-
-    if empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-
-    creados = []
-    for i, fila in enumerate(filas, start=1):
-        fecha = str(fila.get("fecha") or fecha_default).strip()
-        try:
-            datetime.strptime(fecha, "%d/%m/%Y")
-        except ValueError:
-            return jsonify(ok=False, error=f"Fila {i}: la fecha \"{fecha}\" no es válida (formato dd/mm/aaaa)."), 400
-
-        try:
-            monto = float(str(fila.get("monto", 0)).replace(",", "."))
-        except (TypeError, ValueError):
-            return jsonify(ok=False, error=f"Fila {i}: el monto no es un número válido."), 400
-        if monto < 0:
-            return jsonify(ok=False, error=f"Fila {i}: el monto no puede ser negativo."), 400
-
-        descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
-
-        if empresa.tipo_contribuyente == "Responsable Inscripto":
-            alicuota = fila.get("alicuota") or alicuota_default
-            # Si la descripción elegida tiene su propia alícuota configurada,
-            # esa tiene prioridad (mismo criterio que el resto del sistema).
-            alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(descripcion_elegida)
-            if alicuota_de_la_descripcion is not None:
-                alicuota = alicuota_de_la_descripcion
-        else:
-            alicuota = None  # Monotributo no discrimina IVA -- se ignora aunque venga cargada
-
-        comprobante = Comprobante(
-            usuario_id=current_user.id,
-            empresa_id=empresa.id,
-            id_transaccion=None,  # cargado a mano -- no participa de la detección de duplicados
-            punto_venta=empresa.config_punto_venta,
-            tipo_comprobante=tipo_comprobante_default,
-            concepto=concepto_efectivo(fecha, empresa.config_concepto, dias_atras),
-            alicuota_iva=alicuota,
-            descripcion=descripcion_elegida,
-            unidad_medida=empresa.config_unidad_medida,
-            precio_unitario=monto,
-            tipo_documento="DNI",
-            cuit_receptor="",
-            nombre_razon_social="CONSUMIDOR FINAL",
-            fecha_comprobante=fecha,
-            medio_pago_detectado="Transferencia",
-            condicion_iva=empresa.config_condicion_iva,
-            condicion_venta=condicion_venta_default,
-            fecha_desde=fecha,
-            fecha_hasta=fecha,
-            importe_total=monto,
-            cantidad=1.0,
-            archivo_origen="Carga manual",
-        )
-        db.session.add(comprobante)
-        creados.append(comprobante)
-
-    db.session.commit()
-    return jsonify(ok=True, cantidad=len(creados), ids=[c.id for c in creados])
-
-
 @app.route("/empresas/<int:empresa_id>/comprobantes/detener-facturacion", methods=["POST"])
 @login_required
 def detener_facturacion(empresa_id):
@@ -2221,6 +2171,20 @@ def admin_cuil_desbloquear(cuil_id):
 
 # ---------- Sincronización con el panel de membresías central ----------
 
+def _clave_webhook_valida(clave_recibida):
+    """
+    Compara la clave del webhook contra PANEL_MEMBRESIAS_SECRET en tiempo
+    constante (hmac.compare_digest) en vez de con "!=" -- una comparación
+    normal de strings corta apenas encuentra el primer caracter distinto,
+    lo que en teoría deja filtrar por tiempo de respuesta cuánto de la
+    clave adivinó un atacante. compare_digest siempre tarda lo mismo.
+    """
+    if not PANEL_MEMBRESIAS_SECRET:
+        return False
+    return hmac.compare_digest(clave_recibida, PANEL_MEMBRESIAS_SECRET)
+
+
+@csrf.exempt
 @app.route("/api/interno/sincronizar-membresia", methods=["POST"])
 def sincronizar_membresia():
     """
@@ -2230,7 +2194,7 @@ def sincronizar_membresia():
     quien llama es el otro servidor, no una persona.
     """
     clave_recibida = request.headers.get("X-Webhook-Secret", "")
-    if not PANEL_MEMBRESIAS_SECRET or clave_recibida != PANEL_MEMBRESIAS_SECRET:
+    if not _clave_webhook_valida(clave_recibida):
         return jsonify({"error": "no autorizado"}), 401
 
     data = request.get_json() or {}
@@ -2256,6 +2220,7 @@ def sincronizar_membresia():
     return jsonify({"ok": True, "estado": usuario.estado})
 
 
+@csrf.exempt
 @app.route("/api/interno/registros-nuevos", methods=["GET"])
 def registros_nuevos_para_panel():
     """
@@ -2276,7 +2241,7 @@ def registros_nuevos_para_panel():
     vez que se abre.
     """
     clave_recibida = request.headers.get("X-Webhook-Secret", "")
-    if not PANEL_MEMBRESIAS_SECRET or clave_recibida != PANEL_MEMBRESIAS_SECRET:
+    if not _clave_webhook_valida(clave_recibida):
         return jsonify({"error": "no autorizado"}), 401
 
     query = Usuario.query
@@ -2330,4 +2295,11 @@ def crear_admin():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    # debug=True (que habilita la consola interactiva de Werkzeug -- una
+    # forma conocida de ejecutar código remoto si el puerto queda expuesto)
+    # ahora depende de una variable de entorno explícita en vez de estar
+    # siempre prendido. En producción se corre con gunicorn (ver
+    # entrypoint.sh), que nunca pasa por acá -- esto es solo para cuando
+    # alguien corre "python app.py" directo en su máquina.
+    debug_local = os.environ.get("FLASK_DEBUG") == "1"
+    app.run(host="0.0.0.0", port=5000, debug=debug_local, threaded=True)

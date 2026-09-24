@@ -9,6 +9,29 @@ from almacenamiento import guardar_archivo_persistente
 
 EXTENSIONES_VALIDAS = {"png", "jpg", "jpeg", "pdf"}
 
+# Primeros bytes ("magic numbers") reales de cada formato soportado -- se
+# usan para chequear que el CONTENIDO del archivo sea lo que dice ser su
+# extensión, y no algo renombrado a mano (ej. un .html o un ejecutable
+# subido como "foto.jpg") para intentar colarlo por acá.
+_FIRMAS_VALIDAS = {
+    "pdf": (b"%PDF",),
+    "png": (b"\x89PNG\r\n\x1a\n",),
+    "jpg": (b"\xff\xd8\xff",),
+    "jpeg": (b"\xff\xd8\xff",),
+}
+
+
+def _contenido_coincide_con_extension(ruta_local, ext):
+    firmas = _FIRMAS_VALIDAS.get(ext)
+    if not firmas:
+        return False
+    try:
+        with open(ruta_local, "rb") as f:
+            cabecera = f.read(16)
+    except OSError:
+        return False
+    return any(cabecera.startswith(firma) for firma in firmas)
+
 # ---------- Mercado Pago: mapa de payment_method_id -> ARCA ----------
 # Cuando no encuentra un código exacto acá, cae a "Otra..." con el nombre
 # que mandó Mercado Pago como detalle -- mismo criterio que ya se usa para
@@ -151,7 +174,7 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
     demás facturas de esa empresa.
     """
     ext = nombre_original.lower().split(".")[-1]
-    if ext not in EXTENSIONES_VALIDAS:
+    if ext not in EXTENSIONES_VALIDAS or not _contenido_coincide_con_extension(ruta_local, ext):
         return "ignorado", None, (None, None)
 
     empresa = Empresa.query.get(empresa_id)
