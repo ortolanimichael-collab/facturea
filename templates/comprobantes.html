@@ -25,6 +25,8 @@
 })();
 </script>
 <title>AutoFacturación — Comprobantes</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/logo-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1745,7 +1747,11 @@ document.getElementById('btnSubir').addEventListener('click', async () => {
     const data = await r.json();
     resumen.style.display = 'block';
     if (data.ok) {
-      resumen.textContent = `Nuevos: ${data.resumen.nuevos} · Duplicados: ${data.resumen.duplicados} · Errores: ${data.resumen.errores}`;
+      let texto = `Nuevos: ${data.resumen.nuevos} · Duplicados: ${data.resumen.duplicados} · Errores: ${data.resumen.errores}`;
+      if (data.resumen.limite_plan > 0) {
+        texto += ` · Bloqueados por límite del plan: ${data.resumen.limite_plan} (escribinos por soporte para subir de plan)`;
+      }
+      resumen.textContent = texto;
       setTimeout(() => window.location.reload(), 1000);
     } else {
       resumen.textContent = 'Error: ' + data.error;

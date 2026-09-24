@@ -25,6 +25,8 @@
 })();
 </script>
 <title>AutoFacturación — Empresas</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/logo-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -244,6 +246,17 @@
   {% set descripciones_actuales = ((empresa.descripciones_disponibles if empresa else "") or "").split(",") | select | list %}
   {% set descripciones_alicuotas_actuales = ((empresa.descripciones_alicuotas if empresa else "") or "").split(",") %}
 
+  {% set limite_alcanzado = (not empresa) and (usuario.limite_empresas is not none) and (empresas|length >= usuario.limite_empresas) %}
+  {% if limite_alcanzado %}
+  <section>
+    <h2>Agregar una empresa nueva</h2>
+    <div class="vacio">
+      Tu plan ({{ usuario.plan_info["nombre"] }}) permite hasta {{ usuario.limite_empresas }}
+      {{ "empresa" if usuario.limite_empresas == 1 else "empresas" }}, y ya tenés {{ empresas|length }} cargada{{ "" if empresas|length == 1 else "s" }}.
+      Para agregar otra, escribinos desde <a href="/soporte">soporte</a> y vemos cómo subir de plan.
+    </div>
+  </section>
+  {% else %}
   <section>
     <h2>{{ "Editar empresa" if empresa else "Agregar una empresa nueva" }}</h2>
     <p class="desc">{{ "Modificá los datos de facturación de esta empresa." if empresa else "Cargá una empresa/cliente que representás en ARCA. Podés agregar todas las que necesites." }}</p>
@@ -266,9 +279,9 @@
         <label>Tipo de contribuyente</label>
         <select name="tipo_contribuyente" id="tipoContribuyente">
           <option value="Monotributo" {{ "selected" if not empresa or empresa.tipo_contribuyente in (None, "", "Monotributo") }}>Monotributo</option>
-          <option value="Responsable Inscripto" {{ "selected" if empresa and empresa.tipo_contribuyente == "Responsable Inscripto" }}>Responsable Inscripto</option>
+          <option value="Responsable Inscripto" {{ "disabled" if not usuario.permite_responsable_inscripto }} {{ "selected" if empresa and empresa.tipo_contribuyente == "Responsable Inscripto" }}>Responsable Inscripto{{ "" if usuario.permite_responsable_inscripto else " (no incluido en tu plan)" }}</option>
         </select>
-        <p class="hint">Un Responsable Inscripto factura con IVA discriminado (Factura A o B, según el cliente) en vez de Factura C.</p>
+        <p class="hint">Un Responsable Inscripto factura con IVA discriminado (Factura A o B, según el cliente) en vez de Factura C.{{ " Tu plan actual (" + usuario.plan_info["nombre"] + ") no lo incluye -- escribinos por soporte si necesitás subir de plan." if not usuario.permite_responsable_inscripto }}</p>
       </div>
 
       <div class="campo" id="campoAlicuotaIva" style="display:none;">
@@ -475,6 +488,7 @@
       {% if empresa %}<a href="/empresas" style="margin-left:14px;font-family:var(--sans);font-size:13px;color:var(--muted);">Cancelar</a>{% endif %}
     </form>
   </section>
+  {% endif %}
 </div>
 
 <script>

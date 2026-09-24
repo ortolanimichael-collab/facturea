@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoFacturación — Crear cuenta</title>
+<meta name="description" content="Creá tu cuenta gratis en AutoFacturación y empezá a facturar automáticamente ante ARCA tus comprobantes de Mercado Pago, transferencias y bancos.">
+<link rel="icon" href="/static/img/logo-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -83,12 +85,13 @@
     text-transform:uppercase;color:#9FB3D9;display:block;margin:16px 0 6px;
   }
   .form-label:first-of-type{margin-top:0;}
-  .panel-body input{
+  .panel-body input, .panel-body select{
     width:100%;font-family:var(--sans);font-size:14.5px;padding:11px 14px;border-radius:8px;
     border:1.5px solid var(--navy-mid);background:var(--navy);color:#fff;
   }
   .panel-body input::placeholder{color:#8194BC;}
-  .panel-body input:focus{outline:none;border-color:var(--blue);}
+  .panel-body input:focus, .panel-body select:focus{outline:none;border-color:var(--blue);}
+  .panel-body select option{background:var(--navy);color:#fff;}
 
   .panel .btn-primary{width:100%;justify-content:center;margin-top:22px;}
   .panel-divider{border-top:1px solid var(--navy-mid);margin:18px 0 14px;}
@@ -140,6 +143,13 @@
 
         <form method="POST">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="form-label">Plan</label>
+          <select name="plan">
+            <option value="individual" {{ "selected" if plan_elegido == "individual" }}>Individual — 1 empresa, hasta 100 comprobantes/mes</option>
+            <option value="profesional" {{ "selected" if plan_elegido == "profesional" }}>Profesional — hasta 5 empresas, hasta 500 comprobantes/mes</option>
+            <option value="estudio" {{ "selected" if plan_elegido == "estudio" }}>Estudio — empresas y comprobantes ilimitados</option>
+          </select>
+
           <label class="form-label">Nombre o razón social</label>
           <input type="text" name="nombre" required>
 

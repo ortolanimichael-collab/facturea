@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoFacturación — Suscripción vencida</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex">
+<title>Página no encontrada — AutoFacturación</title>
 <link rel="icon" href="/static/img/logo-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,8 +22,6 @@
     --ink:#131C33;
     --muted:#5C6478;
     --line: rgba(19,28,51,0.14);
-    --red-tint:#FBE8E8;
-    --red-deep:#B33A3A;
     --sans: "Manrope", "Roboto", sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -34,24 +32,21 @@
   }
   a{color:inherit;}
   img,svg{display:block;max-width:100%;}
-  h1{font-family:var(--sans);font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
 
   .card{
-    max-width:440px;width:100%;background:var(--paper-2);border:1px solid var(--line);
+    max-width:460px;width:100%;background:var(--paper-2);border:1px solid var(--line);
     border-radius:14px;padding:44px 40px;text-align:center;
   }
   .logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:28px;}
   .logo-mark{width:32px;height:32px;flex:none;}
   .logo-text{font-family:var(--sans);font-weight:800;font-size:18px;letter-spacing:-0.01em;color:var(--navy);}
 
-  h1{font-size:22px;margin-bottom:14px;}
-  p{color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:8px;}
-
-  .estado{
-    display:inline-block;margin:16px 0;padding:7px 18px;border-radius:20px;
-    background:var(--red-tint);color:var(--red-deep);
-    font-family:var(--sans);font-size:13px;font-weight:700;
+  .codigo{
+    font-family:var(--sans);font-weight:800;font-size:56px;letter-spacing:-0.02em;
+    color:var(--blue-deep);line-height:1;margin-bottom:10px;
   }
+  h1{font-size:20px;font-weight:800;letter-spacing:-0.01em;margin-bottom:12px;}
+  p{color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:8px;}
 
   .btn{
     display:inline-flex;align-items:center;justify-content:center;gap:8px;margin-top:26px;
@@ -71,11 +66,10 @@
       <img src="/static/img/logo-icon.png" class="logo-mark" alt="AutoFacturación">
       <div class="logo-text">AutoFacturación</div>
     </div>
-    <h1>Tu acceso está pausado</h1>
-    <div class="estado">{{ 'Suspendido' if not usuario.activo else 'Prueba vencida' }}</div>
-    <p>Tu período de prueba o suscripción terminó el {{ usuario.fecha_vencimiento.strftime('%d/%m/%Y') if usuario.fecha_vencimiento else '—' }}.</p>
-    <p>Para renovar y seguir facturando, escribinos y te reactivamos apenas confirmemos el pago.</p>
-    <a class="btn" href="{{ url_for('soporte') }}">Ir a soporte</a>
+    <div class="codigo">404</div>
+    <h1>Esta página no existe</h1>
+    <p>El link puede estar mal escrito o la página se movió de lugar.</p>
+    <a class="btn" href="/">Volver al inicio</a>
   </div>
 </body>
 </html>
