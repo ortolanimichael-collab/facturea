@@ -51,6 +51,50 @@ def _fernet():
     return _FERNET_CACHE
 
 
+PLANES = {
+    # Estos límites tienen que ser un espejo EXACTO de lo que se promete en
+    # la sección de precios de templates/index.html -- si cambia uno,
+    # cambia el otro, para no volver a prometer algo que el sistema no
+    # cumple. "full" es el plan sin límites (uso interno/admin, ver
+    # crear_admin_inicial()); "legacy" es el fallback para cuentas viejas
+    # que se registraron ANTES de que este sistema de límites existiera
+    # (plan="basico" o vacío) -- se tratan como sin límites a propósito,
+    # para no romper retroactivamente una cuenta que ya tenía más empresas
+    # o más comprobantes de los que un plan nuevo permitiría. Vos podés
+    # reasignarles un plan real de manera manual desde el panel admin.
+    "individual": {
+        "nombre": "Individual",
+        "max_empresas": 1,
+        "permite_responsable_inscripto": False,
+        "limite_comprobantes_mensual": 100,
+    },
+    "profesional": {
+        "nombre": "Profesional",
+        "max_empresas": 5,
+        "permite_responsable_inscripto": True,
+        "limite_comprobantes_mensual": 500,
+    },
+    "estudio": {
+        "nombre": "Estudio",
+        "max_empresas": None,  # ilimitado, como promete la landing
+        "permite_responsable_inscripto": True,
+        "limite_comprobantes_mensual": None,  # sin tope publicitado
+    },
+    "full": {
+        "nombre": "Full (interno)",
+        "max_empresas": None,
+        "permite_responsable_inscripto": True,
+        "limite_comprobantes_mensual": None,
+    },
+    "legacy": {
+        "nombre": "Sin plan asignado",
+        "max_empresas": None,
+        "permite_responsable_inscripto": True,
+        "limite_comprobantes_mensual": None,
+    },
+}
+
+
 class Usuario(UserMixin, db.Model):
     """
     Cada cliente de Facturea. También se usa para vos mismo como administrador
@@ -65,7 +109,7 @@ class Usuario(UserMixin, db.Model):
     nombre_razon_social = db.Column(db.String(200))
     cuit = db.Column(db.String(20))
 
-    plan = db.Column(db.String(30), default="basico")  # "basico" | "full"
+    plan = db.Column(db.String(30), default="individual")  # ver PLANES arriba: "individual" | "profesional" | "estudio" | "full" (interno) -- "basico" es el valor viejo de cuentas registradas antes de este sistema, tratado como "legacy" (sin límites) en plan_info
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_vencimiento = db.Column(db.DateTime)
     metodo_pago = db.Column(db.String(150))  # nota libre por ahora: "transferencia", "efectivo", etc.
@@ -113,6 +157,46 @@ class Usuario(UserMixin, db.Model):
         if self.esta_vencido:
             return "vencido"
         return "activo"
+
+    @property
+    def plan_info(self):
+        """Los límites del plan de este usuario -- "legacy" (sin límites)
+        para cualquier valor viejo o no reconocido en self.plan, así una
+        cuenta registrada antes de que existieran los planes reales nunca
+        se ve retroactivamente restringida por sorpresa."""
+        return PLANES.get(self.plan, PLANES["legacy"])
+
+    @property
+    def limite_empresas(self):
+        """None significa sin límite."""
+        return self.plan_info["max_empresas"]
+
+    @property
+    def permite_responsable_inscripto(self):
+        return self.plan_info["permite_responsable_inscripto"]
+
+    @property
+    def limite_comprobantes_mensual(self):
+        """None significa sin límite."""
+        return self.plan_info["limite_comprobantes_mensual"]
+
+    def comprobantes_este_mes(self):
+        """Cuenta los comprobantes que este usuario cargó (subida, Drive, o
+        carga manual) desde el 1° del mes actual -- sirve para chequear el
+        límite mensual del plan antes de aceptar uno nuevo."""
+        inicio_mes = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return Comprobante.query.filter(
+            Comprobante.usuario_id == self.id,
+            Comprobante.creado_en >= inicio_mes,
+        ).count()
+
+    def le_queda_cupo_mensual(self, cantidad=1):
+        """True si el usuario todavía puede cargar `cantidad` comprobantes
+        más este mes sin pasarse del límite de su plan."""
+        limite = self.limite_comprobantes_mensual
+        if limite is None:
+            return True
+        return self.comprobantes_este_mes() + cantidad <= limite
 
     def renovar(self, dias=30):
         """Extiende el vencimiento. Si ya venció, cuenta desde hoy; si no, suma sobre lo que le queda."""

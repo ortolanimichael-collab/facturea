@@ -25,7 +25,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, DIAS_PRUEBA_GRATIS
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, DIAS_PRUEBA_GRATIS, PLANES
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -810,6 +810,15 @@ def lead_demo():
 
 # ---------- Cuenta ----------
 
+def _plan_valido(valor):
+    """Devuelve el plan si es uno de los 3 que se venden en la landing, o
+    "individual" (el default más conservador) si viene vacío o inventado --
+    así nadie puede registrarse con plan="full" pisando la URL a mano."""
+    if valor in ("individual", "profesional", "estudio"):
+        return valor
+    return "individual"
+
+
 @app.route("/registro", methods=["GET", "POST"])
 @limiter.limit("10 per hour;20 per day")
 def registro():
@@ -817,14 +826,15 @@ def registro():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         nombre = request.form.get("nombre", "").strip()
+        plan_elegido = _plan_valido(request.form.get("plan", ""))
 
         if not email or not password or not nombre:
-            return render_template("registro.html", error="Completá todos los campos.", email_prefill=email)
+            return render_template("registro.html", error="Completá todos los campos.", email_prefill=email, plan_elegido=plan_elegido)
 
         if Usuario.query.filter_by(email=email).first():
-            return render_template("registro.html", error="Ya existe una cuenta con ese email.", email_prefill=email)
+            return render_template("registro.html", error="Ya existe una cuenta con ese email.", email_prefill=email, plan_elegido=plan_elegido)
 
-        nuevo = Usuario(email=email, nombre_razon_social=nombre)
+        nuevo = Usuario(email=email, nombre_razon_social=nombre, plan=plan_elegido)
         nuevo.set_password(password)
         nuevo.fecha_vencimiento = datetime.utcnow() + timedelta(days=DIAS_PRUEBA_GRATIS)
         db.session.add(nuevo)
@@ -835,7 +845,12 @@ def registro():
         login_user(nuevo)
         return redirect(url_for("panel"))
 
-    return render_template("registro.html", email_prefill=request.args.get("email", ""))
+    # El link "Elegir Individual/Profesional/Estudio" de la landing manda
+    # acá con ?plan=... -- se precarga en un campo oculto del formulario
+    # (ver templates/registro.html) para que quede guardado en la cuenta
+    # apenas se registre, sin que el usuario tenga que elegirlo de nuevo.
+    plan_elegido = _plan_valido(request.args.get("plan", ""))
+    return render_template("registro.html", email_prefill=request.args.get("email", ""), plan_elegido=plan_elegido)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -886,8 +901,19 @@ def panel():
 @login_required
 def empresas():
     if request.method == "POST":
+        limite_empresas = current_user.limite_empresas
+        cantidad_actual = current_user.empresas.count()
+        error = None
+        if limite_empresas is not None and cantidad_actual >= limite_empresas:
+            error = (
+                f"Tu plan ({current_user.plan_info['nombre']}) permite hasta {limite_empresas} "
+                f"{'empresa' if limite_empresas == 1 else 'empresas'}, y ya tenés {cantidad_actual}. "
+                "Para cargar otra, hablá con nosotros para subir de plan desde soporte."
+            )
+
         nueva = Empresa(usuario_id=current_user.id)
-        error = _completar_campos_empresa(nueva, request.form)
+        if not error:
+            error = _completar_campos_empresa(nueva, request.form, usuario=current_user)
         if error:
             lista = current_user.empresas.order_by(Empresa.nombre_interno).all()
             fecha_emision_default = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
@@ -912,7 +938,7 @@ def empresas_editar(empresa_id):
         return redirect(url_for("empresas"))
 
     if request.method == "POST":
-        error = _completar_campos_empresa(empresa, request.form)
+        error = _completar_campos_empresa(empresa, request.form, usuario=current_user)
         if error:
             lista = current_user.empresas.order_by(Empresa.nombre_interno).all()
             dias_atras = empresa.config_dias_atras_fecha_emision or 10
@@ -959,13 +985,25 @@ def _validar_cuil(valor):
     return None
 
 
-def _completar_campos_empresa(empresa, form):
+def _completar_campos_empresa(empresa, form, usuario=None):
     """Devuelve un mensaje de error (string) si algo no es válido, o None si
     quedó todo bien. Mientras haya error, el objeto empresa puede quedar con
     cambios a medias en memoria, pero eso no importa -- las rutas que llaman
     a esto no hacen commit si hay error, así que nada se guarda de más."""
     empresa.nombre_interno = form.get("nombre_interno", "").strip()
     empresa.razon_social_arca = form.get("razon_social_arca", "").strip()
+
+    tipo_contribuyente_pedido = form.get("tipo_contribuyente", "").strip() or "Monotributo"
+    if (
+        usuario is not None
+        and tipo_contribuyente_pedido == "Responsable Inscripto"
+        and not usuario.permite_responsable_inscripto
+    ):
+        return (
+            f"Tu plan ({usuario.plan_info['nombre']}) no incluye Responsable Inscripto -- "
+            "solo Monotributo. Para facturar como Responsable Inscripto, hablá con "
+            "nosotros para subir de plan desde soporte."
+        )
 
     cuil_arca_nuevo = form.get("cuil_arca", "").strip()
     error_cuil = _validar_cuil(cuil_arca_nuevo)
@@ -977,7 +1015,7 @@ def _completar_campos_empresa(empresa, form):
         empresa.set_password_arca(password_nueva)
 
     empresa.config_tipo_comprobante = ",".join(form.getlist("config_tipo_comprobante"))
-    empresa.tipo_contribuyente = form.get("tipo_contribuyente", "").strip() or "Monotributo"
+    empresa.tipo_contribuyente = tipo_contribuyente_pedido
     empresa.config_alicuota_iva = ",".join(form.getlist("config_alicuota_iva")) or None
     empresa.puntos_venta_disponibles = form.get("puntos_venta_disponibles", "").strip()
     empresa.config_punto_venta = form.get("config_punto_venta", "").strip()
@@ -1292,6 +1330,7 @@ def _calcular_estadisticas(empresa_id):
     duplicados = [r for r in registros if r.resultado == "duplicado"]
     bloqueados = [r for r in registros if r.resultado == "ignorado"]
     con_error = [r for r in registros if r.resultado == "error"]
+    por_limite_plan = [r for r in registros if r.resultado == "limite"]
     imagenes = [r for r in registros if (r.extension or "") in ("png", "jpg", "jpeg")]
     pdfs = [r for r in registros if (r.extension or "") == "pdf"]
 
@@ -1309,6 +1348,7 @@ def _calcular_estadisticas(empresa_id):
         "duplicados": len(duplicados),
         "bloqueados": len(bloqueados),
         "con_error": len(con_error),
+        "bloqueados_por_limite_plan": len(por_limite_plan),
         "duplicados_detalle": [
             {
                 "registro_id": r.id, "nombre_archivo": r.nombre_archivo,
@@ -1343,8 +1383,8 @@ def api_subir(empresa_id):
         return jsonify(ok=False, error="No se recibió ningún archivo."), 400
 
     fecha_hoy = datetime.now().strftime("%d/%m/%Y")
-    resumen = {"nuevos": 0, "duplicados": 0, "errores": 0, "ignorados": 0}
-    clave = {"nuevo": "nuevos", "duplicado": "duplicados", "error": "errores", "ignorado": "ignorados"}
+    resumen = {"nuevos": 0, "duplicados": 0, "errores": 0, "ignorados": 0, "limite_plan": 0}
+    clave = {"nuevo": "nuevos", "duplicado": "duplicados", "error": "errores", "ignorado": "ignorados", "limite": "limite_plan"}
 
     with tempfile.TemporaryDirectory() as tmp:
         for archivo in archivos:
@@ -2036,6 +2076,12 @@ def registro_agregar_manual(empresa_id, registro_id):
     if registro.resultado != "error":
         return jsonify(ok=False, error="Este archivo no está en la lista de errores."), 400
 
+    if not current_user.le_queda_cupo_mensual():
+        return jsonify(ok=False, error=(
+            f"Llegaste al límite de comprobantes por mes de tu plan ({current_user.plan_info['nombre']}). "
+            "Escribinos desde soporte para subir de plan."
+        )), 400
+
     dias_atras = empresa.config_dias_atras_fecha_emision or 10
     fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
 
@@ -2276,6 +2322,26 @@ def admin_metodo_pago(usuario_id):
     if usuario:
         usuario.metodo_pago = request.form.get("metodo_pago", "").strip()
         db.session.commit()
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/plan/<int:usuario_id>", methods=["POST"])
+@login_required
+@admin_required
+def admin_plan(usuario_id):
+    """
+    Asigna manualmente el plan real (individual/profesional/estudio) de un
+    cliente -- hace falta porque hoy el plan se guarda en la cuenta recién
+    en el registro (ver _plan_valido() en /registro), así que las cuentas
+    creadas antes de eso, o si el cliente después cambia de plan a mano
+    (por WhatsApp, transferencia, etc.), necesitan poder actualizarse acá.
+    """
+    usuario = db.session.get(Usuario, usuario_id)
+    if usuario:
+        nuevo_plan = request.form.get("plan", "").strip()
+        if nuevo_plan in PLANES:
+            usuario.plan = nuevo_plan
+            db.session.commit()
     return redirect(url_for("admin_panel"))
 
 

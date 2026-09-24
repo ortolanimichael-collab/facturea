@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from automatizacion.arca_bot import concepto_efectivo
 from lector import lector_core
-from models import db, Comprobante, Empresa
+from models import db, Comprobante, Empresa, Usuario
 from almacenamiento import guardar_archivo_persistente
 
 EXTENSIONES_VALIDAS = {"png", "jpg", "jpeg", "pdf"}
@@ -176,6 +176,14 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
     ext = nombre_original.lower().split(".")[-1]
     if ext not in EXTENSIONES_VALIDAS or not _contenido_coincide_con_extension(ruta_local, ext):
         return "ignorado", None, (None, None)
+
+    # Límite mensual de comprobantes del plan (ver PLANES en models.py) --
+    # se chequea ACÁ, antes de gastar tiempo de OCR, porque este es el único
+    # lugar por el que pasan tanto la subida manual (api_subir) como la
+    # sincronización con Google Drive (drive_sync.sincronizar_carpeta).
+    usuario = db.session.get(Usuario, usuario_id)
+    if usuario and not usuario.le_queda_cupo_mensual():
+        return "limite", None, (None, None)
 
     empresa = Empresa.query.get(empresa_id)
 

@@ -50,7 +50,7 @@ def sincronizar_carpeta(folder_id, fecha_interfaz, usuario_id, empresa_id, cuit_
     service = get_drive_service()
     archivos = _listar_archivos(service, folder_id)
 
-    resumen = {"nuevos": 0, "duplicados": 0, "errores": 0, "ignorados": 0}
+    resumen = {"nuevos": 0, "duplicados": 0, "errores": 0, "ignorados": 0, "limite_plan": 0}
 
     for archivo in archivos:
         nombre = archivo["name"]
@@ -73,7 +73,7 @@ def sincronizar_carpeta(folder_id, fecha_interfaz, usuario_id, empresa_id, cuit_
                 ruta_local, nombre, usuario_id, empresa_id, fecha_interfaz, cuit_propio_cliente,
                 drive_file_id=archivo["id"],
             )
-        resumen[{"nuevo": "nuevos", "duplicado": "duplicados", "error": "errores", "ignorado": "ignorados"}[resultado]] += 1
+        resumen[{"nuevo": "nuevos", "duplicado": "duplicados", "error": "errores", "ignorado": "ignorados", "limite": "limite_plan"}[resultado]] += 1
 
         ext = nombre.rsplit(".", 1)[-1].lower() if "." in nombre else ""
         db.session.add(RegistroSubida(
