@@ -83,8 +83,14 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 # Wsgi corre detrás de un proxy (Render, o Nginx en el VPS) que termina el
 # TLS y manda "X-Forwarded-Proto", así que se usa ProxyFix para que Flask
 # sepa que el pedido original SÍ era HTTPS, y se redirige el que no lo sea.
+# x_for=1 además hace que request.remote_addr (y por lo tanto el rate
+# limiter de abajo, y cualquier IP que guardemos) sea la IP REAL del
+# visitante y no la del proxy interno de Render -- sin esto, todo pedido
+# le llega a Flask con la misma IP interna, así que el límite "10 registros
+# por hora" terminaba compartido entre TODOS los visitantes en vez de ser
+# por persona.
 from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 
 @app.before_request
@@ -303,7 +309,7 @@ PANEL_MEMBRESIAS_URL = os.environ.get("PANEL_MEMBRESIAS_URL", "")  # ej: http://
 PANEL_MEMBRESIAS_SECRET = os.environ.get("PANEL_MEMBRESIAS_SECRET", "")
 
 
-def _enviar_registro_al_panel(nombre, email):
+def _enviar_registro_al_panel(nombre, email, ip=None):
     """Hace el POST real a panel-membresías avisando el alta -- función
     interna, sin hilo propio, para poder encadenarla en orden con el
     check-in (ver avisar_registro_y_checkin_al_panel más abajo)."""
@@ -317,6 +323,7 @@ def _enviar_registro_al_panel(nombre, email):
                 "nombre": nombre,
                 "email": email,
                 "dias_prueba": DIAS_PRUEBA_GRATIS,
+                "ip": ip,
             },
             timeout=65,  # le da margen a que panel-membresías despierte del reposo
         )
@@ -324,7 +331,7 @@ def _enviar_registro_al_panel(nombre, email):
         print(f"[aviso] no se pudo avisar al panel de membresías: {e}")
 
 
-def _enviar_checkin_al_panel(email):
+def _enviar_checkin_al_panel(email, ip=None):
     """Hace el GET real a panel-membresías avisando el check-in -- función
     interna, sin hilo propio, mismo motivo que la de arriba."""
     if not PANEL_MEMBRESIAS_URL:
@@ -332,14 +339,14 @@ def _enviar_checkin_al_panel(email):
     try:
         requests.get(
             f"{PANEL_MEMBRESIAS_URL}/api/validar-licencia",
-            params={"producto": "facturea", "email": email, "version": "web"},
+            params={"producto": "facturea", "email": email, "version": "web", "ip": ip},
             timeout=65,
         )
     except requests.exceptions.RequestException as e:
         print(f"[aviso] no se pudo avisar el check-in al panel de membresías: {e}")
 
 
-def avisar_registro_al_panel(usuario):
+def avisar_registro_al_panel(usuario, ip=None):
     """
     Le avisa al panel de membresías que se registró un cliente nuevo, para
     que aparezca ahí sin tener que cargarlo a mano. Si el panel no está
@@ -354,6 +361,11 @@ def avisar_registro_al_panel(usuario):
     de 5 segundos de antes ni siquiera le daba tiempo a despertar).
     Mandándolo de fondo, con más margen de tiempo, el registro responde
     al instante igual, y el aviso tiene una chance real de llegar.
+
+    `ip` se pasa como string SUELTO, no leído del `request` dentro del
+    hilo -- el contexto de pedido de Flask no existe más una vez que el
+    hilo corre, así que hay que sacarlo ANTES de lanzarlo (mismo motivo
+    por el que nombre/email se sacan del objeto `usuario` acá abajo).
     """
     # Se sacan los valores ACÁ, antes de lanzar el hilo -- el objeto `usuario`
     # viene de SQLAlchemy, y una vez que este pedido termine (que puede pasar
@@ -362,10 +374,10 @@ def avisar_registro_al_panel(usuario):
     # strings sueltos al hilo, en vez del objeto entero, se evita el problema.
     nombre = usuario.nombre_razon_social or usuario.email
     email = usuario.email
-    threading.Thread(target=_enviar_registro_al_panel, args=(nombre, email), daemon=True).start()
+    threading.Thread(target=_enviar_registro_al_panel, args=(nombre, email, ip), daemon=True).start()
 
 
-def avisar_checkin_al_panel(email):
+def avisar_checkin_al_panel(email, ip=None):
     """
     Le avisa al panel de membresías que este usuario se logueó ahora mismo,
     para que "última conexión" en el panel refleje la realidad. No rompe
@@ -373,11 +385,13 @@ def avisar_checkin_al_panel(email):
 
     Mismo criterio que avisar_registro_al_panel: se manda de fondo, para
     no hacer esperar el login de nadie a que panel-membresías despierte.
+    `ip` tiene que venir ya leída del `request` ANTES de llamar a esta
+    función, por el mismo motivo que en avisar_registro_al_panel.
     """
-    threading.Thread(target=_enviar_checkin_al_panel, args=(email,), daemon=True).start()
+    threading.Thread(target=_enviar_checkin_al_panel, args=(email, ip), daemon=True).start()
 
 
-def avisar_registro_y_checkin_al_panel(usuario):
+def avisar_registro_y_checkin_al_panel(usuario, ip=None):
     """
     Para cuando alguien se REGISTRA (que de paso ya lo deja logueado):
     manda el aviso de alta y el de check-in EN ORDEN, dentro del MISMO hilo
@@ -394,8 +408,8 @@ def avisar_registro_y_checkin_al_panel(usuario):
     email = usuario.email
 
     def _mandar_en_orden():
-        _enviar_registro_al_panel(nombre, email)
-        _enviar_checkin_al_panel(email)
+        _enviar_registro_al_panel(nombre, email, ip)
+        _enviar_checkin_al_panel(email, ip)
 
     threading.Thread(target=_mandar_en_orden, daemon=True).start()
 
@@ -840,7 +854,7 @@ def registro():
         db.session.add(nuevo)
         db.session.commit()
 
-        avisar_registro_y_checkin_al_panel(nuevo)
+        avisar_registro_y_checkin_al_panel(nuevo, ip=request.remote_addr)
 
         login_user(nuevo)
         return redirect(url_for("panel"))
@@ -865,7 +879,7 @@ def login():
             return render_template("login.html", error="Email o contraseña incorrectos.")
 
         login_user(usuario)
-        avisar_checkin_al_panel(usuario.email)
+        avisar_checkin_al_panel(usuario.email, ip=request.remote_addr)
         if usuario.es_admin:
             return redirect(url_for("admin_panel"))
         return redirect(url_for("panel"))
@@ -2263,15 +2277,102 @@ def comprobante_vista_previa_pdf(empresa_id, comprobante_id):
 
 # ---------- Soporte / tutoriales ----------
 
+# Datos de contacto que se muestran en /soporte y adonde llegan los
+# reportes de problemas. El email se puede pisar con la variable de
+# entorno SUPPORT_EMAIL si el día de mañana cambia; el de WhatsApp es el
+# mismo que ya se usa en la landing.
+SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "facturabotsistema@gmail.com")
+SUPPORT_WHATSAPP = os.environ.get("SUPPORT_WHATSAPP", "5493571618367")
+
+# Credenciales SMTP para mandar el mail de "reportar un problema" -- se
+# manda con una cuenta de Gmail y una contraseña de aplicación (no la
+# contraseña normal de la cuenta, Google no lo permite para esto). Si no
+# están configuradas, el formulario no rompe: avisa que no se pudo enviar
+# y sugiere escribir directo por los otros canales.
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", SUPPORT_EMAIL)
+SMTP_APP_PASSWORD = os.environ.get("SMTP_APP_PASSWORD", "")
+
+
+def _enviar_email_soporte(asunto, cuerpo, responder_a=None):
+    """
+    Manda un email real a SUPPORT_EMAIL vía SMTP (Gmail + contraseña de
+    aplicación). Devuelve (True, None) si se mandó, o (False, motivo) si
+    no se pudo -- nunca tira una excepción hacia afuera, para que un
+    problema de correo no rompa el pedido HTTP que lo disparó.
+    """
+    if not SMTP_APP_PASSWORD:
+        return False, "el envío de correo no está configurado (falta SMTP_APP_PASSWORD)"
+
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(cuerpo, _charset="utf-8")
+    msg["Subject"] = asunto
+    msg["From"] = SMTP_USER
+    msg["To"] = SUPPORT_EMAIL
+    if responder_a:
+        msg["Reply-To"] = responder_a
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as servidor:
+            servidor.starttls()
+            servidor.login(SMTP_USER, SMTP_APP_PASSWORD)
+            servidor.sendmail(SMTP_USER, [SUPPORT_EMAIL], msg.as_string())
+        return True, None
+    except Exception as e:
+        print(f"[aviso] no se pudo mandar el email de soporte: {e}")
+        return False, str(e)
+
+
 @app.route("/soporte")
 @login_required
 def soporte():
     """
     Sección con guías de uso, contacto y pedido de revisión técnica.
-    Por ahora es contenido estático; más adelante puede sumar un formulario
-    real de tickets.
     """
-    return render_template("soporte.html", usuario=current_user)
+    return render_template(
+        "soporte.html", usuario=current_user,
+        support_email=SUPPORT_EMAIL, support_whatsapp=SUPPORT_WHATSAPP,
+    )
+
+
+@app.route("/soporte/reportar", methods=["POST"])
+@login_required
+@limiter.limit("5 per hour;15 per day")
+def soporte_reportar():
+    """
+    El formulario "Reportar un problema" de /soporte -- manda un email de
+    verdad a SUPPORT_EMAIL con los datos del reporte y quién lo mandó, para
+    no depender de que alguien esté mirando el panel de soporte a mano.
+    Limitado por IP para que no se pueda usar para mandar spam/flood al
+    mail de la empresa.
+    """
+    empresa_afectada = (request.form.get("empresa_afectada") or "").strip()[:200]
+    descripcion = (request.form.get("descripcion") or "").strip()[:4000]
+
+    if not descripcion:
+        return jsonify(ok=False, error="Contanos qué pasó antes de enviar."), 400
+
+    cuerpo = (
+        f"Reporte de problema en AutoFacturación\n\n"
+        f"De: {current_user.nombre_razon_social or current_user.email} <{current_user.email}>\n"
+        f"Empresa afectada: {empresa_afectada or '(no especificada)'}\n"
+        f"Fecha: {datetime.utcnow().strftime('%d/%m/%Y %H:%M UTC')}\n\n"
+        f"Descripción:\n{descripcion}\n"
+    )
+    ok, motivo = _enviar_email_soporte(
+        asunto=f"[Soporte Facturea] Reporte de {current_user.email}",
+        cuerpo=cuerpo,
+        responder_a=current_user.email,
+    )
+    if not ok:
+        return jsonify(ok=False, error=(
+            "No se pudo enviar el reporte automáticamente. "
+            f"Mientras tanto, escribinos directo a {SUPPORT_EMAIL} o por WhatsApp."
+        )), 502
+    return jsonify(ok=True)
 
 
 # ---------- Panel de administrador ----------
