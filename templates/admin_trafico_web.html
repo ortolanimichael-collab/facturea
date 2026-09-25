@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFacturación — Tráfico web</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/logo-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --sans: "Manrope", "Roboto", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px;}
+
+  header.app-header{background:var(--navy-deep);border-bottom:2px solid var(--blue);margin-bottom:32px;}
+  header.app-header .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;gap:14px;flex-wrap:wrap;}
+  .logo{font-family:var(--sans);font-weight:800;font-size:18px;display:flex;align-items:center;gap:9px;text-decoration:none;color:#FFFFFF;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;}
+  .nav-links a{color:#D6E1F5;text-decoration:none;}
+  .nav-links a:hover{color:#fff;}
+
+  h1{font-family:var(--sans);font-weight:800;font-size:24px;margin:0 0 4px;color:var(--ink);}
+  p.sub{color:var(--muted);font-size:14.5px;margin-bottom:28px;}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+  @media (max-width:760px){ .stats{grid-template-columns:repeat(2,1fr);} }
+  .stat{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
+  .stat .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--navy);}
+  .stat .l{font-family:var(--sans);font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;margin-top:4px;}
+
+  table{width:100%;border-collapse:collapse;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  thead th{font-family:var(--sans);font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;color:var(--muted);text-align:left;padding:13px 14px;border-bottom:1.5px solid var(--line);background:var(--paper);}
+  tbody td{padding:11px 14px;font-size:13.5px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--blue-tint);}
+  td.mono{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--muted);}
+
+  .seccion-titulo{font-family:var(--sans);font-weight:800;font-size:18px;margin:40px 0 4px;color:var(--ink);}
+  .seccion-sub{color:var(--muted);font-size:13.5px;margin-bottom:16px;}
+  .tag-cuenta{font-family:var(--sans);font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:20px;background:var(--blue-tint);color:var(--blue-deep);}
+  .tag-anon{font-family:var(--sans);font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:20px;background:var(--paper);color:var(--muted);}
+  .sin-registros{color:var(--muted);font-size:13.5px;padding:20px;text-align:center;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="wrap">
+    <a href="/" class="logo"><img src="/static/img/logo-icon.png" alt="AutoFacturación" style="width:26px;height:26px;">AutoFacturación</a>
+    <div class="nav-links">
+      <a href="/admin">Panel admin</a>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <h1>Tráfico web</h1>
+  <p class="sub">Cualquiera que entra a la página, tenga cuenta o no -- distinto de "última conexión" del panel de membresías, que solo cuenta clientes ya registrados.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{{ visitas_24h }}</div><div class="l">Visitas últimas 24 h</div></div>
+    <div class="stat"><div class="n">{{ visitas_7d }}</div><div class="l">Visitas últimos 7 días</div></div>
+    <div class="stat"><div class="n">{{ visitas_30d }}</div><div class="l">Visitas últimos 30 días</div></div>
+    <div class="stat"><div class="n">{{ anonimas_30d }}</div><div class="l">Anónimas (30 días)</div></div>
+  </div>
+
+  <div class="seccion-titulo">Páginas más visitadas (30 días)</div>
+  {% if paginas_top %}
+  <table>
+    <thead><tr><th>Página</th><th>Visitas</th></tr></thead>
+    <tbody>
+      {% for ruta, cantidad in paginas_top %}
+      <tr><td class="mono">{{ ruta }}</td><td>{{ cantidad }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="sin-registros">Todavía no hay visitas registradas en los últimos 30 días.</div>
+  {% endif %}
+
+  <div class="seccion-titulo">Últimas 100 visitas</div>
+  <div class="seccion-sub">Una fila por visitante distinto por día (no una por cada click) -- ver nota en el código si hace falta más detalle.</div>
+  {% if ultimas %}
+  <table>
+    <thead><tr><th>Fecha</th><th>IP</th><th>Página</th><th>Quién</th></tr></thead>
+    <tbody>
+      {% for v in ultimas %}
+      <tr>
+        <td class="mono">{{ v.creado_en.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td class="mono">{{ v.ip or '—' }}</td>
+        <td class="mono">{{ v.ruta }}</td>
+        <td>
+          {% if v.usuario %}
+          <span class="tag-cuenta">{{ v.usuario.email }}</span>
+          {% else %}
+          <span class="tag-anon">anónimo</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="sin-registros">Todavía no hay visitas registradas.</div>
+  {% endif %}
+</div>
+</body>
+</html>
