@@ -392,12 +392,12 @@
   <div class="barra-acciones">
     <div class="upload-box">
       <input type="file" id="archivos" multiple accept="image/png,image/jpeg,application/pdf">
-      <button id="btnSubir" class="btn">Subir y leer</button>
+      <button id="btnSubir" class="btn" data-track="subir_comprobante">Subir y leer</button>
     </div>
     {% if empresa.tiene_mercadopago_conectado() %}
     <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
     {% endif %}
-    <button id="btnFacturarTodo" class="btn btn-facturar-todo">Facturar todo lo pendiente</button>
+    <button id="btnFacturarTodo" class="btn btn-facturar-todo" data-track="facturar_todo">Facturar todo lo pendiente</button>
     <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
     <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
     <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
@@ -2496,5 +2496,6 @@ document.addEventListener('keydown', (e) => {
   abrirRevision(parseInt(idPendiente, 10));
 })();
 </script>
+<script src="/static/js/tracking.js" defer></script>
 </body>
 </html>

@@ -92,17 +92,67 @@
   <div class="sin-registros">Todavía no hay visitas registradas en los últimos 30 días.</div>
   {% endif %}
 
+  <div class="seccion-titulo">Tiempo promedio por página (30 días)</div>
+  <div class="seccion-sub">Cuánto tiempo estuvo la pestaña abierta y visible en cada página antes de que el visitante se fuera. Requiere que el navegador soporte JS (siempre) y que la visita haya durado al menos 1 segundo.</div>
+  {% if tiempo_por_pagina_30d %}
+  <table>
+    <thead><tr><th>Página</th><th>Tiempo promedio</th><th>Mediciones</th></tr></thead>
+    <tbody>
+      {% for ruta, promedio_seg, mediciones in tiempo_por_pagina_30d %}
+      <tr>
+        <td class="mono">{{ ruta }}</td>
+        <td class="mono">{{ '%d:%02d'|format((promedio_seg or 0) // 60, (promedio_seg or 0) % 60) }} min</td>
+        <td>{{ mediciones }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="sin-registros">Todavía no hay mediciones de tiempo en página.</div>
+  {% endif %}
+
+  <div class="seccion-titulo">Clicks en botones clave (30 días)</div>
+  <div class="seccion-sub">Botones marcados con data-track en el HTML (landing, registro, login, subir comprobante, facturar todo).</div>
+  {% if clicks_30d %}
+  <table>
+    <thead><tr><th>Botón</th><th>Clicks</th></tr></thead>
+    <tbody>
+      {% for nombre, cantidad in clicks_30d %}
+      <tr><td class="mono">{{ nombre or 'sin nombre' }}</td><td>{{ cantidad }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="sin-registros">Todavía no hay clicks registrados.</div>
+  {% endif %}
+
+  <div class="seccion-titulo">De dónde vienen (30 días)</div>
+  <div class="seccion-sub">Instagram y WhatsApp se detectan solos por cómo abren el link sus navegadores internos. Para separar mejor "bio de Instagram" de "un post" o "una historia", agregá <span class="mono" style="font-size:12px;">?utm_source=bio</span> (o el nombre que quieras) al final del link que compartís en cada lugar.</div>
+  {% if origenes_30d %}
+  <table>
+    <thead><tr><th>Origen</th><th>Visitas</th></tr></thead>
+    <tbody>
+      {% for origen, cantidad in origenes_30d %}
+      <tr><td class="mono">{{ origen or 'sin datos' }}</td><td>{{ cantidad }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="sin-registros">Todavía no hay visitas registradas en los últimos 30 días.</div>
+  {% endif %}
+
   <div class="seccion-titulo">Últimas 100 visitas</div>
-  <div class="seccion-sub">Una fila por visitante distinto por día (no una por cada click) -- ver nota en el código si hace falta más detalle.</div>
+  <div class="seccion-sub">Una fila por visitante distinto por día (no una por cada click) -- ver nota en el código si hace falta más detalle. Hora de Argentina.</div>
   {% if ultimas %}
   <table>
-    <thead><tr><th>Fecha</th><th>IP</th><th>Página</th><th>Quién</th></tr></thead>
+    <thead><tr><th>Fecha</th><th>IP</th><th>Página</th><th>Origen</th><th>Quién</th></tr></thead>
     <tbody>
       {% for v in ultimas %}
       <tr>
-        <td class="mono">{{ v.creado_en.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td class="mono">{{ v.creado_en_ar.strftime('%d/%m/%Y %H:%M') if v.creado_en_ar else '—' }}</td>
         <td class="mono">{{ v.ip or '—' }}</td>
         <td class="mono">{{ v.ruta }}</td>
+        <td class="mono">{{ v.origen or '—' }}</td>
         <td>
           {% if v.usuario %}
           <span class="tag-cuenta">{{ v.usuario.email }}</span>

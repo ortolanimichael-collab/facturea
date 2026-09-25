@@ -684,7 +684,7 @@
         <h1>Facturá cientos de comprobantes de Mercado Pago y bancos en 3 clics (sin tocar la web de ARCA).</h1>
         <p class="lead">AutoFacturación lee tus comprobantes, extrae los montos automáticamente y emite tus facturas A, B o C masivamente con CAE. Ahorrá hasta 10 horas de burocracia cada mes.</p>
         <div class="hero-cta">
-          <a href="/registro" class="btn btn-primary">Probar gratis por 15 días — Subí tu primer comprobante</a>
+          <a href="/registro" class="btn btn-primary" data-track="cta_hero_registrarse">Probar gratis por 15 días — Subí tu primer comprobante</a>
           <a href="#como-funciona" class="btn btn-ghost">Ver cómo funciona</a>
         </div>
         <p class="hero-note">Configuración en 3 minutos · Sin tarjeta de crédito · Funciona con Monotributo y RI</p>
@@ -953,7 +953,7 @@
           <p class="roi-resultado-label">Con AutoFacturación</p>
           <p class="roi-resultado-autofact">~3 minutos</p>
           <p class="roi-resultado-sub">mediante ejecución batch automatizada</p>
-          <a href="/registro" class="btn btn-primary" style="margin-top:18px;width:100%;justify-content:center;">Probar gratis por 15 días</a>
+          <a href="/registro" class="btn btn-primary" style="margin-top:18px;width:100%;justify-content:center;" data-track="cta_planes_registrarse">Probar gratis por 15 días</a>
         </div>
       </div>
     </div>
@@ -1116,7 +1116,7 @@
         <div>
           <h2>Empezá gratis, sin tarjeta</h2>
           <p>Creá tu cuenta y probá AutoFacturación 15 días sin costo. Subís tus primeros comprobantes, ves cómo arma la planilla, y recién ahí decidís qué plan te sirve.</p>
-          <a href="/registro" class="btn btn-primary" style="margin-top:20px; display:inline-flex; width:auto;">Probar gratis por 15 días</a>
+          <a href="/registro" class="btn btn-primary" style="margin-top:20px; display:inline-flex; width:auto;" data-track="cta_final_registrarse">Probar gratis por 15 días</a>
         </div>
         <form class="cta-fields" onsubmit="return enviarWhatsapp(event)">
           <p class="form-note" style="margin-bottom:2px;">¿Tenés dudas antes de anotarte? Escribinos:</p>
@@ -1453,5 +1453,6 @@ async function enviarWhatsapp(e){
 })();
 </script>
 
+<script src="/static/js/tracking.js" defer></script>
 </body>
 </html>
