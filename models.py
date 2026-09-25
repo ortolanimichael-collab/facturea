@@ -544,7 +544,44 @@ class VisitaWeb(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=True)
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
+    # De dónde vino la visita. "origen" es ya una clasificación legible
+    # (instagram, whatsapp, google, directo, etc.) calculada una sola vez al
+    # registrar la visita -- ver _clasificar_origen() en app.py. "referrer"
+    # guarda el header Referer crudo tal cual llegó, por si algún día hace
+    # falta revisar un caso que _clasificar_origen no supo identificar bien.
+    origen = db.Column(db.String(40))
+    referrer = db.Column(db.String(300))
+
     usuario = db.relationship("Usuario")
+
+
+class EventoWeb(db.Model):
+    """
+    Interacción puntual de un visitante DENTRO de una visita ya registrada
+    en VisitaWeb: cuánto tiempo estuvo en una página antes de irse, o si
+    tocó alguno de los botones "clave" que marcamos con data-track en el
+    HTML (ver static/js/tracking.js). A diferencia de VisitaWeb (una fila
+    por visitante por día), acá SÍ puede haber varias filas por visita --
+    una por página que recorrió y una por cada botón importante que tocó.
+
+    tipo:
+      - "tiempo_en_pagina": "nombre" es la ruta (ej. "/"), "valor_seg" son
+        los segundos que esa página estuvo visible en la pestaña activa
+        antes de que el visitante se fuera o cambiara de pestaña.
+      - "click": "nombre" es la etiqueta del botón (el valor de
+        data-track, ej. "cta_registrarse", "subir_comprobante").
+    """
+    __tablename__ = "eventos_web"
+
+    id = db.Column(db.Integer, primary_key=True)
+    visita_id = db.Column(db.Integer, db.ForeignKey("visitas_web.id"), nullable=True, index=True)
+    tipo = db.Column(db.String(20), nullable=False)  # "tiempo_en_pagina" | "click"
+    nombre = db.Column(db.String(120))
+    valor_seg = db.Column(db.Integer)  # solo para "tiempo_en_pagina"
+    ruta = db.Column(db.String(200))
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    visita = db.relationship("VisitaWeb")
 
 
 def init_db(app):

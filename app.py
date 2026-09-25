@@ -25,7 +25,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, VisitaWeb, DIAS_PRUEBA_GRATIS, PLANES
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, VisitaWeb, EventoWeb, DIAS_PRUEBA_GRATIS, PLANES
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -419,17 +419,29 @@ def crear_admin_inicial():
     Si no existe ningún administrador todavía y están configuradas las variables
     ADMIN_EMAIL y ADMIN_PASSWORD, crea la cuenta admin automáticamente al arrancar.
     No hace falta acceso a Shell (que en Render solo viene en planes pagos).
-    Es seguro dejarlo: si el admin ya existe, no hace nada.
+    Es seguro dejarlo: si el admin ya existe, no hace nada -- salvo que se
+    pida explícitamente resetear la contraseña (ver RESETEAR_PASSWORD_ADMIN
+    más abajo), para cubrir el caso de perder/no recordar la contraseña de
+    un admin que ya existía.
     """
     email = os.environ.get("ADMIN_EMAIL")
     password = os.environ.get("ADMIN_PASSWORD")
     if not email or not password:
         return
 
+    # Vía de recuperación: si además de ADMIN_EMAIL/ADMIN_PASSWORD se carga
+    # RESETEAR_PASSWORD_ADMIN=1, esa cuenta (existente o nueva) queda con
+    # la contraseña de ADMIN_PASSWORD, aunque ya hubiera otro admin. Sin
+    # esta variable, el comportamiento es el de siempre: solo crea el
+    # primer admin si todavía no hay ninguno, y nunca toca una contraseña
+    # existente. Conviene sacar esta variable de Render después de
+    # loguearse, para no dejar una forma de resetear la contraseña
+    # accesible en cualquier redeploy futuro.
+    resetear = os.environ.get("RESETEAR_PASSWORD_ADMIN") == "1"
+
     with app.app_context():
         try:
-            if Usuario.query.filter_by(es_admin=True).first():
-                return  # ya hay un admin, no crear otro
+            hay_admin = Usuario.query.filter_by(es_admin=True).first()
         except Exception:
             # Las tablas todavía no existen -- pasa cuando este archivo se importa
             # desde "flask db upgrade" (que corre ANTES de que existan las tablas).
@@ -437,9 +449,14 @@ def crear_admin_inicial():
             # el servidor de verdad, ya con las migraciones aplicadas.
             return
 
+        if hay_admin and not resetear:
+            return  # ya hay un admin y no se pidió resetear nada
+
         existente = Usuario.query.filter_by(email=email.lower()).first()
         if existente:
             existente.es_admin = True
+            if resetear:
+                existente.set_password(password)
             db.session.commit()
             return
 
@@ -558,6 +575,66 @@ def admin_required(f):
     return decorada
 
 
+def _clasificar_origen(req):
+    """De dónde vino esta visita, en una palabra legible en el panel.
+
+    Prioridad:
+    1. ?utm_source=... en la URL -- si vos mismo etiquetás el link que
+       ponés en la bio de Instagram, en un estado de WhatsApp, etc. (ej.
+       "...?utm_source=instagram"), esto es 100% confiable porque lo
+       decidiste vos.
+    2. El User-Agent del navegador -- cuando alguien toca un link DENTRO
+       de Instagram o WhatsApp, esas apps casi siempre abren la página en
+       su propio "navegador interno", que se identifica solo en el
+       User-Agent (llevan literalmente "Instagram" o "WhatsApp" en el
+       string). Esto pasa la gran mayoría de las veces sin que vos tengas
+       que hacer nada.
+    3. El header Referer -- si la visita vino de un click en Google,
+       Facebook, u otra página, el navegador manda de dónde viene (salvo
+       que la app de origen lo bloquee, como hace Instagram normalmente
+       en su feed).
+    4. Si no hay nada de lo anterior, se marca "directo" (alguien escribió
+       la URL a mano, la tenía guardada, o vino de un mensaje/PDF/apps que
+       no mandan referer -- WhatsApp en Android, por ejemplo, no siempre
+       lo manda aunque no sea navegador interno)."""
+    utm = (req.args.get("utm_source") or "").strip().lower()
+    if utm:
+        return utm[:40]
+
+    ua = (req.headers.get("User-Agent") or "").lower()
+    if "instagram" in ua:
+        return "instagram"
+    if "whatsapp" in ua:
+        return "whatsapp"
+    if "fban" in ua or "fbav" in ua or "fb_iab" in ua:
+        return "facebook"
+    if "tiktok" in ua or "musical_ly" in ua:
+        return "tiktok"
+
+    ref = (req.referrer or "").lower()
+    if not ref:
+        return "directo"
+    if "instagram.com" in ref:
+        return "instagram"
+    if "whatsapp.com" in ref or "wa.me" in ref:
+        return "whatsapp"
+    if "facebook.com" in ref or "fb.com" in ref:
+        return "facebook"
+    if "google." in ref:
+        return "google"
+    if "t.co" in ref or "twitter.com" in ref or "x.com" in ref:
+        return "twitter/x"
+    # Referer de una página propia (por ejemplo, de un link interno):
+    # no aporta como "origen externo", así que se muestra tal cual (el
+    # dominio) para no perder el dato.
+    try:
+        from urllib.parse import urlparse
+        dominio = urlparse(req.referrer).netloc
+        return dominio[:40] if dominio else "otro"
+    except Exception:
+        return "otro"
+
+
 @app.before_request
 def _registrar_visita_web():
     """
@@ -593,6 +670,8 @@ def _registrar_visita_web():
             ruta=request.path[:200],
             user_agent=(request.headers.get("User-Agent") or "")[:300],
             usuario_id=current_user.id if current_user.is_authenticated else None,
+            origen=_clasificar_origen(request),
+            referrer=(request.referrer or "")[:300] or None,
         )
         db.session.add(visita)
         db.session.commit()
@@ -600,6 +679,49 @@ def _registrar_visita_web():
     except Exception as e:
         db.session.rollback()
         print(f"[aviso] no se pudo registrar la visita web: {e}")
+
+
+_TIPOS_EVENTO_VALIDOS = {"tiempo_en_pagina", "click"}
+
+
+@csrf.exempt
+@app.route("/api/evento-web", methods=["POST"])
+def registrar_evento_web():
+    """
+    Lo llama el propio navegador del visitante (ver static/js/tracking.js),
+    no otro servidor -- por eso no pide clave, a diferencia de los
+    /api/interno/... Guarda cuánto tiempo pasó en cada página antes de
+    irse, y cuándo tocó alguno de los botones marcados con data-track en
+    el HTML. Si algo viene raro simplemente no se guarda esa fila (nunca
+    debe romper la navegación de un visitante real)."""
+    data = request.get_json(silent=True) or {}
+    tipo = (data.get("tipo") or "")[:20]
+    if tipo not in _TIPOS_EVENTO_VALIDOS:
+        return ("", 204)
+
+    valor_seg = None
+    if tipo == "tiempo_en_pagina":
+        try:
+            valor_seg = max(0, min(3600, int(data.get("valor_seg") or 0)))
+        except (TypeError, ValueError):
+            valor_seg = None
+
+    try:
+        evento = EventoWeb(
+            visita_id=session.get("visita_web_id"),
+            tipo=tipo,
+            nombre=(data.get("nombre") or "")[:120] or None,
+            valor_seg=valor_seg,
+            ruta=(data.get("ruta") or request.path)[:200],
+        )
+        db.session.add(evento)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[aviso] no se pudo registrar el evento web: {e}")
+    # 204 y no jsonify: esto lo llama sendBeacon/fetch keepalive, a nadie le
+    # importa la respuesta y así pesa lo mínimo posible.
+    return ("", 204)
 
 
 @app.before_request
@@ -2479,7 +2601,45 @@ def admin_trafico_web():
         .all()
     )
 
+    # De dónde viene la gente que entra (ver _clasificar_origen), últimos
+    # 30 días -- para saber si conviene más publicar en Instagram, mandar
+    # el link por WhatsApp, etc.
+    origenes_30d = (
+        db.session.query(VisitaWeb.origen, db.func.count(VisitaWeb.id).label("cantidad"))
+        .filter(VisitaWeb.creado_en >= desde_30d)
+        .group_by(VisitaWeb.origen)
+        .order_by(db.func.count(VisitaWeb.id).desc())
+        .all()
+    )
+
+    # Tiempo promedio en cada página (solo cuenta páginas donde llegó a
+    # medirse al menos 1 segundo -- ver tracking.js) y clicks en los
+    # botones marcados con data-track, ambos de los últimos 30 días.
+    tiempo_por_pagina_30d = (
+        db.session.query(
+            EventoWeb.ruta,
+            db.func.avg(EventoWeb.valor_seg).label("promedio_seg"),
+            db.func.count(EventoWeb.id).label("mediciones"),
+        )
+        .filter(EventoWeb.tipo == "tiempo_en_pagina", EventoWeb.creado_en >= desde_30d)
+        .group_by(EventoWeb.ruta)
+        .order_by(db.func.count(EventoWeb.id).desc())
+        .all()
+    )
+    clicks_30d = (
+        db.session.query(EventoWeb.nombre, db.func.count(EventoWeb.id).label("cantidad"))
+        .filter(EventoWeb.tipo == "click", EventoWeb.creado_en >= desde_30d)
+        .group_by(EventoWeb.nombre)
+        .order_by(db.func.count(EventoWeb.id).desc())
+        .all()
+    )
+
     ultimas = VisitaWeb.query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+    for v in ultimas:
+        # Mismo ajuste fijo de -3hs que ya se usa para facturado_en_ar más
+        # arriba en el archivo -- Argentina no tiene horario de verano, así
+        # que no hace falta nada más elaborado.
+        v.creado_en_ar = (v.creado_en - timedelta(hours=3)) if v.creado_en else None
 
     return render_template(
         "admin_trafico_web.html",
@@ -2489,6 +2649,9 @@ def admin_trafico_web():
         con_cuenta_30d=con_cuenta_30d,
         anonimas_30d=anonimas_30d,
         paginas_top=paginas_top,
+        origenes_30d=origenes_30d,
+        tiempo_por_pagina_30d=tiempo_por_pagina_30d,
+        clicks_30d=clicks_30d,
         ultimas=ultimas,
     )
 
@@ -2749,8 +2912,12 @@ def visitas_web_para_panel():
             {
                 "ip": v.ip,
                 "ruta": v.ruta,
-                "fecha": v.creado_en.isoformat() if v.creado_en else None,
+                # Ya ajustada a hora de Argentina (UTC-3, sin horario de
+                # verano) antes de mandarla -- así el panel de membresías no
+                # tiene que saber en qué huso horario está esto guardado.
+                "fecha": (v.creado_en - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M") if v.creado_en else None,
                 "email": v.usuario.email if v.usuario else None,
+                "origen": v.origen,
             }
             for v in ultimas
         ],
