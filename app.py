@@ -2708,6 +2708,55 @@ def uso_comprobantes_para_panel():
     })
 
 
+@csrf.exempt
+@app.route("/api/interno/visitas-web", methods=["GET"])
+def visitas_web_para_panel():
+    """
+    Panel de membresías llama ACÁ (misma clave compartida que los demás
+    endpoints /api/interno/...) para traer el tráfico real a la página --
+    CUALQUIERA que entra, tenga cuenta o no (ver VisitaWeb en models.py y
+    _registrar_visita_web más arriba). Esto es distinto de "última
+    conexión" de cada suscripción, que solo sabe de clientes ya
+    registrados.
+    """
+    clave_recibida = request.headers.get("X-Webhook-Secret", "")
+    if not _clave_webhook_valida(clave_recibida):
+        return jsonify({"error": "no autorizado"}), 401
+
+    ahora = datetime.utcnow()
+    desde_24h = ahora - timedelta(hours=24)
+    desde_7d = ahora - timedelta(days=7)
+    desde_30d = ahora - timedelta(days=30)
+
+    base_query = VisitaWeb.query
+    visitas_24h = base_query.filter(VisitaWeb.creado_en >= desde_24h).count()
+    visitas_7d = base_query.filter(VisitaWeb.creado_en >= desde_7d).count()
+    visitas_30d = base_query.filter(VisitaWeb.creado_en >= desde_30d).count()
+    con_cuenta_30d = base_query.filter(
+        VisitaWeb.creado_en >= desde_30d, VisitaWeb.usuario_id.isnot(None)
+    ).count()
+
+    ultimas = VisitaWeb.query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+
+    return jsonify({
+        "ok": True,
+        "visitas_24h": visitas_24h,
+        "visitas_7d": visitas_7d,
+        "visitas_30d": visitas_30d,
+        "con_cuenta_30d": con_cuenta_30d,
+        "anonimas_30d": visitas_30d - con_cuenta_30d,
+        "ultimas": [
+            {
+                "ip": v.ip,
+                "ruta": v.ruta,
+                "fecha": v.creado_en.isoformat() if v.creado_en else None,
+                "email": v.usuario.email if v.usuario else None,
+            }
+            for v in ultimas
+        ],
+    })
+
+
 # ---------- Utilidad para crear el primer administrador ----------
 
 @app.cli.command("crear-admin")
