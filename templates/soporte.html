@@ -3,6 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+// Agrega el token CSRF a todos los fetch() que no sean GET/HEAD, sin tener
+// que tocar cada llamada una por una -- necesario porque el servidor ahora
+// exige ese token en cualquier POST (protección contra CSRF).
+(function () {
+  var token = document.querySelector('meta[name="csrf-token"]').content;
+  var fetchOriginal = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    var metodo = (init.method || 'GET').toUpperCase();
+    if (metodo !== 'GET' && metodo !== 'HEAD') {
+      init.headers = new Headers(init.headers || {});
+      if (!init.headers.has('X-CSRFToken')) {
+        init.headers.set('X-CSRFToken', token);
+      }
+    }
+    return fetchOriginal.call(this, input, init);
+  };
+})();
+</script>
 <title>AutoFacturación — Soporte</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/static/img/logo-icon.png">
@@ -97,6 +118,20 @@
   .btn-primary{background:var(--blue);color:#FFFFFF;}
   .btn-primary:hover{background:var(--blue-deep);}
 
+  .contacto-grid{display:flex;flex-direction:column;gap:14px;}
+  .contacto-item{display:flex;align-items:center;gap:14px;}
+  .contacto-item .icono{
+    width:42px;height:42px;flex:none;border-radius:10px;background:var(--blue-tint);
+    display:flex;align-items:center;justify-content:center;font-size:19px;
+  }
+  .contacto-item a.dato{font-weight:700;color:var(--navy);text-decoration:none;font-size:14.5px;}
+  .contacto-item a.dato:hover{color:var(--blue-deep);text-decoration:underline;}
+  .contacto-item .etiqueta{font-size:12px;color:var(--muted);}
+
+  .aviso-ok{background:#E7F6EC;border:1.5px solid #34A853;color:#1E7A3B;padding:12px 14px;border-radius:8px;font-size:13.5px;margin-top:14px;}
+  .aviso-error{background:#FBE9E9;border:1.5px solid #D64545;color:#A13030;padding:12px 14px;border-radius:8px;font-size:13.5px;margin-top:14px;}
+  .btn[disabled]{opacity:0.6;cursor:not-allowed;}
+
   footer{padding:36px 0;border-top:1px solid var(--line);background:var(--paper-2);margin-top:20px;}
   .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
   .foot-row p{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-weight:600;}
@@ -155,7 +190,23 @@
     <section class="panel-tab" id="tab-contacto">
       <div class="item">
         <h3>Hablá con nosotros</h3>
-        <p>Escribinos por WhatsApp o email y te respondemos a la brevedad.</p>
+        <p style="margin-bottom:16px;">Escribinos por WhatsApp o email y te respondemos a la brevedad.</p>
+        <div class="contacto-grid">
+          <div class="contacto-item">
+            <div class="icono">💬</div>
+            <div>
+              <div class="etiqueta">WhatsApp</div>
+              <a class="dato" href="https://wa.me/{{ support_whatsapp }}" target="_blank" rel="noopener">+{{ support_whatsapp }}</a>
+            </div>
+          </div>
+          <div class="contacto-item">
+            <div class="icono">✉️</div>
+            <div>
+              <div class="etiqueta">Email</div>
+              <a class="dato" href="mailto:{{ support_email }}">{{ support_email }}</a>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -163,17 +214,18 @@
       <div class="item">
         <h3>Contanos qué pasó</h3>
         <p style="margin-bottom:16px;">Describí el problema con el mayor detalle posible; te contactamos para resolverlo.</p>
-        <form>
+        <form id="formReporte">
           <div class="campo">
             <label>Empresa afectada (opcional)</label>
-            <input type="text" placeholder="ej: Juan Moya (Kiosco)">
+            <input type="text" name="empresa_afectada" placeholder="ej: Juan Moya (Kiosco)">
           </div>
           <div class="campo">
             <label>Descripción del problema</label>
-            <textarea placeholder="Contanos qué pasó..."></textarea>
+            <textarea name="descripcion" required placeholder="Contanos qué pasó..."></textarea>
           </div>
-          <button type="button" class="btn btn-primary" onclick="alert('Por ahora escribinos directo por los canales de contacto. Este formulario todavía no está conectado.')">Enviar</button>
+          <button type="submit" class="btn btn-primary" id="btnEnviarReporte">Enviar</button>
         </form>
+        <div id="reporteAviso"></div>
       </div>
     </section>
   </div>
@@ -191,6 +243,32 @@ function mostrarTab(nombre) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('activa', t.dataset.tab === nombre));
   document.querySelectorAll('.panel-tab').forEach(p => p.classList.toggle('activa', p.id === 'tab-' + nombre));
 }
+
+document.getElementById('formReporte').addEventListener('submit', async function (ev) {
+  ev.preventDefault();
+  const boton = document.getElementById('btnEnviarReporte');
+  const aviso = document.getElementById('reporteAviso');
+  aviso.innerHTML = '';
+  boton.disabled = true;
+  boton.textContent = 'Enviando...';
+
+  try {
+    const datos = new FormData(ev.target);
+    const resp = await fetch('/soporte/reportar', { method: 'POST', body: datos });
+    const json = await resp.json();
+    if (json.ok) {
+      aviso.innerHTML = '<div class="aviso-ok">Listo, recibimos tu reporte. Te contactamos a la brevedad.</div>';
+      ev.target.reset();
+    } else {
+      aviso.innerHTML = '<div class="aviso-error">' + (json.error || 'No se pudo enviar el reporte.') + '</div>';
+    }
+  } catch (e) {
+    aviso.innerHTML = '<div class="aviso-error">No se pudo enviar el reporte por un problema de conexión. Escribinos directo por los canales de contacto.</div>';
+  } finally {
+    boton.disabled = false;
+    boton.textContent = 'Enviar';
+  }
+});
 </script>
 </body>
 </html>
