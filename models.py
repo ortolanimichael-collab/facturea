@@ -521,6 +521,32 @@ class LeadContacto(db.Model):
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class VisitaWeb(db.Model):
+    """
+    Un renglón por cada visita a una página pública de Facturea -- a
+    diferencia de lo que se manda al panel de membresías (que solo sabe de
+    login/registro de CLIENTES YA CONVERTIDOS), esto registra a CUALQUIERA
+    que entra a la página, tenga cuenta o no. Vive acá y no en el panel de
+    membresías porque el panel está pensado para clientes con suscripción,
+    y la mayoría de estas visitas nunca llegan a serlo.
+
+    No se guarda una fila por cada pedido HTTP (eso serían millones de
+    filas y no aportaría nada) -- se guarda como mucho UNA por
+    visitante/sesión de navegador POR DÍA, la primera vez que entra. Ver
+    _registrar_visita_web() en app.py.
+    """
+    __tablename__ = "visitas_web"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(45))
+    ruta = db.Column(db.String(200))
+    user_agent = db.Column(db.String(300))
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=True)
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    usuario = db.relationship("Usuario")
+
+
 def init_db(app):
     database_url = os.environ.get("DATABASE_URL", "sqlite:///facturea.db")
     if database_url.startswith("postgres://"):

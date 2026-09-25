@@ -25,7 +25,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, DIAS_PRUEBA_GRATIS, PLANES
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, VisitaWeb, DIAS_PRUEBA_GRATIS, PLANES
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -556,6 +556,50 @@ def admin_required(f):
             return redirect(url_for("home"))
         return f(*args, **kwargs)
     return decorada
+
+
+@app.before_request
+def _registrar_visita_web():
+    """
+    Registra como mucho UNA visita por navegador por día (usando la cookie
+    de sesión para no repetir en cada click), para poder ver cuánta gente
+    entra de verdad a la página -- no solo quienes llegan a registrarse o
+    loguearse (eso se avisa aparte al panel de membresías, ver
+    avisar_checkin_al_panel más abajo, y es un evento distinto). Se
+    ignoran archivos estáticos, la API y los webhooks internos, que no son
+    "alguien mirando una página".
+    """
+    if request.endpoint in (None, "static") or request.path.startswith("/api/") or request.path.startswith("/static/"):
+        return
+    hoy = datetime.utcnow().strftime("%Y-%m-%d")
+    try:
+        if session.get("visita_registrada_el") == hoy:
+            # Ya se contó una visita hoy para esta sesión de navegador. Si
+            # esa visita quedó como "anónima" y la persona se logueó
+            # DESPUÉS en la misma sesión (caso típico: entra a la landing
+            # sin cuenta y recién ahí hace login), se la completa con quién
+            # es -- si no, se la seguiría mostrando como anónima para
+            # siempre aunque en realidad ya se sepa quién es.
+            visita_id = session.get("visita_web_id")
+            if visita_id and current_user.is_authenticated:
+                visita = db.session.get(VisitaWeb, visita_id)
+                if visita and visita.usuario_id is None:
+                    visita.usuario_id = current_user.id
+                    db.session.commit()
+            return
+        session["visita_registrada_el"] = hoy
+        visita = VisitaWeb(
+            ip=request.remote_addr,
+            ruta=request.path[:200],
+            user_agent=(request.headers.get("User-Agent") or "")[:300],
+            usuario_id=current_user.id if current_user.is_authenticated else None,
+        )
+        db.session.add(visita)
+        db.session.commit()
+        session["visita_web_id"] = visita.id
+    except Exception as e:
+        db.session.rollback()
+        print(f"[aviso] no se pudo registrar la visita web: {e}")
 
 
 @app.before_request
@@ -2396,6 +2440,57 @@ def admin_panel():
         ).first()
         c.usado_por_otra_cuenta = bool(otra_empresa)
     return render_template("admin.html", usuarios=usuarios, cuils_bloqueados=cuils_bloqueados)
+
+
+@app.route("/admin/trafico-web")
+@login_required
+@admin_required
+def admin_trafico_web():
+    """
+    Tráfico real a la página -- registrado o no. Distinto de "última
+    conexión" en el panel de membresías, que solo sabe de quienes YA son
+    clientes. Acá aparece cualquiera que haya entrado (ver
+    _registrar_visita_web más arriba).
+    """
+    ahora = datetime.utcnow()
+    desde_24h = ahora - timedelta(hours=24)
+    desde_7d = ahora - timedelta(days=7)
+    desde_30d = ahora - timedelta(days=30)
+
+    base_query = VisitaWeb.query
+    visitas_24h = base_query.filter(VisitaWeb.creado_en >= desde_24h).count()
+    visitas_7d = base_query.filter(VisitaWeb.creado_en >= desde_7d).count()
+    visitas_30d = base_query.filter(VisitaWeb.creado_en >= desde_30d).count()
+
+    # Cuántas de esas visitas eran de alguien ya logueado vs. anónimo --
+    # para distinguir tráfico nuevo/curioso de gente que ya es cliente.
+    con_cuenta_30d = base_query.filter(
+        VisitaWeb.creado_en >= desde_30d, VisitaWeb.usuario_id.isnot(None)
+    ).count()
+    anonimas_30d = visitas_30d - con_cuenta_30d
+
+    # Páginas más visitadas en los últimos 30 días.
+    paginas_top = (
+        db.session.query(VisitaWeb.ruta, db.func.count(VisitaWeb.id).label("cantidad"))
+        .filter(VisitaWeb.creado_en >= desde_30d)
+        .group_by(VisitaWeb.ruta)
+        .order_by(db.func.count(VisitaWeb.id).desc())
+        .limit(15)
+        .all()
+    )
+
+    ultimas = VisitaWeb.query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+
+    return render_template(
+        "admin_trafico_web.html",
+        visitas_24h=visitas_24h,
+        visitas_7d=visitas_7d,
+        visitas_30d=visitas_30d,
+        con_cuenta_30d=con_cuenta_30d,
+        anonimas_30d=anonimas_30d,
+        paginas_top=paginas_top,
+        ultimas=ultimas,
+    )
 
 
 @app.route("/admin/renovar/<int:usuario_id>", methods=["POST"])
