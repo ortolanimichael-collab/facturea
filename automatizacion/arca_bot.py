@@ -145,10 +145,42 @@ def elegir_punto_de_venta_y_tipo_comprobante(ventana, punto_venta, texto_tipo_co
     (ej: "Factura C"), porque no tenemos mapeados los códigos numéricos
     internos de cada tipo -- esto también evita tener que armar un mapa a
     mano para las variantes MiPyMEs (FCE) el día que algún cliente las use.
+
+    ARCA en algún momento de 2026 empezó a mostrar "Punto de Ventas a
+    utilizar" con un buscador visual encima (el que dice "seleccionar..."
+    y despliega una lista al abrirlo) -- pero el mensaje de error que
+    reportó un cliente confirma que el <select id="puntodeventa"> de toda
+    la vida SIGUE estando ahí en el HTML ("locator resolved to <select
+    id="puntodeventa"...>"), lo que pasa es que ARCA ahora lo tapa/oculta
+    con CSS para mostrar el buscador nuevo en su lugar. select_option()
+    exige que el elemento esté visible antes de tocarlo, y como ARCA lo
+    esconde a propósito, eso nunca pasa -- de ahí el timeout eterno. Ver
+    _elegir_punto_de_venta() para el arreglo.
     """
-    ventana.locator("#puntodeventa").select_option(punto_venta)
+    _elegir_punto_de_venta(ventana, punto_venta)
     ventana.locator("#universocomprobante").select_option(label=texto_tipo_comprobante)
     ventana.get_by_role("button", name="Continuar >").click()
+
+
+def _elegir_punto_de_venta(ventana, punto_venta, timeout_normal=6000):
+    """
+    Se intenta primero de la forma de siempre (por si ARCA vuelve a
+    mostrarlo visible como antes). Si eso tarda de más -- señal de que es
+    el buscador nuevo tapando el <select> -- se repite con force=True, que
+    le dice a Playwright que ignore el chequeo de "tiene que estar visible
+    en pantalla" y elija la opción igual. Esto funciona porque el <select>
+    real sigue estando ahí y sigue funcionando (dispara el mismo onchange
+    que siempre disparó) -- ARCA solo dejó de MOSTRARLO, no lo sacó.
+
+    Si en algún momento ARCA saca el <select> del todo (no solo lo esconde)
+    esto va a volver a fallar, y ahí sí va a hacer falta mirar el HTML
+    nuevo del buscador para clickearlo como a un combobox de verdad.
+    """
+    selector = ventana.locator("#puntodeventa")
+    try:
+        selector.select_option(punto_venta, timeout=timeout_normal)
+    except PlaywrightTimeoutError:
+        selector.select_option(punto_venta, force=True)
 
 
 def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hasta):
