@@ -212,6 +212,25 @@
   .btn.btn-peligro:hover{background:var(--danger);color:#fff;}
   .acciones-fila .btn-revisar{border-color:var(--blue-deep);color:var(--blue-deep);}
   .acciones-fila .btn-revisar:hover{background:var(--blue-deep);color:#fff;}
+  .acciones-fila .btn-ver-error{border-color:var(--warn-deep);color:var(--warn-deep);background:var(--warn-tint);}
+  .acciones-fila .btn-ver-error:hover{background:var(--warn-deep);color:#fff;}
+
+  #overlayVerError{display:none;position:fixed;inset:0;background:rgba(19,28,51,0.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
+  #overlayVerError.abierto{display:flex;}
+  .modal-error{background:var(--paper-2);border-radius:14px;max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+  .modal-error-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .modal-error-head h3{font-family:var(--sans);font-size:16px;font-weight:800;color:var(--ink);margin:0;}
+  .modal-error-head .archivo{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .modal-error-cerrar{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:4px;}
+  .modal-error-cuerpo{padding:18px 22px;overflow-y:auto;}
+  .modal-error-texto{font-family:ui-monospace,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word;background:var(--warn-tint);color:var(--warn-deep);border-radius:10px;padding:14px;border:1px solid rgba(138,90,10,0.25);}
+  .modal-error-pie{padding:16px 22px;border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .modal-error-pie .msg{font-size:12.5px;color:var(--muted);}
+  .btn-enviar-whatsapp{font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;border:1.5px solid #1FAA59;background:#1FAA59;color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+  .btn-enviar-whatsapp:hover{background:#178A46;}
+  .btn-enviar-email{font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;border:1.5px solid var(--navy);background:var(--paper-2);color:var(--navy);}
+  .btn-enviar-email:hover{background:var(--navy);color:#fff;}
+  .btn-enviar-email:disabled{opacity:0.6;cursor:default;}
 
   /* ---------- Revisión manual ---------- */
   #overlayRevision{
@@ -547,6 +566,9 @@
           <td>
             <div class="acciones-fila">
               <button class="btn-revisar" data-id="{{ c.id }}">Revisar</button>
+              {% if c.estado == "error" %}
+              <button class="btn-ver-error" data-id="{{ c.id }}" data-archivo="{{ c.archivo_origen or '' }}" data-error="{{ c.error_facturacion or 'No quedó guardado el detalle de este error.' }}">Ver error</button>
+              {% endif %}
               {% if editable %}
               <button class="btn-facturar {{ 'reintentar' if c.estado == 'error' }}" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de facturar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>{{ "Reintentar" if c.estado == "error" else "Facturar" }}</button>
               <button class="btn-probar" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de probar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>Probar</button>
@@ -661,6 +683,26 @@
   </div>
 </div>
 
+<div id="overlayVerError">
+  <div class="modal-error">
+    <div class="modal-error-head">
+      <div>
+        <h3>Error al facturar</h3>
+        <div class="archivo" id="verErrorArchivo"></div>
+      </div>
+      <button type="button" class="modal-error-cerrar" id="btnCerrarVerError">✕</button>
+    </div>
+    <div class="modal-error-cuerpo">
+      <div class="modal-error-texto" id="verErrorTexto"></div>
+    </div>
+    <div class="modal-error-pie">
+      <a href="#" target="_blank" rel="noopener" class="btn-enviar-whatsapp" id="btnEnviarWhatsapp">Enviar por WhatsApp</a>
+      <button type="button" class="btn-enviar-email" id="btnEnviarEmail">Enviar por email a soporte</button>
+      <span class="msg" id="verErrorMsg"></span>
+    </div>
+  </div>
+</div>
+
 <div id="overlayRevision">
   <div class="revision-topbar">
     <div class="info-izq">
@@ -698,6 +740,7 @@ function mostrarTabComprobantes(idPestaña) {
 }
 
 const EMPRESA_ID = {{ empresa.id }};
+const SUPPORT_WHATSAPP = {{ support_whatsapp | tojson }};
 const DATOS_REVISION = {{ datos_revision | tojson }};
 const CAMPOS_REVISION = [
   { campo: 'precio_unitario', etiqueta: 'Monto', tipo: 'numero' },
@@ -1292,6 +1335,84 @@ document.querySelectorAll('.btn-preview-pdf').forEach(btn => {
   btn.addEventListener('click', () => {
     window.open(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/vista-previa.pdf`, '_blank');
   });
+});
+
+// ---------- Modal "Ver error" + reportar a soporte ----------
+let idComprobanteError = null;
+
+function armarTextoWhatsapp(id, archivo, error) {
+  return `Hola! Tengo un error al facturar un comprobante en AutoFacturación.\n` +
+    `Comprobante: #${id}${archivo ? ' -- ' + archivo : ''}\n` +
+    `Error:\n${error}`;
+}
+
+function abrirModalVerError(btn) {
+  idComprobanteError = btn.dataset.id;
+  const archivo = btn.dataset.archivo || '';
+  const error = btn.dataset.error || 'No quedó guardado el detalle de este error.';
+
+  document.getElementById('verErrorArchivo').textContent = archivo;
+  document.getElementById('verErrorTexto').textContent = error;
+  document.getElementById('verErrorMsg').textContent = '';
+
+  const btnWhatsapp = document.getElementById('btnEnviarWhatsapp');
+  btnWhatsapp.href = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(armarTextoWhatsapp(idComprobanteError, archivo, error))}`;
+
+  const btnEmail = document.getElementById('btnEnviarEmail');
+  btnEmail.disabled = false;
+  btnEmail.textContent = 'Enviar por email a soporte';
+
+  document.getElementById('overlayVerError').classList.add('abierto');
+}
+
+function cerrarModalVerError() {
+  document.getElementById('overlayVerError').classList.remove('abierto');
+  idComprobanteError = null;
+}
+
+document.querySelectorAll('.btn-ver-error').forEach(btn => {
+  btn.addEventListener('click', () => abrirModalVerError(btn));
+});
+
+document.getElementById('btnCerrarVerError').addEventListener('click', cerrarModalVerError);
+
+document.getElementById('overlayVerError').addEventListener('click', (e) => {
+  if (e.target.id === 'overlayVerError') cerrarModalVerError();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('overlayVerError').classList.contains('abierto')) {
+    cerrarModalVerError();
+  }
+});
+
+document.getElementById('btnEnviarEmail').addEventListener('click', async () => {
+  if (!idComprobanteError) return;
+  const btnEmail = document.getElementById('btnEnviarEmail');
+  const msg = document.getElementById('verErrorMsg');
+  btnEmail.disabled = true;
+  btnEmail.textContent = 'Enviando...';
+  msg.style.color = '';
+  msg.textContent = '';
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${idComprobanteError}/reportar-error`, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      btnEmail.textContent = 'Enviado ✓';
+      msg.style.color = '#1FAA59';
+      msg.textContent = 'Le avisamos a soporte, te van a contactar a la brevedad.';
+    } else {
+      btnEmail.disabled = false;
+      btnEmail.textContent = 'Enviar por email a soporte';
+      msg.style.color = 'var(--warn-deep)';
+      msg.textContent = data.error || 'No se pudo enviar el reporte.';
+    }
+  } catch (e) {
+    btnEmail.disabled = false;
+    btnEmail.textContent = 'Enviar por email a soporte';
+    msg.style.color = 'var(--warn-deep)';
+    msg.textContent = 'No se pudo conectar con el servidor.';
+  }
 });
 
 document.querySelectorAll('.btn-facturar').forEach(btn => {

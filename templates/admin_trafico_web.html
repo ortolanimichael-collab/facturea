@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="refresh" content="30">
 <title>AutoFacturación — Tráfico web</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/static/img/logo-icon.png">
@@ -37,8 +38,9 @@
   h1{font-family:var(--sans);font-weight:800;font-size:24px;margin:0 0 4px;color:var(--ink);}
   p.sub{color:var(--muted);font-size:14.5px;margin-bottom:28px;}
 
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
-  @media (max-width:760px){ .stats{grid-template-columns:repeat(2,1fr);} }
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px;}
+  @media (max-width:900px){ .stats{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:560px){ .stats{grid-template-columns:repeat(2,1fr);} }
   .stat{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
   .stat .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--navy);}
   .stat .l{font-family:var(--sans);font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;margin-top:4px;}
@@ -55,6 +57,10 @@
   .tag-cuenta{font-family:var(--sans);font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:20px;background:var(--blue-tint);color:var(--blue-deep);}
   .tag-anon{font-family:var(--sans);font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:20px;background:var(--paper);color:var(--muted);}
   .sin-registros{color:var(--muted);font-size:13.5px;padding:20px;text-align:center;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;}
+  .stat.en-vivo .n{color:#1FAA59;}
+  .punto-vivo{display:inline-block;width:9px;height:9px;border-radius:50%;background:#1FAA59;box-shadow:0 0 0 3px rgba(31,170,89,0.18);vertical-align:middle;}
+  @keyframes pulso-vivo{0%{box-shadow:0 0 0 0 rgba(31,170,89,0.45);}70%{box-shadow:0 0 0 6px rgba(31,170,89,0);}100%{box-shadow:0 0 0 0 rgba(31,170,89,0);}}
+  .punto-vivo.activo{animation:pulso-vivo 1.8s infinite;}
 </style>
 </head>
 <body>
@@ -69,9 +75,10 @@
 </header>
 <div class="wrap">
   <h1>Tráfico web</h1>
-  <p class="sub">Cualquiera que entra a la página, tenga cuenta o no -- distinto de "última conexión" del panel de membresías, que solo cuenta clientes ya registrados.</p>
+  <p class="sub">Cualquiera que entra a la página, tenga cuenta o no -- distinto de "última conexión" del panel de membresías, que solo cuenta clientes ya registrados. Ya sin bots ({{ bots_30d }} descartados en 30 días). Esta página se actualiza sola cada 30s.</p>
 
   <div class="stats">
+    <div class="stat en-vivo"><div class="n"><span class="punto-vivo {{ 'activo' if en_linea_ahora else '' }}"></span> {{ en_linea_ahora }}</div><div class="l">En línea ahora</div></div>
     <div class="stat"><div class="n">{{ visitas_24h }}</div><div class="l">Visitas últimas 24 h</div></div>
     <div class="stat"><div class="n">{{ visitas_7d }}</div><div class="l">Visitas últimos 7 días</div></div>
     <div class="stat"><div class="n">{{ visitas_30d }}</div><div class="l">Visitas últimos 30 días</div></div>
@@ -127,7 +134,7 @@
   {% endif %}
 
   <div class="seccion-titulo">De dónde vienen (30 días)</div>
-  <div class="seccion-sub">Instagram y WhatsApp se detectan solos por cómo abren el link sus navegadores internos. Para separar mejor "bio de Instagram" de "un post" o "una historia", agregá <span class="mono" style="font-size:12px;">?utm_source=bio</span> (o el nombre que quieras) al final del link que compartís en cada lugar.</div>
+  <div class="seccion-sub">Instagram se detecta solo por cómo abre el link su navegador interno. WhatsApp es más difícil de detectar en un click real (su navegador interno no se identifica distinto de Chrome/Safari) -- para esos casos, agregá <span class="mono" style="font-size:12px;">?utm_source=whatsapp</span> (o el nombre que quieras) al final del link que compartís en cada lugar, y va a aparecer tal cual lo etiquetaste.</div>
   {% if origenes_30d %}
   <table>
     <thead><tr><th>Origen</th><th>Visitas</th></tr></thead>
@@ -142,17 +149,21 @@
   {% endif %}
 
   <div class="seccion-titulo">Últimas 100 visitas</div>
-  <div class="seccion-sub">Una fila por visitante distinto por día (no una por cada click) -- ver nota en el código si hace falta más detalle. Hora de Argentina.</div>
+  <div class="seccion-sub">Una fila por visitante distinto por día (no una por cada click) -- ver nota en el código si hace falta más detalle. Hora de Argentina. Ya sin bots.</div>
   {% if ultimas %}
   <table>
-    <thead><tr><th>Fecha</th><th>IP</th><th>Página</th><th>Origen</th><th>Quién</th></tr></thead>
+    <thead><tr><th></th><th>Fecha</th><th>IP</th><th>Página</th><th>Origen</th><th>Duración</th><th>Quién</th></tr></thead>
     <tbody>
       {% for v in ultimas %}
       <tr>
+        <td>{% if v.en_vivo %}<span class="punto-vivo activo" title="En línea ahora"></span>{% endif %}</td>
         <td class="mono">{{ v.creado_en_ar.strftime('%d/%m/%Y %H:%M') if v.creado_en_ar else '—' }}</td>
         <td class="mono">{{ v.ip or '—' }}</td>
         <td class="mono">{{ v.ruta }}</td>
         <td class="mono">{{ v.origen or '—' }}</td>
+        <td class="mono">
+          {% if v.duracion_seg %}{{ '%d:%02d'|format(v.duracion_seg // 60, v.duracion_seg % 60) }} min{% else %}—{% endif %}
+        </td>
         <td>
           {% if v.usuario %}
           <span class="tag-cuenta">{{ v.usuario.email }}</span>
