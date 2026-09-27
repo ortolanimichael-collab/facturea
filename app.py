@@ -1571,6 +1571,7 @@ def comprobantes(empresa_id):
     return render_template(
         "comprobantes.html", comprobantes=filas, usuario=current_user, empresa=empresa,
         datos_revision=datos_revision, stats=_calcular_estadisticas(empresa.id), conceptos=CONCEPTOS,
+        support_whatsapp=SUPPORT_WHATSAPP,
     )
 
 
@@ -2613,6 +2614,58 @@ def soporte_reportar():
         return jsonify(ok=False, error=(
             "No se pudo enviar el reporte automáticamente. "
             f"Mientras tanto, escribinos directo a {SUPPORT_EMAIL} o por WhatsApp."
+        )), 502
+    return jsonify(ok=True)
+
+
+def _texto_reporte_error_comprobante(empresa, comprobante):
+    """
+    Arma el texto del reporte de un comprobante en estado "error" --lo usan
+    tanto el email (texto plano) como el link de WhatsApp (mismo texto,
+    codificado en la URL). Todo lo que un humano necesitaría para
+    diagnosticar rápido sin tener que pedirlo por separado: quién es,
+    cuál archivo, qué error exacto tiró ARCA/el lector, y un link directo
+    para revisarlo en el panel."""
+    return (
+        f"Error al facturar un comprobante en AutoFacturación\n\n"
+        f"Cliente: {current_user.nombre_razon_social or current_user.email} <{current_user.email}>\n"
+        f"Empresa: {empresa.nombre_interno or empresa.razon_social_arca or empresa.id}\n"
+        f"Comprobante: #{comprobante.id} -- {comprobante.archivo_origen or '(sin nombre)'}\n"
+        f"Fecha: {datetime.utcnow().strftime('%d/%m/%Y %H:%M UTC')}\n\n"
+        f"Error:\n{comprobante.error_facturacion or '(sin detalle guardado)'}\n"
+    )
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/reportar-error", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour;30 per day")
+def comprobante_reportar_error(empresa_id, comprobante_id):
+    """
+    Botón "Enviar por email" del modal "Ver error" en la tabla de
+    comprobantes -- manda a soporte el error EXACTO de ESE comprobante
+    puntual (a diferencia de /soporte/reportar, que es un formulario libre
+    donde el cliente tiene que escribir y a veces pegar mal el error). Así
+    llega ya armado con toda la data necesaria para diagnosticarlo rápido.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    comprobante = Comprobante.query.filter_by(id=comprobante_id, empresa_id=empresa.id).first()
+    if not comprobante:
+        return jsonify(ok=False, error="Ese comprobante no existe."), 404
+    if comprobante.estado != "error":
+        return jsonify(ok=False, error="Este comprobante no tiene ningún error para reportar."), 400
+
+    ok, motivo = _enviar_email_soporte(
+        asunto=f"[Soporte Facturea] Error en comprobante #{comprobante.id} de {current_user.email}",
+        cuerpo=_texto_reporte_error_comprobante(empresa, comprobante),
+        responder_a=current_user.email,
+    )
+    if not ok:
+        return jsonify(ok=False, error=(
+            "No se pudo enviar el mail automáticamente. Probá por WhatsApp, "
+            f"o escribinos directo a {SUPPORT_EMAIL}."
         )), 502
     return jsonify(ok=True)
 
