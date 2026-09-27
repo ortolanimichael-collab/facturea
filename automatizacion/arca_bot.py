@@ -165,22 +165,52 @@ def elegir_punto_de_venta_y_tipo_comprobante(ventana, punto_venta, texto_tipo_co
 def _elegir_punto_de_venta(ventana, punto_venta, timeout_normal=6000):
     """
     Se intenta primero de la forma de siempre (por si ARCA vuelve a
-    mostrarlo visible como antes). Si eso tarda de más -- señal de que es
-    el buscador nuevo tapando el <select> -- se repite con force=True, que
-    le dice a Playwright que ignore el chequeo de "tiene que estar visible
-    en pantalla" y elija la opción igual. Esto funciona porque el <select>
-    real sigue estando ahí y sigue funcionando (dispara el mismo onchange
-    que siempre disparó) -- ARCA solo dejó de MOSTRARLO, no lo sacó.
+    mostrarlo visible como antes, o en cuentas donde no cambió nada). Si
+    eso tarda de más, hay dos problemas posibles y hay que resolver los DOS:
 
-    Si en algún momento ARCA saca el <select> del todo (no solo lo esconde)
-    esto va a volver a fallar, y ahí sí va a hacer falta mirar el HTML
-    nuevo del buscador para clickearlo como a un combobox de verdad.
+    1. El <select> está oculto detrás del buscador nuevo de ARCA (visible
+       en pantalla como "seleccionar...") -- select_option exige que el
+       elemento esté visible, y como ARCA lo tapa a propósito, nunca lo
+       está. Se resuelve con force=True, que le dice a Playwright que
+       ignore ese chequeo.
+    2. El "value" interno que ARCA le pone a cada <option> puede haber
+       cambiado (dejar de ser un número simple como "1"). Un primer intento
+       de arreglo asumía que el ÚNICO problema era la visibilidad, pero un
+       cliente lo probó y le siguió fallando con el mismo timeout de
+       30000ms -- eso significa que el problema real es que "1" ya no
+       matchea ningún <option> real, no solo que estaba tapado.
+
+    Por eso ahora, en vez de asumir cuál es el value interno, se LEE
+    directo del HTML (con JavaScript, algo que funciona aunque el <select>
+    esté escondido, porque es inspeccionar el DOM y no una acción simulada
+    de mouse/teclado) cuál es el <option> cuyo TEXTO VISIBLE empieza con el
+    punto de venta con cero a la izquierda tal como ARCA lo muestra en la
+    lista (ej: punto_venta="1" -> "00001-..."), y se usa el value real de
+    ESE option -- así no importa qué formato interno use ARCA.
     """
     selector = ventana.locator("#puntodeventa")
     try:
         selector.select_option(punto_venta, timeout=timeout_normal)
+        return
     except PlaywrightTimeoutError:
-        selector.select_option(punto_venta, force=True)
+        pass
+
+    prefijo_visible = f"{int(punto_venta):05d}"
+    valor_real = selector.evaluate(
+        """(select, prefijo) => {
+            const opciones = Array.from(select.options);
+            const encontrada = opciones.find(o => o.text.trim().startsWith(prefijo));
+            return encontrada ? encontrada.value : null;
+        }""",
+        prefijo_visible,
+    )
+    if valor_real is None:
+        raise ValueError(
+            f"No se encontró en ARCA ningún punto de venta que empiece con \"{prefijo_visible}-\" "
+            f"en el desplegable de \"Punto de Ventas a utilizar\". Revisá que el punto de venta "
+            f"configurado ({punto_venta}) siga habilitado en ARCA para esta empresa."
+        )
+    selector.select_option(valor_real, force=True)
 
 
 def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hasta):
