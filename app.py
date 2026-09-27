@@ -558,6 +558,39 @@ def _sync_column_widths():
 _sync_column_widths()
 
 
+def _backfill_fecha_desde_hasta_faltante():
+    """
+    Corrige, una sola vez al arrancar, los comprobantes que quedaron con
+    "Desde"/"Hasta" vacíos por un bug de antes en la importación de
+    Mercado Pago (crear_comprobante_desde_pago_mercadopago no los cargaba
+    -- ya arreglado ahí para los que se traigan de acá en adelante, esto
+    es solo para los que ya habían quedado mal ANTES del arreglo). No
+    toca comprobantes ya facturados: lo que se mandó a ARCA en su momento
+    ya quedó así, y esto es nomás un dato de referencia local.
+    """
+    with app.app_context():
+        pendientes = Comprobante.query.filter(
+            Comprobante.estado != "facturado",
+            Comprobante.fecha_comprobante.isnot(None),
+            or_(
+                Comprobante.fecha_desde.is_(None), Comprobante.fecha_desde == "",
+                Comprobante.fecha_hasta.is_(None), Comprobante.fecha_hasta == "",
+            ),
+        ).all()
+        if not pendientes:
+            return
+        for c in pendientes:
+            if not c.fecha_desde:
+                c.fecha_desde = c.fecha_comprobante
+            if not c.fecha_hasta:
+                c.fecha_hasta = c.fecha_comprobante
+        db.session.commit()
+        print(f"[info] fecha_desde/fecha_hasta completados en {len(pendientes)} comprobante(s) que habían quedado vacíos.")
+
+
+_backfill_fecha_desde_hasta_faltante()
+
+
 crear_admin_inicial()
 
 

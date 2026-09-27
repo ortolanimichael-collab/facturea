@@ -144,6 +144,13 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         tipo_pago_detalle=tipo_pago_detalle,
         condicion_iva=empresa.config_condicion_iva,
         condicion_venta=condicion_venta_default,
+        # Mismo criterio que la carga manual (ver comprobante_cargar_a_mano en
+        # app.py): el período facturado "Desde/Hasta" que le pide ARCA para
+        # servicios se carga igual a la fecha del comprobante -- antes acá
+        # quedaban vacíos, lo que rompía la automatización para cualquier
+        # empresa con concepto "Servicios" o "Productos y Servicios".
+        fecha_desde=fecha_comprobante,
+        fecha_hasta=fecha_comprobante,
         importe_total=importe_total,
         cantidad=cantidad,
         archivo_origen=f"Mercado Pago #{pago['id']}",
