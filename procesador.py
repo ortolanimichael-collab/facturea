@@ -125,6 +125,33 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         or payer.get("email") or None
     )
 
+    # Tipo de documento del receptor: si Mercado Pago mandó la identificación
+    # del pagador (payer.identification.type/number -- lo manda cuando el
+    # comprador la cargó al pagar, ej. con QR o link de pago) y es CUIT o
+    # CUIL, se usa ese dato tal cual. Si no, se factura como "DNI" sin
+    # número -- el valor por defecto para un monotributista facturando a
+    # Consumidor Final, que es el caso normal de un pago de Mercado Pago
+    # (ARCA solo exige completar el número si el Tipo de documento elegido
+    # es CUIT/CUIL, ver facturar_comprobante en arca_bot.py -- con "DNI"
+    # puede quedar vacío sin problema).
+    identificacion = payer.get("identification") or {}
+    tipo_doc_mp = (identificacion.get("type") or "").strip().upper()
+    numero_doc_mp = (identificacion.get("number") or "").strip()
+    if tipo_doc_mp in ("CUIT", "CUIL") and numero_doc_mp:
+        tipo_documento = tipo_doc_mp
+        cuit_receptor = numero_doc_mp
+    else:
+        tipo_documento = "DNI"
+        cuit_receptor = None
+
+    # Últimos dígitos de la tarjeta (débito o crédito) que mandó Mercado
+    # Pago -- igual que con el lector de imágenes, ARCA solo pide estos
+    # últimos dígitos, nunca el número completo de la tarjeta (ver
+    # zfill(20) en _completar_tarjeta, arca_bot.py).
+    numero_pago_mp = None
+    if medio_pago_detectado in ("Débito", "Crédito"):
+        numero_pago_mp = ((pago.get("card") or {}).get("last_four_digits") or "").strip() or None
+
     fila = Comprobante(
         usuario_id=usuario_id,
         empresa_id=empresa.id,
@@ -142,6 +169,9 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         medio_pago_detectado=medio_pago_detectado,
         tipo_pago=tipo_pago,
         tipo_pago_detalle=tipo_pago_detalle,
+        numero_pago=numero_pago_mp,
+        tipo_documento=tipo_documento,
+        cuit_receptor=cuit_receptor,
         condicion_iva=empresa.config_condicion_iva,
         condicion_venta=condicion_venta_default,
         # Mismo criterio que la carga manual (ver comprobante_cargar_a_mano en

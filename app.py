@@ -591,6 +591,43 @@ def _backfill_fecha_desde_hasta_faltante():
 _backfill_fecha_desde_hasta_faltante()
 
 
+def _backfill_tipo_documento_faltante():
+    """
+    Mismo criterio que _backfill_fecha_desde_hasta_faltante() de arriba,
+    para otro campo que quedaba vacío por el mismo bug viejo de
+    crear_comprobante_desde_pago_mercadopago (no cargaba Tipo de
+    documento en absoluto) -- ya arreglado ahí para los pagos que se
+    traigan de acá en adelante (con CUIT/CUIL si Mercado Pago lo dio, o
+    "DNI" si no), esto es solo para completar los que ya habían quedado
+    sin nada.
+
+    Se le pone "DNI" a los que no tengan ninguno -- el valor por defecto
+    para un monotributista facturando a Consumidor Final. No se toca:
+    - Los ya facturados (dato histórico, ya se mandó así a ARCA).
+    - Los de tipo "... A" (Factura A, Nota de Crédito/Débito A, etc.):
+      esos exigen CUIT sí o sí, y no hay forma de adivinarlo acá -- se
+      dejan para que el cliente los complete a mano en Revisión Manual.
+    """
+    with app.app_context():
+        pendientes = (
+            Comprobante.query.filter(
+                Comprobante.estado != "facturado",
+                or_(Comprobante.tipo_documento.is_(None), Comprobante.tipo_documento == ""),
+            )
+            .all()
+        )
+        pendientes = [c for c in pendientes if not (c.tipo_comprobante or "").strip().endswith(" A")]
+        if not pendientes:
+            return
+        for c in pendientes:
+            c.tipo_documento = "DNI"
+        db.session.commit()
+        print(f"[info] Tipo de documento completado como \"DNI\" en {len(pendientes)} comprobante(s) que habían quedado vacíos.")
+
+
+_backfill_tipo_documento_faltante()
+
+
 crear_admin_inicial()
 
 
