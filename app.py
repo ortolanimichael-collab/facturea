@@ -604,8 +604,14 @@ def _clasificar_origen(req):
     ua = (req.headers.get("User-Agent") or "").lower()
     if "instagram" in ua:
         return "instagram"
-    if "whatsapp" in ua:
-        return "whatsapp"
+    # OJO: "whatsapp" en el User-Agent NO es un visitante real -- es el
+    # propio WhatsApp buscando el título/imagen para armar la vista previa
+    # del link apenas alguien lo pega en un chat (pasa una sola vez, antes
+    # de que cualquier persona lo haya tocado). Eso se filtra como bot en
+    # _detectar_bot(); si de verdad alguien abre el link en el navegador
+    # interno de WhatsApp, ese navegador casi nunca se identifica distinto
+    # de un Chrome/Safari normal, así que ahí solo queda el Referer (si lo
+    # manda) o "directo".
     if "fban" in ua or "fbav" in ua or "fb_iab" in ua:
         return "facebook"
     if "tiktok" in ua or "musical_ly" in ua:
@@ -635,6 +641,41 @@ def _clasificar_origen(req):
         return "otro"
 
 
+# Rutas que un navegador de verdad pide solas (o que un humano jamás visita
+# a propósito) -- no son "alguien mirando una página", así que ni se
+# registran como visita. La gran mayoría del tráfico a /robots.txt es
+# justamente esto: un crawler chequeando qué puede rastrear antes de tocar
+# cualquier otra cosa.
+_RUTAS_NO_VISITA = {"/robots.txt", "/sitemap.xml", "/favicon.ico", "/ads.txt", "/humans.txt"}
+
+# Substrings de User-Agent que casi con certeza son un programa, no una
+# persona con un navegador: buscadores, herramientas de SEO, monitores de
+# uptime, bots de vista-previa de links (Slack/Telegram/Discord/Twitter/
+# WhatsApp cuando alguien pega el link en un chat -- eso pasa UNA vez, antes
+# de que nadie lo haya tocado todavía) y librerías HTTP de scripts
+# (curl, requests de Python, etc.). "bot"/"spider"/"crawl" son genéricos y
+# ya cubren a la enorme mayoría (googlebot, bingbot, ahrefsbot, etc.) sin
+# tener que listarlos a todos uno por uno.
+_UA_BOT_TOKENS = (
+    "bot", "spider", "crawl", "slurp", "mediapartners",
+    "facebookexternalhit", "whatsapp", "telegrambot", "discordbot",
+    "linkedinbot", "pingdom", "uptimerobot", "monitor", "curl/",
+    "python-requests", "python-urllib", "wget/", "headlesschrome",
+    "phantomjs", "go-http-client", "libwww-perl", "scrapy", "httpclient",
+    "okhttp",
+)
+
+
+def _detectar_bot(req):
+    """True si esta visita parece un programa y no una persona navegando.
+    Ver _UA_BOT_TOKENS arriba para el criterio. Un User-Agent vacío también
+    cuenta como bot -- un navegador de verdad siempre manda uno."""
+    ua = (req.headers.get("User-Agent") or "").strip().lower()
+    if not ua:
+        return True
+    return any(token in ua for token in _UA_BOT_TOKENS)
+
+
 @app.before_request
 def _registrar_visita_web():
     """
@@ -646,7 +687,12 @@ def _registrar_visita_web():
     ignoran archivos estáticos, la API y los webhooks internos, que no son
     "alguien mirando una página".
     """
-    if request.endpoint in (None, "static") or request.path.startswith("/api/") or request.path.startswith("/static/"):
+    if (
+        request.endpoint in (None, "static")
+        or request.path.startswith("/api/")
+        or request.path.startswith("/static/")
+        or request.path in _RUTAS_NO_VISITA
+    ):
         return
     hoy = datetime.utcnow().strftime("%Y-%m-%d")
     try:
@@ -672,6 +718,7 @@ def _registrar_visita_web():
             usuario_id=current_user.id if current_user.is_authenticated else None,
             origen=_clasificar_origen(request),
             referrer=(request.referrer or "")[:300] or None,
+            es_bot=_detectar_bot(request),
         )
         db.session.add(visita)
         db.session.commit()
@@ -721,6 +768,35 @@ def registrar_evento_web():
         print(f"[aviso] no se pudo registrar el evento web: {e}")
     # 204 y no jsonify: esto lo llama sendBeacon/fetch keepalive, a nadie le
     # importa la respuesta y así pesa lo mínimo posible.
+    return ("", 204)
+
+
+# Cada cuánto manda un latido el navegador (ver tracking.js) mientras la
+# pestaña sigue visible. El umbral de "en vivo ahora" en las consultas de
+# tráfico le da un colchón de un latido y medio perdido antes de apagar el
+# puntito verde.
+SEGUNDOS_LATIDO = 20
+SEGUNDOS_EN_VIVO = 45
+
+
+@csrf.exempt
+@app.route("/api/latido-web", methods=["POST"])
+def latido_web():
+    """
+    "Sigo acá" -- lo llama el navegador del visitante cada SEGUNDOS_LATIDO
+    mientras la pestaña está visible (ver tracking.js), para poder mostrar
+    en el panel quién está en la página AHORA MISMO (el puntito verde), no
+    solo quién pasó en algún momento del día."""
+    visita_id = session.get("visita_web_id")
+    if visita_id:
+        try:
+            visita = db.session.get(VisitaWeb, visita_id)
+            if visita:
+                visita.ultimo_latido = datetime.utcnow()
+                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"[aviso] no se pudo registrar el latido web: {e}")
     return ("", 204)
 
 
@@ -2578,11 +2654,18 @@ def admin_trafico_web():
     desde_24h = ahora - timedelta(hours=24)
     desde_7d = ahora - timedelta(days=7)
     desde_30d = ahora - timedelta(days=30)
+    desde_en_vivo = ahora - timedelta(seconds=SEGUNDOS_EN_VIVO)
 
-    base_query = VisitaWeb.query
+    # Todo lo de acá para abajo excluye tráfico de bots (ver _detectar_bot)
+    # para mostrar quién entra DE VERDAD -- no buscadores, monitores de
+    # uptime, ni bots de vista previa de links.
+    base_query = VisitaWeb.query.filter(VisitaWeb.es_bot.is_(False))
     visitas_24h = base_query.filter(VisitaWeb.creado_en >= desde_24h).count()
     visitas_7d = base_query.filter(VisitaWeb.creado_en >= desde_7d).count()
     visitas_30d = base_query.filter(VisitaWeb.creado_en >= desde_30d).count()
+    bots_30d = VisitaWeb.query.filter(
+        VisitaWeb.es_bot.is_(True), VisitaWeb.creado_en >= desde_30d
+    ).count()
 
     # Cuántas de esas visitas eran de alguien ya logueado vs. anónimo --
     # para distinguir tráfico nuevo/curioso de gente que ya es cliente.
@@ -2591,10 +2674,14 @@ def admin_trafico_web():
     ).count()
     anonimas_30d = visitas_30d - con_cuenta_30d
 
+    # Cuántos siguen con la pestaña abierta AHORA MISMO (puntito verde --
+    # ver latido_web()/tracking.js).
+    en_linea_ahora = base_query.filter(VisitaWeb.ultimo_latido >= desde_en_vivo).count()
+
     # Páginas más visitadas en los últimos 30 días.
     paginas_top = (
         db.session.query(VisitaWeb.ruta, db.func.count(VisitaWeb.id).label("cantidad"))
-        .filter(VisitaWeb.creado_en >= desde_30d)
+        .filter(VisitaWeb.creado_en >= desde_30d, VisitaWeb.es_bot.is_(False))
         .group_by(VisitaWeb.ruta)
         .order_by(db.func.count(VisitaWeb.id).desc())
         .limit(15)
@@ -2606,7 +2693,7 @@ def admin_trafico_web():
     # el link por WhatsApp, etc.
     origenes_30d = (
         db.session.query(VisitaWeb.origen, db.func.count(VisitaWeb.id).label("cantidad"))
-        .filter(VisitaWeb.creado_en >= desde_30d)
+        .filter(VisitaWeb.creado_en >= desde_30d, VisitaWeb.es_bot.is_(False))
         .group_by(VisitaWeb.origen)
         .order_by(db.func.count(VisitaWeb.id).desc())
         .all()
@@ -2634,12 +2721,30 @@ def admin_trafico_web():
         .all()
     )
 
-    ultimas = VisitaWeb.query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+    ultimas = base_query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+
+    # Duración total de cada visita: suma de todo lo medido como
+    # "tiempo_en_pagina" (ver EventoWeb) a lo largo de las páginas que
+    # recorrió ese día -- una sola cifra de "cuánto duró" por fila, en vez
+    # de tener que sumarlo a ojo.
+    ids_visitas = [v.id for v in ultimas]
+    duracion_por_visita = {}
+    if ids_visitas:
+        filas = (
+            db.session.query(EventoWeb.visita_id, db.func.sum(EventoWeb.valor_seg))
+            .filter(EventoWeb.tipo == "tiempo_en_pagina", EventoWeb.visita_id.in_(ids_visitas))
+            .group_by(EventoWeb.visita_id)
+            .all()
+        )
+        duracion_por_visita = {vid: total for vid, total in filas}
+
     for v in ultimas:
         # Mismo ajuste fijo de -3hs que ya se usa para facturado_en_ar más
         # arriba en el archivo -- Argentina no tiene horario de verano, así
         # que no hace falta nada más elaborado.
         v.creado_en_ar = (v.creado_en - timedelta(hours=3)) if v.creado_en else None
+        v.en_vivo = bool(v.ultimo_latido and v.ultimo_latido >= desde_en_vivo)
+        v.duracion_seg = duracion_por_visita.get(v.id)
 
     return render_template(
         "admin_trafico_web.html",
@@ -2648,6 +2753,8 @@ def admin_trafico_web():
         visitas_30d=visitas_30d,
         con_cuenta_30d=con_cuenta_30d,
         anonimas_30d=anonimas_30d,
+        bots_30d=bots_30d,
+        en_linea_ahora=en_linea_ahora,
         paginas_top=paginas_top,
         origenes_30d=origenes_30d,
         tiempo_por_pagina_30d=tiempo_por_pagina_30d,
@@ -2890,16 +2997,30 @@ def visitas_web_para_panel():
     desde_24h = ahora - timedelta(hours=24)
     desde_7d = ahora - timedelta(days=7)
     desde_30d = ahora - timedelta(days=30)
+    desde_en_vivo = ahora - timedelta(seconds=SEGUNDOS_EN_VIVO)
 
-    base_query = VisitaWeb.query
+    # Sin bots (ver _detectar_bot) -- mismo criterio que /admin/trafico-web.
+    base_query = VisitaWeb.query.filter(VisitaWeb.es_bot.is_(False))
     visitas_24h = base_query.filter(VisitaWeb.creado_en >= desde_24h).count()
     visitas_7d = base_query.filter(VisitaWeb.creado_en >= desde_7d).count()
     visitas_30d = base_query.filter(VisitaWeb.creado_en >= desde_30d).count()
     con_cuenta_30d = base_query.filter(
         VisitaWeb.creado_en >= desde_30d, VisitaWeb.usuario_id.isnot(None)
     ).count()
+    en_linea_ahora = base_query.filter(VisitaWeb.ultimo_latido >= desde_en_vivo).count()
 
-    ultimas = VisitaWeb.query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+    ultimas = base_query.order_by(VisitaWeb.creado_en.desc()).limit(100).all()
+
+    ids_visitas = [v.id for v in ultimas]
+    duracion_por_visita = {}
+    if ids_visitas:
+        filas = (
+            db.session.query(EventoWeb.visita_id, db.func.sum(EventoWeb.valor_seg))
+            .filter(EventoWeb.tipo == "tiempo_en_pagina", EventoWeb.visita_id.in_(ids_visitas))
+            .group_by(EventoWeb.visita_id)
+            .all()
+        )
+        duracion_por_visita = {vid: total for vid, total in filas}
 
     return jsonify({
         "ok": True,
@@ -2908,6 +3029,7 @@ def visitas_web_para_panel():
         "visitas_30d": visitas_30d,
         "con_cuenta_30d": con_cuenta_30d,
         "anonimas_30d": visitas_30d - con_cuenta_30d,
+        "en_linea_ahora": en_linea_ahora,
         "ultimas": [
             {
                 "ip": v.ip,
@@ -2918,6 +3040,8 @@ def visitas_web_para_panel():
                 "fecha": (v.creado_en - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M") if v.creado_en else None,
                 "email": v.usuario.email if v.usuario else None,
                 "origen": v.origen,
+                "en_vivo": bool(v.ultimo_latido and v.ultimo_latido >= desde_en_vivo),
+                "duracion_seg": duracion_por_visita.get(v.id),
             }
             for v in ultimas
         ],

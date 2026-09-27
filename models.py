@@ -552,6 +552,19 @@ class VisitaWeb(db.Model):
     origen = db.Column(db.String(40))
     referrer = db.Column(db.String(300))
 
+    # True si _detectar_bot() (ver app.py) identificó esto como un programa
+    # y no una persona -- buscadores, monitores de uptime, bots de vista
+    # previa de links, scripts. Se calcula una sola vez al registrar la
+    # visita; las consultas de tráfico filtran por esto para no mezclar
+    # visitas reales con tráfico automático.
+    es_bot = db.Column(db.Boolean, default=False, index=True)
+
+    # Última vez que el navegador mandó un "latido" (ver /api/latido-web y
+    # tracking.js) mientras la pestaña seguía abierta y visible. Si pasaron
+    # menos de ~45 segundos desde esto, se considera que la persona sigue
+    # en la página ahora mismo (el puntito verde del panel).
+    ultimo_latido = db.Column(db.DateTime)
+
     usuario = db.relationship("Usuario")
 
 
