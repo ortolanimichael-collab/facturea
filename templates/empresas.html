@@ -368,6 +368,24 @@
         {% endif %}
       </section>
 
+      <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
+        <h2 style="font-size:14px;">Sistema de gestión de tu negocio (opcional)</h2>
+        <p class="desc">Si usás el sistema de gestión / tienda online del ecosistema, conectalo acá para que tus ventas lleguen solas a esta tabla como comprobantes pendientes, listas para facturar.</p>
+        {% if not empresa %}
+        <p class="hint">Guardá la empresa primero -- después vas a poder conectarla acá mismo.</p>
+        {% else %}
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          {% if empresa.api_token_hash %}<span class="estado-config completa">Conectado</span>{% endif %}
+          <button type="button" class="btn" onclick="generarTokenGestion({{ empresa.id }}, {{ 'true' if empresa.api_token_hash else 'false' }})">{{ 'Generar código nuevo' if empresa.api_token_hash else 'Generar código de conexión' }}</button>
+          {% if empresa.api_token_hash %}<button type="button" onclick="revocarTokenGestion({{ empresa.id }})" style="font-family:var(--sans);font-size:12.5px;padding:8px 14px;border-radius:3px;border:1.5px solid var(--danger);color:var(--danger);background:var(--paper);cursor:pointer;">Desconectar</button>{% endif %}
+        </div>
+        <div id="tokenGestion" style="display:none;margin-top:14px;">
+          <p class="hint">Copiá este código y pegalo en el sistema de gestión (Facturación &gt; Conectar). <strong>Solo se muestra esta vez.</strong></p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;"><input type="text" id="tokenGestionValor" readonly style="flex:1;min-width:260px;font-family:monospace;"><button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('tokenGestionValor').value);this.textContent='¡Copiado!'">Copiar</button></div>
+        </div>
+        {% endif %}
+      </section>
+
       <div class="campo">
         <label>Puntos de venta</label>
         <div class="puntos-venta-lista" id="listaPuntos">
@@ -526,6 +544,29 @@ async function desconectarDrive(empresaId) {
     } else {
       alert('No se pudo desconectar. Probá de nuevo.');
     }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+async function generarTokenGestion(empresaId, yaConectado) {
+  if (yaConectado && !confirm('Si generás un código nuevo, el anterior deja de funcionar y vas a tener que pegar el nuevo en el sistema de gestión. ¿Seguir?')) return;
+  try {
+    const r = await fetch(`/empresas/${empresaId}/api-externa/token`, { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) { alert(d.error || 'No se pudo generar el código.'); return; }
+    document.getElementById('tokenGestionValor').value = d.token;
+    document.getElementById('tokenGestion').style.display = 'block';
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+async function revocarTokenGestion(empresaId) {
+  if (!confirm('¿Desconectar el sistema de gestión? Sus ventas van a dejar de llegar a esta empresa.')) return;
+  try {
+    const r = await fetch(`/empresas/${empresaId}/api-externa/revocar`, { method: 'POST' });
+    if (r.ok) window.location.reload(); else alert('No se pudo desconectar. Probá de nuevo.');
   } catch (e) {
     alert('No se pudo conectar con el servidor.');
   }
