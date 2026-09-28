@@ -1,0 +1,20 @@
+CAMBIOS PARA AUTOFACTURACIÓN (repo "facturea") — Fase 4
+
+Archivos a subir a GitHub (reemplazar / agregar):
+
+  NUEVO      api_externa.py            API para que el sistema de gestión mande sus ventas
+  MODIFICADO app.py                    +2 funciones (_iniciar_lote_facturacion, _estado_lote_facturacion)
+                                       y el registro de la API al final (antes de "if __name__")
+  MODIFICADO models.py                 +1 columna en Empresa: api_token_hash
+  MODIFICADO templates/empresas.html   +sección "Sistema de gestión de tu negocio" (generar/desconectar código)
+
+No hay dependencias nuevas. La columna nueva la agrega sola _sync_missing_columns() al arrancar
+(no hace falta migración de Alembic).
+
+Hechos sobre la versión que está en GitHub al 28/09/2026 (commit "Add files via upload" de las 14:15).
+Si cambiaste app.py / models.py / empresas.html en tu PC después de eso, NO reemplaces esos tres:
+aplicá los cambios a mano mirando "cambios.diff" (son pocos bloques y todos están marcados).
+
+Seguridad: el código de conexión se muestra una sola vez y se guarda solo su hash (sha256).
+Solo sirve para esa empresa y para las rutas /api/externo/*. Las rutas de la API no usan CSRF
+(son servidor a servidor) y tienen límite de 120 pedidos por minuto.

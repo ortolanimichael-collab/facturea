@@ -2837,6 +2837,51 @@ def facturar_todos_estado(empresa_id):
     return jsonify(ok=True, **estado_copia)
 
 
+def _iniciar_lote_facturacion(empresa, prefijo_id_transaccion=None, estados=("pendiente", "error"), limite_monto=None):
+    """
+    Misma lógica que facturar_todos() pero invocable sin un pedido del navegador -- la usa la
+    API externa (api_externa.py) para facturar las ventas que manda el sistema de gestión.
+    Si viene prefijo_id_transaccion, solo toma los comprobantes cuyo id_transaccion empieza
+    así (ej. "NEG-"), para no facturar sin querer otros que el usuario todavía no revisó.
+    Devuelve (cantidad_lanzada, None) o (None, mensaje_de_error).
+    """
+    with _lock_facturacion_lote:
+        estado_actual = _estado_facturacion_lote.get(empresa.id)
+        if estado_actual and estado_actual.get("en_curso"):
+            return None, "Ya hay una facturación en lote en curso para esta empresa."
+
+    consulta = Comprobante.query.filter(
+        Comprobante.empresa_id == empresa.id,
+        Comprobante.estado.in_(list(estados)),
+    )
+    if prefijo_id_transaccion:
+        consulta = consulta.filter(Comprobante.id_transaccion.like(prefijo_id_transaccion + "%"))
+    pendientes = _ordenar_por_fecha_facturacion(consulta.all(), empresa)
+    pendientes_ids = [c.id for c in pendientes]
+    if not pendientes_ids:
+        return 0, None
+
+    _detener_facturacion_solicitado.discard(empresa.id)
+    with _lock_facturacion_lote:
+        _estado_facturacion_lote[empresa.id] = _estado_inicial_lote(len(pendientes_ids))
+    threading.Thread(
+        target=_facturar_todos_en_segundo_plano,
+        args=(app, empresa.id, pendientes_ids, limite_monto),
+        daemon=True,
+    ).start()
+    return len(pendientes_ids), None
+
+
+def _estado_lote_facturacion(empresa_id):
+    with _lock_facturacion_lote:
+        estado = _estado_facturacion_lote.get(empresa_id)
+        if estado is None:
+            return None
+        copia = dict(estado)
+        copia["detalle"] = list(copia["detalle"])
+        return copia
+
+
 @app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/vista-previa.pdf")
 @login_required
 def comprobante_vista_previa_pdf(empresa_id, comprobante_id):
@@ -3461,6 +3506,20 @@ def crear_admin():
     db.session.add(admin)
     db.session.commit()
     print(f"Administrador '{email}' creado correctamente.")
+
+
+# ---------- API para el sistema de gestión de negocios (ver api_externa.py) ----------
+from api_externa import crear_blueprint_api_externa
+
+_bp_api_panel, _bp_api_externa = crear_blueprint_api_externa(
+    csrf=csrf,
+    limiter=limiter,
+    chequear_cuil=_chequear_cuil_no_abusado,
+    iniciar_lote=lambda empresa, prefijo, estados: _iniciar_lote_facturacion(empresa, prefijo, estados),
+    estado_lote=_estado_lote_facturacion,
+)
+app.register_blueprint(_bp_api_panel)
+app.register_blueprint(_bp_api_externa)
 
 
 if __name__ == "__main__":

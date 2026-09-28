@@ -1,0 +1,152 @@
+diff --git a/app.py b/app.py
+index 0080f2d..2a548b0 100644
+--- a/app.py
++++ b/app.py
+@@ -2837,6 +2837,51 @@ def facturar_todos_estado(empresa_id):
+     return jsonify(ok=True, **estado_copia)
+ 
+ 
++def _iniciar_lote_facturacion(empresa, prefijo_id_transaccion=None, estados=("pendiente", "error"), limite_monto=None):
++    """
++    Misma lógica que facturar_todos() pero invocable sin un pedido del navegador -- la usa la
++    API externa (api_externa.py) para facturar las ventas que manda el sistema de gestión.
++    Si viene prefijo_id_transaccion, solo toma los comprobantes cuyo id_transaccion empieza
++    así (ej. "NEG-"), para no facturar sin querer otros que el usuario todavía no revisó.
++    Devuelve (cantidad_lanzada, None) o (None, mensaje_de_error).
++    """
++    with _lock_facturacion_lote:
++        estado_actual = _estado_facturacion_lote.get(empresa.id)
++        if estado_actual and estado_actual.get("en_curso"):
++            return None, "Ya hay una facturación en lote en curso para esta empresa."
++
++    consulta = Comprobante.query.filter(
++        Comprobante.empresa_id == empresa.id,
++        Comprobante.estado.in_(list(estados)),
++    )
++    if prefijo_id_transaccion:
++        consulta = consulta.filter(Comprobante.id_transaccion.like(prefijo_id_transaccion + "%"))
++    pendientes = _ordenar_por_fecha_facturacion(consulta.all(), empresa)
++    pendientes_ids = [c.id for c in pendientes]
++    if not pendientes_ids:
++        return 0, None
++
++    _detener_facturacion_solicitado.discard(empresa.id)
++    with _lock_facturacion_lote:
++        _estado_facturacion_lote[empresa.id] = _estado_inicial_lote(len(pendientes_ids))
++    threading.Thread(
++        target=_facturar_todos_en_segundo_plano,
++        args=(app, empresa.id, pendientes_ids, limite_monto),
++        daemon=True,
++    ).start()
++    return len(pendientes_ids), None
++
++
++def _estado_lote_facturacion(empresa_id):
++    with _lock_facturacion_lote:
++        estado = _estado_facturacion_lote.get(empresa_id)
++        if estado is None:
++            return None
++        copia = dict(estado)
++        copia["detalle"] = list(copia["detalle"])
++        return copia
++
++
+ @app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/vista-previa.pdf")
+ @login_required
+ def comprobante_vista_previa_pdf(empresa_id, comprobante_id):
+@@ -3463,6 +3508,20 @@ def crear_admin():
+     print(f"Administrador '{email}' creado correctamente.")
+ 
+ 
++# ---------- API para el sistema de gestión de negocios (ver api_externa.py) ----------
++from api_externa import crear_blueprint_api_externa
++
++_bp_api_panel, _bp_api_externa = crear_blueprint_api_externa(
++    csrf=csrf,
++    limiter=limiter,
++    chequear_cuil=_chequear_cuil_no_abusado,
++    iniciar_lote=lambda empresa, prefijo, estados: _iniciar_lote_facturacion(empresa, prefijo, estados),
++    estado_lote=_estado_lote_facturacion,
++)
++app.register_blueprint(_bp_api_panel)
++app.register_blueprint(_bp_api_externa)
++
++
+ if __name__ == "__main__":
+     # debug=True (que habilita la consola interactiva de Werkzeug -- una
+     # forma conocida de ejecutar código remoto si el puerto queda expuesto)
+diff --git a/models.py b/models.py
+index 95ea8ef..4cd7cff 100644
+--- a/models.py
++++ b/models.py
+@@ -278,6 +278,11 @@ class Empresa(db.Model):
+     mercadopago_email = db.Column(db.String(200))  # solo para mostrar qué cuenta está conectada
+     mercadopago_user_id = db.Column(db.String(50))  # id de vendedor en Mercado Pago -- lo pide la API para buscar sus pagos
+ 
++    # Conexión con el sistema de gestión de negocios (ver api_externa.py): hash sha256 del
++    # token que usa ese sistema para mandar sus ventas como comprobantes de ESTA empresa.
++    # Nunca se guarda el token en sí -- se muestra una sola vez al generarlo.
++    api_token_hash = db.Column(db.String(64), index=True)
++
+     def set_google_drive_token(self, refresh_token):
+         self.google_drive_token_cifrado = _fernet().encrypt(refresh_token.encode())
+ 
+diff --git a/templates/empresas.html b/templates/empresas.html
+index 9b99f2b..08aa6ee 100644
+--- a/templates/empresas.html
++++ b/templates/empresas.html
+@@ -368,6 +368,24 @@
+         {% endif %}
+       </section>
+ 
++      <section style="background:var(--paper);margin-bottom:20px;padding:20px;">
++        <h2 style="font-size:14px;">Sistema de gestión de tu negocio (opcional)</h2>
++        <p class="desc">Si usás el sistema de gestión / tienda online del ecosistema, conectalo acá para que tus ventas lleguen solas a esta tabla como comprobantes pendientes, listas para facturar.</p>
++        {% if not empresa %}
++        <p class="hint">Guardá la empresa primero -- después vas a poder conectarla acá mismo.</p>
++        {% else %}
++        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
++          {% if empresa.api_token_hash %}<span class="estado-config completa">Conectado</span>{% endif %}
++          <button type="button" class="btn" onclick="generarTokenGestion({{ empresa.id }}, {{ 'true' if empresa.api_token_hash else 'false' }})">{{ 'Generar código nuevo' if empresa.api_token_hash else 'Generar código de conexión' }}</button>
++          {% if empresa.api_token_hash %}<button type="button" onclick="revocarTokenGestion({{ empresa.id }})" style="font-family:var(--sans);font-size:12.5px;padding:8px 14px;border-radius:3px;border:1.5px solid var(--danger);color:var(--danger);background:var(--paper);cursor:pointer;">Desconectar</button>{% endif %}
++        </div>
++        <div id="tokenGestion" style="display:none;margin-top:14px;">
++          <p class="hint">Copiá este código y pegalo en el sistema de gestión (Facturación &gt; Conectar). <strong>Solo se muestra esta vez.</strong></p>
++          <div style="display:flex;gap:8px;flex-wrap:wrap;"><input type="text" id="tokenGestionValor" readonly style="flex:1;min-width:260px;font-family:monospace;"><button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('tokenGestionValor').value);this.textContent='¡Copiado!'">Copiar</button></div>
++        </div>
++        {% endif %}
++      </section>
++
+       <div class="campo">
+         <label>Puntos de venta</label>
+         <div class="puntos-venta-lista" id="listaPuntos">
+@@ -531,6 +549,29 @@ async function desconectarDrive(empresaId) {
+   }
+ }
+ 
++async function generarTokenGestion(empresaId, yaConectado) {
++  if (yaConectado && !confirm('Si generás un código nuevo, el anterior deja de funcionar y vas a tener que pegar el nuevo en el sistema de gestión. ¿Seguir?')) return;
++  try {
++    const r = await fetch(`/empresas/${empresaId}/api-externa/token`, { method: 'POST' });
++    const d = await r.json();
++    if (!d.ok) { alert(d.error || 'No se pudo generar el código.'); return; }
++    document.getElementById('tokenGestionValor').value = d.token;
++    document.getElementById('tokenGestion').style.display = 'block';
++  } catch (e) {
++    alert('No se pudo conectar con el servidor.');
++  }
++}
++
++async function revocarTokenGestion(empresaId) {
++  if (!confirm('¿Desconectar el sistema de gestión? Sus ventas van a dejar de llegar a esta empresa.')) return;
++  try {
++    const r = await fetch(`/empresas/${empresaId}/api-externa/revocar`, { method: 'POST' });
++    if (r.ok) window.location.reload(); else alert('No se pudo desconectar. Probá de nuevo.');
++  } catch (e) {
++    alert('No se pudo conectar con el servidor.');
++  }
++}
++
+ async function desconectarMercadoPago(empresaId) {
+   const ok = confirm('¿Desconectar Mercado Pago de esta empresa? Vas a poder volver a conectarla cuando quieras.');
+   if (!ok) return;

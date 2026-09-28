@@ -278,6 +278,11 @@ class Empresa(db.Model):
     mercadopago_email = db.Column(db.String(200))  # solo para mostrar qué cuenta está conectada
     mercadopago_user_id = db.Column(db.String(50))  # id de vendedor en Mercado Pago -- lo pide la API para buscar sus pagos
 
+    # Conexión con el sistema de gestión de negocios (ver api_externa.py): hash sha256 del
+    # token que usa ese sistema para mandar sus ventas como comprobantes de ESTA empresa.
+    # Nunca se guarda el token en sí -- se muestra una sola vez al generarlo.
+    api_token_hash = db.Column(db.String(64), index=True)
+
     def set_google_drive_token(self, refresh_token):
         self.google_drive_token_cifrado = _fernet().encrypt(refresh_token.encode())
 
