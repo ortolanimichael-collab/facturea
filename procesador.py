@@ -189,6 +189,552 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
     return fila
 
 
+# ---------- Payway (CSV de "Historial" / "Movimientos") ----------
+# La MARCA que trae el CSV de Payway ya viene separada en Débito/Crédito
+# (ej. "VISA DEBITO" vs "VISA" a secas para crédito), a diferencia de
+# Mercado Pago que la manda por separado en payment_type_id -- por eso este
+# mapa es propio, con las mismas reglas ya definidas para el resto del
+# sistema: "Visa" a secas en Débito NO es "Visa Electrón" (un producto
+# distinto), se carga como "Otra..." con detalle "VISA Débito".
+MAPA_TARJETAS_PAYWAY = {
+    "VISA DEBITO": ("Débito", "Otra...", "VISA Débito"),
+    "MASTERCARD DEBITO": ("Débito", "Mastercard Débito", None),
+    "MAESTRO": ("Débito", "Maestro", None),
+    "CABAL DEBITO": ("Débito", "Cabal 24 hs", None),
+    "VISA": ("Crédito", "Visa", None),
+    "MASTERCARD": ("Crédito", "Mastercard", None),
+    "AMEX": ("Crédito", "American Express", None),
+    "AMERICAN EXPRESS": ("Crédito", "American Express", None),
+    "CABAL": ("Crédito", "Cabal", None),
+    "NARANJA": ("Crédito", "Tarjeta Naranja", None),
+    "CENCOSUD": ("Crédito", "Tarjeta Shopping", None),
+    "CORDIAL": ("Crédito", "Credencial", None),
+}
+
+
+def _mapear_medio_pago_payway(marca):
+    """
+    Traduce la columna MARCA del CSV de Payway (ej. "VISA DEBITO",
+    "MASTERCARD") a (medio_pago_detectado, tipo_pago, tipo_pago_detalle) --
+    mismo formato que ya usan el lector de imágenes y Mercado Pago. Si la
+    marca no está en el mapa, se carga como "Otra..." con el nombre tal
+    cual lo mandó Payway, para no inventar una marca que no es ni perder la
+    fila.
+    """
+    marca_norm = (marca or "").strip().upper()
+    if marca_norm in MAPA_TARJETAS_PAYWAY:
+        medio_pago, tipo_pago, detalle = MAPA_TARJETAS_PAYWAY[marca_norm]
+        return medio_pago, tipo_pago, detalle
+    # Cualquier variante "<MARCA> DEBITO" que no esté mapeada explícitamente
+    # se toma igual como Débito -- Payway es consistente con ese sufijo.
+    if marca_norm.endswith(" DEBITO"):
+        return "Débito", "Otra...", marca_norm
+    return "Crédito", "Otra...", marca_norm or "Tarjeta"
+
+
+def parsear_csv_payway(contenido_texto):
+    """
+    Parsea el contenido del CSV de "Historial"/"Movimientos" de Payway y
+    devuelve una lista de diccionarios, uno por fila de venta. El archivo
+    que exporta Payway NO es un CSV estándar desde la primera línea: la
+    línea 1 es un título libre ("Detalle de Transacciones en pesos de
+    Payway Desde: ... Hasta: ..."), y recién la línea 2 trae el encabezado
+    real de columnas -- por eso se busca a mano la línea que empieza con
+    "COMPRA," en vez de asumir que el encabezado está en la fila 0 (lo que
+    haría fallar a csv.DictReader con las columnas corridas).
+
+    Solo se quedan las filas con TIPO="Venta" -- Payway también puede listar
+    anulaciones/contracargos ahí mismo, y facturarlos igual que una venta
+    normal duplicaría el importe en la contabilidad del cliente.
+    """
+    import csv
+    import io
+
+    lineas = contenido_texto.splitlines()
+    idx_encabezado = next(
+        (i for i, linea in enumerate(lineas) if linea.strip().upper().startswith("COMPRA,")),
+        None,
+    )
+    if idx_encabezado is None:
+        raise ValueError(
+            "No se encontró la fila de encabezados (\"COMPRA,PRESENTACION,...\") en el archivo -- "
+            "¿es realmente un CSV de Historial/Movimientos de Payway?"
+        )
+
+    lector_csv = csv.DictReader(io.StringIO("\n".join(lineas[idx_encabezado:])))
+    filas = []
+    for fila in lector_csv:
+        if not fila.get("COMPRA"):
+            continue  # línea vacía al final del archivo
+        if (fila.get("TIPO") or "").strip().lower() != "venta":
+            continue
+        filas.append(fila)
+    return filas
+
+
+def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
+    """
+    Arma un Comprobante "pendiente" a partir de una fila ya parseada del CSV
+    de Payway (ver parsear_csv_payway) -- mismo criterio que
+    crear_comprobante_desde_pago_mercadopago: nunca hay nombre ni
+    identificación de quien pagó (un cupón de POS no lo trae, a diferencia
+    de un pago de Mercado Pago con link/QR), así que factura siempre a
+    Consumidor Final con "DNI" sin número. Devuelve el Comprobante nuevo, o
+    None si esa venta ya se había traído antes (para no duplicarla).
+    """
+    establecimiento = (fila_csv.get("ESTABLECIMIENTO") or "").strip()
+    lote = (fila_csv.get("LOTE") or "").strip()
+    num_cupon = (fila_csv.get("NUM.CUPON") or "").strip()
+    id_transaccion = f"PAYWAY-{establecimiento}-{lote}-{num_cupon}"
+    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+        return None
+
+    try:
+        importe_total = float((fila_csv.get("MONTO_BRUTO") or "0").replace(",", ""))
+    except ValueError:
+        importe_total = 0.0
+    cantidad = 1.0
+
+    medio_pago_detectado, tipo_pago, tipo_pago_detalle = _mapear_medio_pago_payway(fila_csv.get("MARCA"))
+
+    if medio_pago_detectado == "Débito":
+        condicion_venta_default = "Tarjeta de Débito"
+    elif medio_pago_detectado == "Crédito":
+        condicion_venta_default = "Tarjeta de Crédito"
+    else:
+        condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0]
+
+    dias_atras = empresa.config_dias_atras_fecha_emision or 10
+    fecha_compra_str = (fila_csv.get("COMPRA") or "").strip()
+    try:
+        fecha_comprobante = datetime.strptime(fecha_compra_str, "%d/%m/%Y").strftime("%d/%m/%Y")
+    except ValueError:
+        fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
+
+    if empresa.config_descripcion_aleatoria:
+        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    else:
+        opciones_descripcion = []
+    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+
+    # Últimos dígitos de la tarjeta -- Payway ya los manda enmascarados
+    # ("************1518"), así que se toman tal cual vienen (los últimos
+    # 4 números, sin los asteriscos).
+    num_tarjeta_crudo = (fila_csv.get("NUM.TARJETA") or "").strip()
+    numero_pago = None
+    if medio_pago_detectado in ("Débito", "Crédito"):
+        solo_digitos = "".join(c for c in num_tarjeta_crudo if c.isdigit())
+        numero_pago = solo_digitos[-4:] if solo_digitos else None
+
+    fila = Comprobante(
+        usuario_id=usuario_id,
+        empresa_id=empresa.id,
+        id_transaccion=id_transaccion,
+
+        punto_venta=empresa.config_punto_venta,
+        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        descripcion=descripcion_elegida,
+        unidad_medida=empresa.config_unidad_medida,
+        precio_unitario=importe_total / cantidad,
+
+        fecha_comprobante=fecha_comprobante,
+        medio_pago_detectado=medio_pago_detectado,
+        tipo_pago=tipo_pago,
+        tipo_pago_detalle=tipo_pago_detalle,
+        numero_pago=numero_pago,
+        # Un cupón de POS nunca trae CUIT/CUIL del comprador -- se factura
+        # a Consumidor Final con DNI (ARCA no exige el número con ese tipo
+        # de documento), igual que un pago de Mercado Pago sin identificación.
+        tipo_documento="DNI",
+        cuit_receptor=None,
+        condicion_iva=empresa.config_condicion_iva,
+        condicion_venta=condicion_venta_default,
+        fecha_desde=fecha_comprobante,
+        fecha_hasta=fecha_comprobante,
+        importe_total=importe_total,
+        cantidad=cantidad,
+        archivo_origen=f"Payway cupón #{num_cupon} (lote {lote})",
+    )
+    db.session.add(fila)
+    return fila
+
+
+# ---------- Banco Galicia (Excel de "Cuentas" / movimientos de home banking) ----------
+# A diferencia de Mercado Pago y Payway, el resumen de cuenta de Galicia SÍ
+# trae el CUIT/CUIL de quien transfirió en casi todos los casos (viene
+# adentro del bloque de texto de la columna "Movimiento") -- así que acá
+# se factura con ese CUIT real en vez de "DNI" genérico, salvo que la
+# transferencia no traiga ninguno.
+TIPOS_MOVIMIENTO_GALICIA_VENTA = {"TRANSFERENCIA DE TERCEROS", "CREDITO TRANSFERENCIA COELSA"}
+# Tipos que aparecen en el mismo extracto pero NO son una venta -- se
+# ignoran aunque tengan importe en la columna Crédito: intereses que paga
+# el banco, y transferencias que el propio dueño de la cuenta se hizo a sí
+# mismo entre sus propias cuentas (no es un cobro de un cliente).
+TIPOS_MOVIMIENTO_GALICIA_IGNORAR = {"INTERES CAPITALIZADO", "TRANSFERENCIA DE CUENTA PROPIA"}
+
+
+def _parsear_monto_ar(texto):
+    """Convierte un monto en formato argentino ("25.000,00") a float. Devuelve 0.0 si no se puede."""
+    texto = (texto or "").strip()
+    if not texto:
+        return 0.0
+    try:
+        return float(texto.replace(".", "").replace(",", "."))
+    except ValueError:
+        return 0.0
+
+
+def parsear_excel_galicia(archivo_like):
+    """
+    Parsea el Excel que exporta el home banking de Banco Galicia (pestaña
+    "Cuentas") y devuelve una lista de diccionarios, uno por movimiento que
+    representa un cobro real de un tercero. `archivo_like` puede ser una
+    ruta de archivo o un objeto tipo archivo (ej. un BytesIO del upload).
+
+    El archivo no es una tabla limpia desde la fila 1: las primeras filas
+    son encabezado libre del banco (nombre de cuenta, número, fecha/hora de
+    generación, rango de fechas consultado) -- recién más abajo aparece la
+    fila real de columnas ("Fecha", "Movimiento", "Débito", "Crédito",
+    "Saldo Parcial", "Comentarios"), así que se busca esa fila a mano en vez
+    de asumir que está en la posición 1, igual que se hace con el CSV de
+    Payway (ahí el problema es el mismo: encabezado libre antes del real).
+
+    Cada celda "Movimiento" es un bloque de texto de varias líneas: la
+    primera dice el TIPO de movimiento (con eso se filtran intereses y
+    transferencias entre cuentas propias, ver TIPOS_MOVIMIENTO_GALICIA_*),
+    la segunda casi siempre es el nombre de quien transfirió, y en alguna
+    línea más abajo aparece su CUIT/CUIL como un número de exactamente 11
+    dígitos solo (se lo distingue de un CBU, que tiene 22).
+    """
+    import re
+    import openpyxl
+
+    libro = openpyxl.load_workbook(archivo_like, data_only=True)
+    hoja = libro.worksheets[0]
+
+    filas_crudas = list(hoja.iter_rows(values_only=True))
+    idx_encabezado = next(
+        (i for i, fila in enumerate(filas_crudas) if (fila[0] or "").strip().lower() == "fecha"),
+        None,
+    ) if filas_crudas else None
+    if idx_encabezado is None:
+        raise ValueError(
+            "No se encontró la fila de encabezados (\"Fecha, Movimiento, Débito, Crédito...\") en el "
+            "archivo -- ¿es realmente el Excel de movimientos/cuentas de Banco Galicia?"
+        )
+
+    resultado = []
+    for fila in filas_crudas[idx_encabezado + 1:]:
+        fecha_celda = fila[0]
+        if not fecha_celda:
+            continue  # fila vacía (puede haber alguna al final)
+
+        movimiento_texto = (fila[1] or "").strip()
+        lineas = [l.strip() for l in movimiento_texto.split("\n") if l.strip()]
+        if not lineas:
+            continue
+        tipo_movimiento = lineas[0].upper()
+        if tipo_movimiento in TIPOS_MOVIMIENTO_GALICIA_IGNORAR:
+            continue
+        if tipo_movimiento not in TIPOS_MOVIMIENTO_GALICIA_VENTA:
+            continue  # tipo no reconocido -- se prefiere no facturar algo que no se sabe bien qué es
+
+        credito = _parsear_monto_ar(fila[3] if len(fila) > 3 else None)
+        if credito <= 0:
+            continue  # no es plata que entró (o es un débito, columna 2)
+
+        nombre = lineas[1] if len(lineas) > 1 else None
+        cuit = next((l for l in lineas[1:] if re.fullmatch(r"\d{11}", l)), None)
+
+        # La fecha puede venir como texto "28/09/2026" o como objeto date/
+        # datetime real, según cómo Excel haya guardado la celda.
+        if isinstance(fecha_celda, str):
+            fecha_str = fecha_celda.strip()
+        else:
+            fecha_str = fecha_celda.strftime("%d/%m/%Y")
+
+        resultado.append({
+            "fecha": fecha_str,
+            "monto": credito,
+            "nombre": nombre,
+            "cuit": cuit,
+            "movimiento_texto": movimiento_texto,
+        })
+    return resultado
+
+
+def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empresa):
+    """
+    Arma un Comprobante "pendiente" a partir de una transferencia ya
+    parseada del Excel de Banco Galicia (ver parsear_excel_galicia).
+    Devuelve el Comprobante nuevo, o None si esa transferencia ya se había
+    traído antes (para no duplicarla).
+
+    Como el extracto no trae ningún número de operación aparte, el ID único
+    para detectar duplicados se arma con un hash del bloque de texto
+    completo de "Movimiento" (que ya trae varios datos que lo hacen único:
+    CBU, nombre, referencias internas del banco) junto con la fecha y el
+    monto -- así, aunque el cliente vuelva a exportar el mismo rango de
+    fechas superpuesto con una importación anterior, no se duplican las
+    transferencias ya cargadas.
+    """
+    import hashlib
+
+    fecha_comprobante = fila_galicia["fecha"]
+    monto = fila_galicia["monto"]
+    huella = hashlib.sha1(fila_galicia["movimiento_texto"].encode("utf-8")).hexdigest()[:16]
+    id_transaccion = f"GALICIA-{fecha_comprobante.replace('/', '')}-{monto:.2f}-{huella}"
+    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+        return None
+
+    cantidad = 1.0
+    dias_atras = empresa.config_dias_atras_fecha_emision or 10
+
+    if empresa.config_descripcion_aleatoria:
+        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    else:
+        opciones_descripcion = []
+    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+
+    cuit = fila_galicia.get("cuit")
+    nombre = fila_galicia.get("nombre")
+    if cuit:
+        tipo_documento = "CUIT"
+        cuit_receptor = cuit
+    else:
+        # Muy raro (en la práctica casi todas las transferencias de
+        # terceros de Galicia traen CUIT), pero por las dudas: sin CUIT,
+        # se factura igual a Consumidor Final con DNI, como con Payway.
+        tipo_documento = "DNI"
+        cuit_receptor = None
+
+    fila = Comprobante(
+        usuario_id=usuario_id,
+        empresa_id=empresa.id,
+        id_transaccion=id_transaccion,
+
+        punto_venta=empresa.config_punto_venta,
+        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        descripcion=descripcion_elegida,
+        unidad_medida=empresa.config_unidad_medida,
+        precio_unitario=monto / cantidad,
+
+        nombre_remitente=nombre,
+        # A diferencia de Mercado Pago/Payway, acá SÍ tenemos el nombre real
+        # de quien pagó -- se lo pone también en "Recibe" (nombre_razon_social)
+        # para que la tabla lo muestre en vez de "No detectado". No hace
+        # falta mandárselo a ARCA: con el CUIT cargado, ARCA busca la razón
+        # social sola (ver facturar_comprobante, arca_bot.py).
+        nombre_razon_social=nombre,
+        fecha_comprobante=fecha_comprobante,
+        medio_pago_detectado="Transferencia",
+        tipo_documento=tipo_documento,
+        cuit_receptor=cuit_receptor,
+        condicion_iva=empresa.config_condicion_iva,
+        condicion_venta=(empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else "",
+        fecha_desde=fecha_comprobante,
+        fecha_hasta=fecha_comprobante,
+        importe_total=monto,
+        cantidad=cantidad,
+        archivo_origen=f"Transferencia Galicia -- {nombre or 'sin nombre'}" + (f" (CUIT {cuit})" if cuit else ""),
+    )
+    db.session.add(fila)
+    return fila
+
+
+# ---------- NAVE (Excel de "Informe de detalles - Cobros con QR") ----------
+# Igual que Banco Galicia, el informe de NAVE trae el CUIT/CUIL/DNI de quien
+# pagó en una columna propia (no hay que adivinarlo de un bloque de texto),
+# así que acá también se factura con el documento real casi siempre.
+MAPA_MEDIOS_NAVE = {
+    # Débito
+    "VISA DÉBITO": ("Débito", "Otra...", "VISA Débito"),  # "Visa" a secas en Débito no es una opción real de ARCA
+    "MASTERCARD DÉBITO": ("Débito", "Mastercard Débito", None),
+    "MASTERCARD PREPAGA": ("Débito", "Mastercard Débito", None),  # prepaga funciona como débito para ARCA
+    "MAESTRO": ("Débito", "Maestro", None),
+    "CABAL DÉBITO": ("Débito", "Cabal 24 hs", None),
+    # Crédito
+    "VISA CRÉDITO": ("Crédito", "Visa", None),
+    "MASTERCARD CRÉDITO": ("Crédito", "Mastercard", None),
+    "AMERICAN EXPRESS": ("Crédito", "American Express", None),
+    "CABAL CRÉDITO": ("Crédito", "Cabal", None),
+    "NARANJA CRÉDITO": ("Crédito", "Tarjeta Naranja", None),
+    "CENCOSUD": ("Crédito", "Tarjeta Shopping", None),
+    "CORDIAL": ("Crédito", "Credencial", None),
+    # Dinero en cuenta / QR sin tarjeta asociada -- es plata que entra
+    # directo a la cuenta, igual que "account_money" en Mercado Pago, así
+    # que se carga como Transferencia.
+    "DINERO EN CUENTA": ("Transferencia", None, None),
+}
+
+
+def _mapear_medio_pago_nave(medio_de_pago):
+    """
+    Traduce la columna "Medio de Pago" del informe de NAVE (ej. "Visa
+    Débito", "Dinero en cuenta") a (medio_pago_detectado, tipo_pago,
+    tipo_pago_detalle) -- mismo formato que el resto de las fuentes. Si no
+    está en el mapa, se decide por el sufijo (" DÉBITO"/" CRÉDITO") si lo
+    tiene, o se carga como Transferencia si no se puede saber qué es (mejor
+    no inventar una tarjeta que no es).
+    """
+    medio_norm = (medio_de_pago or "").strip().upper()
+    if medio_norm in MAPA_MEDIOS_NAVE:
+        return MAPA_MEDIOS_NAVE[medio_norm]
+    if medio_norm.endswith(" DÉBITO") or medio_norm.endswith(" DEBITO"):
+        return "Débito", "Otra...", medio_norm
+    if medio_norm.endswith(" CRÉDITO") or medio_norm.endswith(" CREDITO"):
+        return "Crédito", "Otra...", medio_norm
+    return "Transferencia", None, None
+
+
+def parsear_excel_nave(archivo_like):
+    """
+    Parsea el Excel "Informe de detalles - Cobros con QR" de NAVE y devuelve
+    una lista de diccionarios, uno por cobro acreditado. `archivo_like`
+    puede ser una ruta de archivo o un objeto tipo archivo (ej. un BytesIO
+    del upload).
+
+    El archivo tiene unas 20 filas de encabezado libre (título del informe,
+    nombre y CUIT del titular, fecha/hora de consulta, totales) antes de la
+    fila real de columnas ("Fecha de operación", "Fecha de acreditación",
+    ..., "CUIT/CUIL/DNI", "Medio de Pago", "Monto bruto", ..., "Estado",
+    ...), así que se la busca a mano en vez de asumir que está en una
+    posición fija, igual que con Payway y Banco Galicia.
+    """
+    import openpyxl
+
+    libro = openpyxl.load_workbook(archivo_like, data_only=True)
+    hoja = libro.worksheets[0]
+
+    filas_crudas = list(hoja.iter_rows(values_only=True))
+    idx_encabezado = next(
+        (i for i, fila in enumerate(filas_crudas)
+         if fila and (fila[0] or "").strip().lower() == "fecha de operación"),
+        None,
+    ) if filas_crudas else None
+    if idx_encabezado is None:
+        raise ValueError(
+            "No se encontró la fila de encabezados (\"Fecha de operación, Fecha de acreditación...\") en "
+            "el archivo -- ¿es realmente el informe de detalles de cobros con QR de NAVE?"
+        )
+
+    resultado = []
+    for fila in filas_crudas[idx_encabezado + 1:]:
+        fecha_celda = fila[0] if len(fila) > 0 else None
+        if not fecha_celda:
+            continue  # fila vacía (puede haber alguna al final, ej. la de totales)
+
+        estado = (fila[13] if len(fila) > 13 else "") or ""
+        if estado.strip().lower() != "acreditado":
+            continue  # se ignoran cobros rechazados/pendientes/anulados, etc.
+
+        # "Fecha de operación" viene como texto "01/09/2026 10:16" -- se toma
+        # solo la parte de la fecha.
+        fecha_texto = str(fecha_celda).strip()
+        fecha_str = fecha_texto.split(" ")[0]
+
+        codigo_operacion = (fila[2] if len(fila) > 2 else "") or ""
+        nombre = (fila[6] if len(fila) > 6 else "") or ""
+        documento = (fila[7] if len(fila) > 7 else "") or ""
+        medio_de_pago = (fila[8] if len(fila) > 8 else "") or ""
+        monto_bruto = fila[9] if len(fila) > 9 else None
+
+        try:
+            monto = float(monto_bruto)
+        except (TypeError, ValueError):
+            continue
+        if monto <= 0:
+            continue
+
+        resultado.append({
+            "fecha": fecha_str,
+            "monto": monto,
+            "nombre": nombre.strip() or None,
+            "documento": documento.strip() or None,
+            "medio_de_pago": medio_de_pago.strip(),
+            "codigo_operacion": codigo_operacion.strip(),
+        })
+    return resultado
+
+
+def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
+    """
+    Arma un Comprobante "pendiente" a partir de un cobro ya parseado del
+    informe de NAVE (ver parsear_excel_nave). Devuelve el Comprobante
+    nuevo, o None si ese cobro ya se había traído antes (para no
+    duplicarlo) -- acá sí hay un identificador único real (Código de
+    operación), a diferencia de Banco Galicia.
+    """
+    id_transaccion = f"NAVE-{fila_nave['codigo_operacion']}"
+    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+        return None
+
+    fecha_comprobante = fila_nave["fecha"]
+    monto = fila_nave["monto"]
+    cantidad = 1.0
+    dias_atras = empresa.config_dias_atras_fecha_emision or 10
+
+    medio_pago_detectado, tipo_pago, tipo_pago_detalle = _mapear_medio_pago_nave(fila_nave["medio_de_pago"])
+
+    if medio_pago_detectado == "Débito":
+        condicion_venta_default = "Tarjeta de Débito"
+    elif medio_pago_detectado == "Crédito":
+        condicion_venta_default = "Tarjeta de Crédito"
+    else:
+        condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else ""
+
+    if empresa.config_descripcion_aleatoria:
+        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    else:
+        opciones_descripcion = []
+    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+
+    # El documento viene en su propia columna, sin ambigüedad: 11 dígitos es
+    # CUIT/CUIL, cualquier otra longitud (normalmente 7-8) es DNI.
+    documento = fila_nave.get("documento")
+    if documento and len(documento) == 11 and documento.isdigit():
+        tipo_documento = "CUIT"
+        cuit_receptor = documento
+    else:
+        tipo_documento = "DNI"
+        cuit_receptor = None
+
+    nombre = fila_nave.get("nombre")
+
+    fila = Comprobante(
+        usuario_id=usuario_id,
+        empresa_id=empresa.id,
+        id_transaccion=id_transaccion,
+
+        punto_venta=empresa.config_punto_venta,
+        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        descripcion=descripcion_elegida,
+        unidad_medida=empresa.config_unidad_medida,
+        precio_unitario=monto / cantidad,
+
+        nombre_remitente=nombre,
+        nombre_razon_social=nombre,
+        fecha_comprobante=fecha_comprobante,
+        medio_pago_detectado=medio_pago_detectado,
+        tipo_pago=tipo_pago,
+        tipo_pago_detalle=tipo_pago_detalle,
+        tipo_documento=tipo_documento,
+        cuit_receptor=cuit_receptor,
+        condicion_iva=empresa.config_condicion_iva,
+        condicion_venta=condicion_venta_default,
+        fecha_desde=fecha_comprobante,
+        fecha_hasta=fecha_comprobante,
+        importe_total=monto,
+        cantidad=cantidad,
+        archivo_origen=f"NAVE -- {nombre or 'sin nombre'}" + (f" (doc. {documento})" if documento else ""),
+    )
+    db.session.add(fila)
+    return fila
+
+
 def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_interfaz, cuit_propio_cliente="", drive_file_id=None):
     """
     Corre un archivo ya descargado/subido a disco por el lector, y si los datos

@@ -1525,6 +1525,130 @@ def empresa_mercadopago_traer_movimientos(empresa_id):
     return jsonify(ok=True, encontrados=len(pagos), nuevos=nuevos)
 
 
+# ---------- Payway por empresa (CSV de "Historial"/"Movimientos") ----------
+
+@app.route("/empresas/<int:empresa_id>/payway/importar-csv", methods=["POST"])
+@login_required
+def empresa_payway_importar_csv(empresa_id):
+    """
+    Botón "Subir CSV de Payway" en Comprobantes -- mismo resultado final que
+    "Traer movimientos de Mercado Pago" (arma un Comprobante "pendiente" por
+    cada venta nueva), pero a partir de un archivo que el cliente descarga a
+    mano de MyPayway (Historial > Movimientos > exportar), porque Payway no
+    tiene una API pública como Mercado Pago para traerlo solo.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify(ok=False, error="No se recibió ningún archivo."), 400
+    if not archivo.filename.lower().endswith(".csv"):
+        return jsonify(ok=False, error="El archivo tiene que ser un .csv (el que exporta MyPayway en Historial/Movimientos)."), 400
+
+    try:
+        # Payway exporta el CSV en latin-1 (con tildes) la mayoría de las
+        # veces, no UTF-8 -- se prueban los dos en vez de asumir uno solo,
+        # para no romper con un "�" o un UnicodeDecodeError según de qué
+        # exportación venga.
+        crudo = archivo.read()
+        try:
+            contenido_texto = crudo.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            contenido_texto = crudo.decode("latin-1")
+        filas_csv = procesador.parsear_csv_payway(contenido_texto)
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    except Exception as e:
+        return jsonify(ok=False, error=f"No se pudo leer el archivo: {e}"), 400
+
+    nuevos = 0
+    for fila_csv in filas_csv:
+        comprobante = procesador.crear_comprobante_desde_fila_payway(fila_csv, current_user.id, empresa)
+        if comprobante:
+            nuevos += 1
+    db.session.commit()
+
+    return jsonify(ok=True, encontrados=len(filas_csv), nuevos=nuevos)
+
+
+# ---------- Banco Galicia por empresa (Excel de "Cuentas"/movimientos) ----------
+
+@app.route("/empresas/<int:empresa_id>/galicia/importar-excel", methods=["POST"])
+@login_required
+def empresa_galicia_importar_excel(empresa_id):
+    """
+    Botón "Subir Excel de Banco Galicia" en Comprobantes -- mismo resultado
+    final que Mercado Pago/Payway (arma un Comprobante "pendiente" por cada
+    transferencia nueva), a partir del Excel que el cliente exporta a mano
+    del home banking de Galicia (pestaña "Cuentas" > movimientos).
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify(ok=False, error="No se recibió ningún archivo."), 400
+    if not archivo.filename.lower().endswith(".xlsx"):
+        return jsonify(ok=False, error="El archivo tiene que ser un .xlsx (el que exporta el home banking de Banco Galicia)."), 400
+
+    try:
+        filas_galicia = procesador.parsear_excel_galicia(io.BytesIO(archivo.read()))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    except Exception as e:
+        return jsonify(ok=False, error=f"No se pudo leer el archivo: {e}"), 400
+
+    nuevos = 0
+    for fila_galicia in filas_galicia:
+        comprobante = procesador.crear_comprobante_desde_transferencia_galicia(fila_galicia, current_user.id, empresa)
+        if comprobante:
+            nuevos += 1
+    db.session.commit()
+
+    return jsonify(ok=True, encontrados=len(filas_galicia), nuevos=nuevos)
+
+
+# ---------- NAVE por empresa (Excel de "Informe de detalles - Cobros con QR") ----------
+
+@app.route("/empresas/<int:empresa_id>/nave/importar-excel", methods=["POST"])
+@login_required
+def empresa_nave_importar_excel(empresa_id):
+    """
+    Botón "Subir Excel de NAVE" en Comprobantes -- mismo resultado final que
+    Mercado Pago/Payway/Banco Galicia (arma un Comprobante "pendiente" por
+    cada cobro nuevo), a partir del Excel "Informe de detalles - Cobros con
+    QR" que el cliente descarga a mano del panel de NAVE.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify(ok=False, error="No se recibió ningún archivo."), 400
+    if not archivo.filename.lower().endswith(".xlsx"):
+        return jsonify(ok=False, error="El archivo tiene que ser un .xlsx (el informe de cobros con QR que exporta NAVE)."), 400
+
+    try:
+        filas_nave = procesador.parsear_excel_nave(io.BytesIO(archivo.read()))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    except Exception as e:
+        return jsonify(ok=False, error=f"No se pudo leer el archivo: {e}"), 400
+
+    nuevos = 0
+    for fila_nave in filas_nave:
+        comprobante = procesador.crear_comprobante_desde_cobro_nave(fila_nave, current_user.id, empresa)
+        if comprobante:
+            nuevos += 1
+    db.session.commit()
+
+    return jsonify(ok=True, encontrados=len(filas_nave), nuevos=nuevos)
+
+
 # ---------- Comprobantes (por empresa) ----------
 
 def _parse_fecha_ddmmaaaa(fecha_str):
