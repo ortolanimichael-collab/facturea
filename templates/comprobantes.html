@@ -416,6 +416,18 @@
     {% if empresa.tiene_mercadopago_conectado() %}
     <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
     {% endif %}
+    <div class="upload-box">
+      <input type="file" id="archivoPayway" accept=".csv,text/csv">
+      <button id="btnSubirPayway" class="btn" style="background:#1E4DB7;border-color:#1E4DB7;">Subir CSV de Payway</button>
+    </div>
+    <div class="upload-box">
+      <input type="file" id="archivoGalicia" accept=".xlsx">
+      <button id="btnSubirGalicia" class="btn" style="background:#FF6600;border-color:#FF6600;">Subir Excel de Banco Galicia</button>
+    </div>
+    <div class="upload-box">
+      <input type="file" id="archivoNave" accept=".xlsx">
+      <button id="btnSubirNave" class="btn" style="background:#6E2FC4;border-color:#6E2FC4;">Subir Excel de NAVE</button>
+    </div>
     <button id="btnFacturarTodo" class="btn btn-facturar-todo" data-track="facturar_todo">Facturar todo lo pendiente</button>
     <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
     <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
@@ -423,6 +435,9 @@
     <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
   </div>
   <span class="msg" id="mercadopagoMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="paywayMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="galiciaMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="naveMsg" style="display:block;margin:-8px 0 8px;"></span>
   <span class="msg" id="facturacionMsg" style="display:none;margin:-8px 0 8px;"></span>
 
   <div id="resumen" class="resumen"></div>
@@ -1923,6 +1938,141 @@ if (btnTraerMercadoPago) {
       msg.textContent = 'No se pudo conectar con el servidor.';
     } finally {
       btnTraerMercadoPago.disabled = false;
+    }
+  });
+}
+
+const btnSubirPayway = document.getElementById('btnSubirPayway');
+if (btnSubirPayway) {
+  btnSubirPayway.addEventListener('click', async () => {
+    const input = document.getElementById('archivoPayway');
+    const msg = document.getElementById('paywayMsg');
+
+    if (!input.files.length) {
+      msg.style.display = 'block';
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Elegí primero el archivo .csv que descargaste de MyPayway (Historial > Movimientos).';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', input.files[0]);
+
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Leyendo el CSV de Payway...';
+    btnSubirPayway.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/payway/importar-csv`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo importar el archivo.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} ventas en el archivo -- ${data.nuevos} nuevas agregadas a la tabla como "pendiente".`;
+      input.value = '';
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnSubirPayway.disabled = false;
+    }
+  });
+}
+
+const btnSubirGalicia = document.getElementById('btnSubirGalicia');
+if (btnSubirGalicia) {
+  btnSubirGalicia.addEventListener('click', async () => {
+    const input = document.getElementById('archivoGalicia');
+    const msg = document.getElementById('galiciaMsg');
+
+    if (!input.files.length) {
+      msg.style.display = 'block';
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Elegí primero el archivo .xlsx que descargaste del home banking de Banco Galicia (Cuentas > Movimientos).';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', input.files[0]);
+
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Leyendo el Excel de Banco Galicia...';
+    btnSubirGalicia.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/galicia/importar-excel`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo importar el archivo.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} transferencias en el archivo -- ${data.nuevos} nuevas agregadas a la tabla como "pendiente".`;
+      input.value = '';
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnSubirGalicia.disabled = false;
+    }
+  });
+}
+
+const btnSubirNave = document.getElementById('btnSubirNave');
+if (btnSubirNave) {
+  btnSubirNave.addEventListener('click', async () => {
+    const input = document.getElementById('archivoNave');
+    const msg = document.getElementById('naveMsg');
+
+    if (!input.files.length) {
+      msg.style.display = 'block';
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Elegí primero el archivo .xlsx del "Informe de detalles - Cobros con QR" que descargaste del panel de NAVE.';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', input.files[0]);
+
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Leyendo el Excel de NAVE...';
+    btnSubirNave.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/nave/importar-excel`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo importar el archivo.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} cobros en el archivo -- ${data.nuevos} nuevos agregados a la tabla como "pendiente".`;
+      input.value = '';
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnSubirNave.disabled = false;
     }
   });
 }
