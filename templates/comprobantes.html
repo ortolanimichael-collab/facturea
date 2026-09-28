@@ -64,11 +64,33 @@
   p.sub{color:var(--muted);font-size:14.5px;}
 
   .barra-acciones{
-    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;
     border:1px solid var(--line);border-radius:14px;background:var(--paper-2);padding:22px;margin:22px 0;
+  }
+  .grupo-cargas{
+    display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;
+  }
+  .carga-card{
+    border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:16px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .carga-card-titulo{
+    display:flex;align-items:center;gap:8px;font-family:var(--sans);font-weight:800;font-size:13.5px;color:var(--ink);
+  }
+  .carga-card-icono{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .carga-card-desc{font-family:var(--sans);font-size:12px;color:var(--muted);margin:-4px 0 0;line-height:1.4;}
+  .carga-card-fila{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .btn-elegir-archivo{
+    font-family:var(--sans);font-weight:700;font-size:12.5px;padding:9px 14px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper-2);color:var(--navy);cursor:pointer;white-space:nowrap;
+  }
+  .btn-elegir-archivo:hover{background:var(--blue-tint);}
+  .nombre-archivo-elegido{
+    font-family:var(--sans);font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:100%;
   }
   .upload-box{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
   .upload-box input[type=file]{font-family:var(--sans);font-size:13px;}
+  .grupo-acciones-generales{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding-top:16px;border-top:1px solid var(--line);}
   .btn{font-family:var(--sans);font-weight:700;font-size:13.5px;padding:11px 20px;border-radius:8px;border:1.5px solid transparent;background:var(--blue);color:#FFFFFF;cursor:pointer;transition:filter .15s ease;}
   .btn:hover{filter:brightness(1.06);}
   .btn:disabled{opacity:0.6;cursor:default;}
@@ -339,7 +361,9 @@
     h1{font-size:18px;}
     p.sub{font-size:13px;}
 
-    .barra-acciones{padding:14px;gap:10px;margin:14px 0;}
+    .barra-acciones{padding:14px;margin:14px 0;}
+    .grupo-cargas{grid-template-columns:1fr;gap:10px;margin-bottom:14px;}
+    .grupo-acciones-generales{gap:8px;padding-top:12px;}
     .upload-box{gap:10px;width:100%;}
     .upload-box input[type=file]{font-size:12px;max-width:100%;}
     .btn{font-size:12px;padding:8px 12px;}
@@ -409,30 +433,69 @@
 
   <div id="tabComprobantes" class="tab-contenido activa">
   <div class="barra-acciones">
-    <div class="upload-box">
-      <input type="file" id="archivos" multiple accept="image/png,image/jpeg,application/pdf">
-      <button id="btnSubir" class="btn" data-track="subir_comprobante">Subir y leer</button>
+    <div class="grupo-cargas">
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:var(--blue);"></span>Comprobantes propios</div>
+        <p class="carga-card-desc">Capturas de pantalla o PDF de transferencias/pagos ya recibidos</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivos">Seleccionar capturas o PDF</label>
+          <input type="file" id="archivos" multiple accept="image/png,image/jpeg,application/pdf" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivosNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubir" class="btn" data-track="subir_comprobante">Subir y leer archivos</button>
+      </div>
+
+      {% if empresa.tiene_mercadopago_conectado() %}
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#009EE3;"></span>Mercado Pago</div>
+        <p class="carga-card-desc">Trae directo desde tu cuenta conectada los cobros nuevos, sin subir ningún archivo</p>
+        <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
+      </div>
+      {% endif %}
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#1E4DB7;"></span>Payway</div>
+        <p class="carga-card-desc">Archivo .csv que descargás de MyPayway (Historial &gt; Movimientos)</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivoPayway">Seleccionar CSV de Payway</label>
+          <input type="file" id="archivoPayway" accept=".csv,text/csv" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivoPaywayNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubirPayway" class="btn" style="background:#1E4DB7;border-color:#1E4DB7;">Cargar CSV de Payway a la tabla</button>
+      </div>
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#FF6600;"></span>Banco Galicia</div>
+        <p class="carga-card-desc">Excel de movimientos del home banking (pestaña Cuentas &gt; Movimientos)</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivoGalicia">Seleccionar Excel de Galicia</label>
+          <input type="file" id="archivoGalicia" accept=".xlsx" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivoGaliciaNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubirGalicia" class="btn" style="background:#FF6600;border-color:#FF6600;">Cargar Excel de Galicia a la tabla</button>
+      </div>
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#6E2FC4;"></span>NAVE</div>
+        <p class="carga-card-desc">Informe de "Cobros con QR" que descargás del panel de NAVE</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivoNave">Seleccionar Excel de NAVE</label>
+          <input type="file" id="archivoNave" accept=".xlsx" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivoNaveNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubirNave" class="btn" style="background:#6E2FC4;border-color:#6E2FC4;">Cargar Excel de NAVE a la tabla</button>
+      </div>
+
     </div>
-    {% if empresa.tiene_mercadopago_conectado() %}
-    <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
-    {% endif %}
-    <div class="upload-box">
-      <input type="file" id="archivoPayway" accept=".csv,text/csv">
-      <button id="btnSubirPayway" class="btn" style="background:#1E4DB7;border-color:#1E4DB7;">Subir CSV de Payway</button>
+
+    <div class="grupo-acciones-generales">
+      <button id="btnFacturarTodo" class="btn btn-facturar-todo" data-track="facturar_todo">Facturar todo lo pendiente</button>
+      <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
+      <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
+      <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
+      <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
     </div>
-    <div class="upload-box">
-      <input type="file" id="archivoGalicia" accept=".xlsx">
-      <button id="btnSubirGalicia" class="btn" style="background:#FF6600;border-color:#FF6600;">Subir Excel de Banco Galicia</button>
-    </div>
-    <div class="upload-box">
-      <input type="file" id="archivoNave" accept=".xlsx">
-      <button id="btnSubirNave" class="btn" style="background:#6E2FC4;border-color:#6E2FC4;">Subir Excel de NAVE</button>
-    </div>
-    <button id="btnFacturarTodo" class="btn btn-facturar-todo" data-track="facturar_todo">Facturar todo lo pendiente</button>
-    <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
-    <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
-    <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
-    <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
   </div>
   <span class="msg" id="mercadopagoMsg" style="display:block;margin:-8px 0 8px;"></span>
   <span class="msg" id="paywayMsg" style="display:block;margin:-8px 0 8px;"></span>
@@ -1862,6 +1925,28 @@ if (btnAgregarManualError) {
   });
 }
 
+// Muestra el/los nombre(s) del archivo elegido junto a cada botón "Seleccionar..."
+// de las tarjetas de carga (comprobantes propios, Payway, Galicia, NAVE).
+[
+  ['archivos', 'archivosNombre'],
+  ['archivoPayway', 'archivoPaywayNombre'],
+  ['archivoGalicia', 'archivoGaliciaNombre'],
+  ['archivoNave', 'archivoNaveNombre'],
+].forEach(([inputId, nombreId]) => {
+  const input = document.getElementById(inputId);
+  const nombreSpan = document.getElementById(nombreId);
+  if (!input || !nombreSpan) return;
+  input.addEventListener('change', () => {
+    if (!input.files.length) {
+      nombreSpan.textContent = 'Ningún archivo seleccionado';
+    } else if (input.files.length === 1) {
+      nombreSpan.textContent = input.files[0].name;
+    } else {
+      nombreSpan.textContent = `${input.files.length} archivos seleccionados`;
+    }
+  });
+});
+
 document.getElementById('btnSubir').addEventListener('click', async () => {
   const input = document.getElementById('archivos');
   const btn = document.getElementById('btnSubir');
@@ -1897,7 +1982,7 @@ document.getElementById('btnSubir').addEventListener('click', async () => {
     resumen.textContent = 'No se pudo conectar con el servidor.';
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Subir y leer';
+    btn.textContent = 'Subir y leer archivos';
   }
 });
 
