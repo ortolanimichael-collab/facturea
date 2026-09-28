@@ -2403,6 +2403,74 @@ def comprobante_eliminar(empresa_id, comprobante_id):
     return jsonify(ok=True)
 
 
+@app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/marcar-facturado", methods=["POST"])
+@login_required
+def comprobante_marcar_facturado(empresa_id, comprobante_id):
+    """
+    Pasa un comprobante "pendiente" o "error" a "facturado" a mano, en un
+    solo click, sin pasar por el bot de ARCA -- para cuando el usuario ya
+    lo facturó por su cuenta (ej. a mano en ARCA, o en otro sistema) y solo
+    quiere que la tabla de Facturea quede al día. No pide confirmación.
+
+    Igual que al facturar de verdad, deja un registro permanente en
+    IdTransaccionFacturada (ver _registrar_id_transaccion_facturada) --
+    así, si más adelante se borra este comprobante y se vuelve a traer la
+    misma transacción (de Mercado Pago, Payway, Banco Galicia o NAVE), el
+    programa sabe que ya está resuelta y no la vuelve a cargar como
+    pendiente.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    comprobante = Comprobante.query.filter_by(id=comprobante_id, empresa_id=empresa.id).first()
+    if not comprobante:
+        return jsonify(ok=False, error="Ese comprobante no existe."), 404
+    if comprobante.estado == "facturado":
+        return jsonify(ok=True)  # ya estaba, no hay nada que hacer
+
+    comprobante.estado = "facturado"
+    comprobante.error_facturacion = None
+    if not comprobante.facturado_en:
+        comprobante.facturado_en = datetime.utcnow()
+    _registrar_id_transaccion_facturada(comprobante)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/marcar-pendiente", methods=["POST"])
+@login_required
+def comprobante_marcar_pendiente(empresa_id, comprobante_id):
+    """
+    Pasa un comprobante "facturado" de vuelta a "pendiente", en un solo
+    click, sin pedir confirmación -- para deshacer un "Facturar"/"Marcar
+    como facturado" hecho por error. También borra su registro permanente
+    en IdTransaccionFacturada, si lo tiene (ver comprobante_marcar_facturado
+    y _registrar_id_transaccion_facturada) -- si no se borrara, quedaría
+    protegido contra refacturar para siempre aunque el usuario haya
+    deshecho el estado a propósito porque necesita facturarlo de nuevo.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    comprobante = Comprobante.query.filter_by(id=comprobante_id, empresa_id=empresa.id).first()
+    if not comprobante:
+        return jsonify(ok=False, error="Ese comprobante no existe."), 404
+    if comprobante.estado != "facturado":
+        return jsonify(ok=True)  # ya estaba, no hay nada que hacer
+
+    comprobante.estado = "pendiente"
+    comprobante.error_facturacion = None
+    comprobante.facturado_en = None
+    if comprobante.id_transaccion:
+        IdTransaccionFacturada.query.filter_by(
+            empresa_id=empresa.id, id_transaccion=comprobante.id_transaccion,
+        ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @app.route("/empresas/<int:empresa_id>/comprobantes/eliminar-todos", methods=["POST"])
 @login_required
 def comprobantes_eliminar_todos(empresa_id):
