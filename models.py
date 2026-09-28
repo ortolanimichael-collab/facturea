@@ -463,6 +463,35 @@ class RegistroSubida(db.Model):
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class IdTransaccionFacturada(db.Model):
+    """
+    Registro PERMANENTE de cada id_transaccion (el que arma cada importador:
+    "MP-<id>" para Mercado Pago, "PAYWAY-..." para Payway, "GALICIA-..." para
+    Banco Galicia, "NAVE-<código>" para NAVE) que ya se facturó con éxito
+    alguna vez, por empresa.
+
+    A diferencia del Comprobante en sí -- que el usuario puede borrar de la
+    tabla en cualquier momento sin afectar la factura real ya emitida en
+    ARCA, ver comprobantes_eliminar_todos() en app.py -- este registro NUNCA
+    se borra junto con el Comprobante. Así, si esa misma transacción se
+    vuelve a traer más adelante (ej. se reimporta el mismo pago de Mercado
+    Pago, o un rango de fechas superpuesto de un CSV/Excel), los
+    crear_comprobante_desde_* de procesador.py encuentran este registro y no
+    la vuelven a cargar como "pendiente" -- evitando facturarla dos veces en
+    ARCA solo porque el registro local se había borrado.
+    """
+    __tablename__ = "ids_transaccion_facturadas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey("empresas.id"), nullable=False, index=True)
+    id_transaccion = db.Column(db.String(120), nullable=False, index=True)
+    facturado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("empresa_id", "id_transaccion", name="uq_id_transaccion_facturada"),
+    )
+
+
 class CuilAntiAbuso(db.Model):
     """
     Un renglón por cada CUIL que alguna vez se usó para facturar de verdad

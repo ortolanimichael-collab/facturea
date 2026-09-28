@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from automatizacion.arca_bot import concepto_efectivo
 from lector import lector_core
-from models import db, Comprobante, Empresa, Usuario
+from models import db, Comprobante, Empresa, Usuario, IdTransaccionFacturada
 from almacenamiento import guardar_archivo_persistente
 
 EXTENSIONES_VALIDAS = {"png", "jpg", "jpeg", "pdf"}
@@ -31,6 +31,38 @@ def _contenido_coincide_con_extension(ruta_local, ext):
     except OSError:
         return False
     return any(cabecera.startswith(firma) for firma in firmas)
+
+
+def _estado_inicial_para_transaccion(id_transaccion, empresa_id):
+    """
+    Decide qué hacer con una transacción (Mercado Pago, Payway, Banco
+    Galicia o NAVE) antes de armar su Comprobante. Devuelve una tupla
+    (crear, estado_inicial, facturado_en_previo):
+
+    - Si YA existe un Comprobante con este id_transaccion en la tabla (en
+      cualquier estado: pendiente, error o facturado), no hay que crear
+      otro -- (False, None, None).
+    - Si no existe un Comprobante pero SÍ hay un registro permanente en
+      IdTransaccionFacturada (ver models.py) de que esta transacción ya se
+      facturó antes -- el comprobante original se borró después, ej. con
+      "Eliminar todos los archivos" -- se crea igual el Comprobante para
+      que no desaparezca del historial, pero directamente en estado
+      "facturado" (con la fecha real en la que se había facturado), NO
+      "pendiente" -- si quedara "pendiente" volvería a aparecer en
+      "Facturar todo" y se duplicaría la factura real ya emitida en ARCA.
+      -- (True, "facturado", esa fecha).
+    - Si no hay ningún rastro de esta transacción, es realmente nueva --
+      (True, "pendiente", None).
+    """
+    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa_id).first():
+        return False, None, None
+    registro_previo = IdTransaccionFacturada.query.filter_by(
+        id_transaccion=id_transaccion, empresa_id=empresa_id,
+    ).first()
+    if registro_previo:
+        return True, "facturado", registro_previo.facturado_en
+    return True, "pendiente", None
+
 
 # ---------- Mercado Pago: mapa de payment_method_id -> ARCA ----------
 # Cuando no encuentra un código exacto acá, cae a "Otra..." con el nombre
@@ -88,7 +120,8 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
     se había traído antes (para no duplicarlo).
     """
     id_transaccion = f"MP-{pago['id']}"
-    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+    crear, estado_inicial, facturado_en_previo = _estado_inicial_para_transaccion(id_transaccion, empresa.id)
+    if not crear:
         return None
 
     importe_total = pago.get("transaction_amount") or 0.0
@@ -183,7 +216,9 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         fecha_hasta=fecha_comprobante,
         importe_total=importe_total,
         cantidad=cantidad,
-        archivo_origen=f"Mercado Pago #{pago['id']}",
+        archivo_origen=f"Mercado Pago #{pago['id']}" + (" -- ya facturado anteriormente (registro recuperado)" if estado_inicial == "facturado" else ""),
+        estado=estado_inicial,
+        facturado_en=facturado_en_previo,
     )
     db.session.add(fila)
     return fila
@@ -286,7 +321,8 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
     lote = (fila_csv.get("LOTE") or "").strip()
     num_cupon = (fila_csv.get("NUM.CUPON") or "").strip()
     id_transaccion = f"PAYWAY-{establecimiento}-{lote}-{num_cupon}"
-    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+    crear, estado_inicial, facturado_en_previo = _estado_inicial_para_transaccion(id_transaccion, empresa.id)
+    if not crear:
         return None
 
     try:
@@ -354,7 +390,9 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
         fecha_hasta=fecha_comprobante,
         importe_total=importe_total,
         cantidad=cantidad,
-        archivo_origen=f"Payway cupón #{num_cupon} (lote {lote})",
+        archivo_origen=f"Payway cupón #{num_cupon} (lote {lote})" + (" -- ya facturado anteriormente (registro recuperado)" if estado_inicial == "facturado" else ""),
+        estado=estado_inicial,
+        facturado_en=facturado_en_previo,
     )
     db.session.add(fila)
     return fila
@@ -485,7 +523,8 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
     monto = fila_galicia["monto"]
     huella = hashlib.sha1(fila_galicia["movimiento_texto"].encode("utf-8")).hexdigest()[:16]
     id_transaccion = f"GALICIA-{fecha_comprobante.replace('/', '')}-{monto:.2f}-{huella}"
-    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+    crear, estado_inicial, facturado_en_previo = _estado_inicial_para_transaccion(id_transaccion, empresa.id)
+    if not crear:
         return None
 
     cantidad = 1.0
@@ -538,7 +577,13 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
         fecha_hasta=fecha_comprobante,
         importe_total=monto,
         cantidad=cantidad,
-        archivo_origen=f"Transferencia Galicia -- {nombre or 'sin nombre'}" + (f" (CUIT {cuit})" if cuit else ""),
+        archivo_origen=(
+            f"Transferencia Galicia -- {nombre or 'sin nombre'}"
+            + (f" (CUIT {cuit})" if cuit else "")
+            + (" -- ya facturado anteriormente (registro recuperado)" if estado_inicial == "facturado" else "")
+        ),
+        estado=estado_inicial,
+        facturado_en=facturado_en_previo,
     )
     db.session.add(fila)
     return fila
@@ -668,7 +713,8 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
     operación), a diferencia de Banco Galicia.
     """
     id_transaccion = f"NAVE-{fila_nave['codigo_operacion']}"
-    if Comprobante.query.filter_by(id_transaccion=id_transaccion, empresa_id=empresa.id).first():
+    crear, estado_inicial, facturado_en_previo = _estado_inicial_para_transaccion(id_transaccion, empresa.id)
+    if not crear:
         return None
 
     fecha_comprobante = fila_nave["fecha"]
@@ -729,7 +775,13 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
         fecha_hasta=fecha_comprobante,
         importe_total=monto,
         cantidad=cantidad,
-        archivo_origen=f"NAVE -- {nombre or 'sin nombre'}" + (f" (doc. {documento})" if documento else ""),
+        archivo_origen=(
+            f"NAVE -- {nombre or 'sin nombre'}"
+            + (f" (doc. {documento})" if documento else "")
+            + (" -- ya facturado anteriormente (registro recuperado)" if estado_inicial == "facturado" else "")
+        ),
+        estado=estado_inicial,
+        facturado_en=facturado_en_previo,
     )
     db.session.add(fila)
     return fila

@@ -25,7 +25,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, LeadContacto, VisitaWeb, EventoWeb, DIAS_PRUEBA_GRATIS, PLANES
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, IdTransaccionFacturada, LeadContacto, VisitaWeb, EventoWeb, DIAS_PRUEBA_GRATIS, PLANES
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -282,6 +282,7 @@ def _facturar_todos_en_segundo_plano(app, empresa_id, comprobante_ids, limite_mo
                     comprobante.facturado_en = datetime.utcnow()
                     if resultado["fecha_ajustada"]:
                         comprobante.fecha_comprobante = resultado["fecha_usada"]
+                    _registrar_id_transaccion_facturada(comprobante)
                     acumulado += importe
                     db.session.commit()
                     _lote_marcar_progreso(empresa_id, facturado=True, monto_facturado=acumulado)
@@ -626,6 +627,55 @@ def _backfill_tipo_documento_faltante():
 
 
 _backfill_tipo_documento_faltante()
+
+
+def _backfill_ids_transaccion_facturadas():
+    """
+    Completa la tabla IdTransaccionFacturada (ver models.py) con los
+    id_transaccion de TODOS los comprobantes que ya estén en estado
+    "facturado" y todavía existan en la base -- para que la protección
+    contra refacturar por duplicado (ver crear_comprobante_desde_* en
+    procesador.py) alcance también a lo que ya se había facturado ANTES de
+    que existiera esta tabla, no solo a lo que se facture de acá en
+    adelante (eso ya lo registra _registrar_id_transaccion_facturada() en
+    el momento de facturar).
+
+    Corre una sola vez por arranque; no hace nada si ya está todo cargado
+    (se puede correr de nuevo sin problema -- solo agrega lo que falte).
+    """
+    with app.app_context():
+        facturados = (
+            Comprobante.query.filter(
+                Comprobante.estado == "facturado",
+                Comprobante.id_transaccion.isnot(None),
+                Comprobante.id_transaccion != "",
+            )
+            .all()
+        )
+        if not facturados:
+            return
+        ya_registrados = {
+            (r.empresa_id, r.id_transaccion)
+            for r in IdTransaccionFacturada.query.all()
+        }
+        nuevos = 0
+        vistos_esta_pasada = set()
+        for c in facturados:
+            clave = (c.empresa_id, c.id_transaccion)
+            if clave in ya_registrados or clave in vistos_esta_pasada:
+                continue
+            vistos_esta_pasada.add(clave)
+            db.session.add(IdTransaccionFacturada(
+                empresa_id=c.empresa_id, id_transaccion=c.id_transaccion,
+                facturado_en=c.facturado_en or datetime.utcnow(),
+            ))
+            nuevos += 1
+        if nuevos:
+            db.session.commit()
+            print(f"[info] Se registraron {nuevos} id_transaccion ya facturados en IdTransaccionFacturada (protección contra refacturar duplicados).")
+
+
+_backfill_ids_transaccion_facturadas()
 
 
 crear_admin_inicial()
@@ -1908,6 +1958,30 @@ def _comprobante_facturado_con_mismo_id_transaccion(comprobante):
     ).first()
 
 
+def _registrar_id_transaccion_facturada(comprobante):
+    """
+    Deja un registro PERMANENTE (tabla IdTransaccionFacturada, ver models.py)
+    de que este id_transaccion ya se facturó con éxito -- a diferencia del
+    propio Comprobante, este registro sobrevive aunque el usuario borre el
+    comprobante después (incluso con "Eliminar todos los archivos"). Se
+    llama justo después de poner comprobante.estado = "facturado" en los dos
+    lugares donde eso pasa. Si el comprobante no tiene id_transaccion (ej. se
+    cargó a mano o vino de una imagen sin dato de origen), no hay nada que
+    registrar.
+    """
+    if not comprobante.id_transaccion:
+        return
+    ya_registrado = IdTransaccionFacturada.query.filter_by(
+        empresa_id=comprobante.empresa_id, id_transaccion=comprobante.id_transaccion,
+    ).first()
+    if not ya_registrado:
+        db.session.add(IdTransaccionFacturada(
+            empresa_id=comprobante.empresa_id,
+            id_transaccion=comprobante.id_transaccion,
+            facturado_en=comprobante.facturado_en or datetime.utcnow(),
+        ))
+
+
 def _chequear_cuil_no_abusado(empresa):
     """
     Anti-abuso de "prueba gratis infinita": evita que alguien reuse el
@@ -1997,6 +2071,7 @@ def facturar(empresa_id, comprobante_id):
                 # Se actualiza acá para que la tabla no mienta sobre qué fecha quedó
                 # escrita de verdad en la factura.
                 comprobante.fecha_comprobante = resultado["fecha_usada"]
+            _registrar_id_transaccion_facturada(comprobante)
             db.session.commit()
         return jsonify(
             ok=True, modo_prueba=modo_prueba,
