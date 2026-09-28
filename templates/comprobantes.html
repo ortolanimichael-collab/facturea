@@ -825,6 +825,45 @@ function mostrarTabComprobantes(idPestaña) {
   document.querySelectorAll('.tab-contenido').forEach(c => c.classList.toggle('activa', c.id === idPestaña));
 }
 
+/* ---------- Recargar la página sin que se mueva el scroll ----------
+   Varias acciones (marcar como facturado/pendiente, facturar, editar,
+   subir CSV/Excel, etc.) recargan la página para que la tabla refleje el
+   cambio -- pero un reload normal siempre vuelve al scroll (0,0), lo que
+   obliga a desplazarse de nuevo hacia la derecha/abajo después de CADA
+   click si se está trabajando fila por fila. Estas dos funciones guardan
+   la posición del scroll (tanto el de la tabla hacia los costados como el
+   de la página hacia abajo) justo antes de recargar, y la restauran apenas
+   carga de nuevo -- así se puede clickear rápido, fila tras fila, sin
+   tener que reubicarse en la tabla cada vez. */
+function recargarConservandoScroll() {
+  try {
+    const tablaScroll = document.getElementById('tablaScroll');
+    sessionStorage.setItem('facturea_scroll_x', String(tablaScroll ? tablaScroll.scrollLeft : 0));
+    sessionStorage.setItem('facturea_scroll_y', String(window.scrollY || window.pageYOffset || 0));
+  } catch (e) {}
+  window.location.reload();
+}
+
+(function restaurarScrollTrasRecargar() {
+  let x, y;
+  try {
+    x = sessionStorage.getItem('facturea_scroll_x');
+    y = sessionStorage.getItem('facturea_scroll_y');
+    if (x === null && y === null) return;
+    sessionStorage.removeItem('facturea_scroll_x');
+    sessionStorage.removeItem('facturea_scroll_y');
+  } catch (e) { return; }
+  const restaurar = () => {
+    const tablaScroll = document.getElementById('tablaScroll');
+    if (tablaScroll && x !== null) tablaScroll.scrollLeft = parseInt(x, 10) || 0;
+    if (y !== null) window.scrollTo(0, parseInt(y, 10) || 0);
+  };
+  // Se espera a que la tabla termine de pintarse (2 frames) antes de
+  // aplicar el scroll -- si se hace antes de tiempo, el navegador todavía
+  // no calculó el ancho/alto real y la restauración no tiene efecto.
+  requestAnimationFrame(() => requestAnimationFrame(restaurar));
+})();
+
 const EMPRESA_ID = {{ empresa.id }};
 const SUPPORT_WHATSAPP = {{ support_whatsapp | tojson }};
 const DATOS_REVISION = {{ datos_revision | tojson }};
@@ -1379,7 +1418,7 @@ async function guardarColumnaCompleta(th, campo, valor, tituloOriginal) {
       th.textContent = tituloOriginal;
       return;
     }
-    window.location.reload(); // recarga para que todas las filas reflejen el cambio (y recalculen importe si hacía falta)
+    recargarConservandoScroll(); // recarga para que todas las filas reflejen el cambio (y recalculen importe si hacía falta)
   } catch (e) {
     alert('No se pudo conectar con el servidor.');
     th.textContent = tituloOriginal;
@@ -1424,7 +1463,7 @@ document.querySelectorAll('.btn-marcar-facturado').forEach(btn => {
       const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/marcar-facturado`, { method: 'POST' });
       const data = await r.json();
       if (data.ok) {
-        window.location.reload();
+        recargarConservandoScroll();
       } else {
         alert('No se pudo marcar como facturado: ' + data.error);
         btn.disabled = false;
@@ -1443,7 +1482,7 @@ document.querySelectorAll('.btn-marcar-pendiente').forEach(btn => {
       const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/marcar-pendiente`, { method: 'POST' });
       const data = await r.json();
       if (data.ok) {
-        window.location.reload();
+        recargarConservandoScroll();
       } else {
         alert('No se pudo marcar como pendiente: ' + data.error);
         btn.disabled = false;
@@ -1556,7 +1595,7 @@ document.querySelectorAll('.btn-facturar').forEach(btn => {
     } catch (e) {
       alert('No se pudo conectar con el servidor.');
     }
-    window.location.reload();
+    recargarConservandoScroll();
   });
 });
 
@@ -1676,7 +1715,7 @@ async function consultarEstadoFacturacion() {
       `Monto facturado: ${formatoMonto(data.monto_facturado)}${corte}`
     );
   }
-  window.location.reload();
+  recargarConservandoScroll();
 }
 
 async function facturarTodosConLimite(btn, limiteMonto) {
@@ -1955,7 +1994,7 @@ if (btnAgregarManualError) {
         // fecha, concepto, CUIT, todo) con el mismo editor de siempre, sin
         // tener que ir a buscarlo entre los pendientes.
         sessionStorage.setItem('abrirRevisionComprobanteId', String(data.comprobante_id));
-        window.location.reload();
+        recargarConservandoScroll();
       } else {
         emFormMsg.textContent = data.error || 'No se pudo agregar.';
         emFormMsg.className = 'msg error';
@@ -2019,7 +2058,7 @@ document.getElementById('btnSubir').addEventListener('click', async () => {
         texto += ` · Bloqueados por límite del plan: ${data.resumen.limite_plan} (escribinos por soporte para subir de plan)`;
       }
       resumen.textContent = texto;
-      setTimeout(() => window.location.reload(), 1000);
+      setTimeout(() => recargarConservandoScroll(), 1000);
     } else {
       resumen.textContent = 'Error: ' + data.error;
     }
@@ -2063,7 +2102,7 @@ if (btnTraerMercadoPago) {
       }
       msg.style.color = 'var(--blue-deep)';
       msg.textContent = `Se encontraron ${data.encontrados} pagos -- ${data.nuevos} nuevos agregados a la tabla como "pendiente".`;
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => recargarConservandoScroll(), 1500);
     } catch (e) {
       msg.style.color = 'var(--danger)';
       msg.textContent = 'No se pudo conectar con el servidor.';
@@ -2108,7 +2147,7 @@ if (btnSubirPayway) {
       msg.style.color = 'var(--blue-deep)';
       msg.textContent = `Se encontraron ${data.encontrados} ventas en el archivo -- ${data.nuevos} nuevas agregadas a la tabla como "pendiente".`;
       input.value = '';
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => recargarConservandoScroll(), 1500);
     } catch (e) {
       msg.style.color = 'var(--danger)';
       msg.textContent = 'No se pudo conectar con el servidor.';
@@ -2153,7 +2192,7 @@ if (btnSubirGalicia) {
       msg.style.color = 'var(--blue-deep)';
       msg.textContent = `Se encontraron ${data.encontrados} transferencias en el archivo -- ${data.nuevos} nuevas agregadas a la tabla como "pendiente".`;
       input.value = '';
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => recargarConservandoScroll(), 1500);
     } catch (e) {
       msg.style.color = 'var(--danger)';
       msg.textContent = 'No se pudo conectar con el servidor.';
@@ -2198,7 +2237,7 @@ if (btnSubirNave) {
       msg.style.color = 'var(--blue-deep)';
       msg.textContent = `Se encontraron ${data.encontrados} cobros en el archivo -- ${data.nuevos} nuevos agregados a la tabla como "pendiente".`;
       input.value = '';
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => recargarConservandoScroll(), 1500);
     } catch (e) {
       msg.style.color = 'var(--danger)';
       msg.textContent = 'No se pudo conectar con el servidor.';
@@ -2240,7 +2279,7 @@ async function forzarGuardadoPendiente() {
 async function cerrarRevision() {
   await forzarGuardadoPendiente();
   // Recargar para que la tabla de atrás refleje todo lo editado en el panel.
-  window.location.reload();
+  recargarConservandoScroll();
 }
 
 async function irARevision(delta) {
@@ -2837,7 +2876,7 @@ async function eliminarEnLote(boton, url, mensajeConfirmacion) {
     const data = await r.json();
     if (data.ok) {
       alert(`Listo, se eliminaron ${data.eliminados} comprobante(s).`);
-      window.location.reload();
+      recargarConservandoScroll();
     } else {
       alert('No se pudo eliminar: ' + data.error);
       boton.disabled = false;
