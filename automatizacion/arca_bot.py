@@ -547,27 +547,42 @@ def facturar_comprobante(comprobante, modo_prueba=False):
             "confirmadas Factura A y Factura B por ahora). Facturalo a mano en ARCA mientras tanto."
         )
 
+    # Se juntan TODOS los problemas de datos en una sola pasada -- antes,
+    # cada chequeo cortaba con su propio ValueError apenas encontraba el
+    # primer problema, así que si un comprobante tenía dos o tres campos
+    # mal, el cliente tenía que "Reintentar" varias veces (uno por vuelta)
+    # para enterarse de todos. Ahora el mensaje de "Ver error" trae la
+    # lista completa de una sola vez.
+    problemas = []
+
     campos_obligatorios = [
-        comprobante.punto_venta, comprobante.tipo_comprobante, comprobante.concepto,
-        comprobante.condicion_iva, comprobante.tipo_documento, comprobante.condicion_venta,
-        comprobante.descripcion, comprobante.unidad_medida,
+        ("Punto de venta", comprobante.punto_venta),
+        ("Tipo de factura", comprobante.tipo_comprobante),
+        ("Concepto", comprobante.concepto),
+        ("Condición de IVA", comprobante.condicion_iva),
+        ("Tipo de documento", comprobante.tipo_documento),
+        ("Condición de venta", comprobante.condicion_venta),
+        ("Descripción", comprobante.descripcion),
+        ("Unidad de medida", comprobante.unidad_medida),
     ]
     if comprobante.medio_pago_detectado in ("Débito", "Crédito"):
-        campos_obligatorios += [comprobante.tipo_pago, comprobante.numero_pago]
+        campos_obligatorios += [
+            ("Tipo de tarjeta", comprobante.tipo_pago),
+            ("Número de tarjeta", comprobante.numero_pago),
+        ]
 
-    if not empresa.razon_social_arca or not all(campos_obligatorios):
-        raise ValueError(
-            f"El comprobante #{comprobante.id} de '{empresa.nombre_interno}' todavía "
-            "tiene campos de facturación sin completar."
-        )
+    campos_faltantes = [nombre for nombre, valor in campos_obligatorios if not valor]
+    if not empresa.razon_social_arca:
+        campos_faltantes.insert(0, "Razón Social ARCA de la empresa (se carga en Empresas > Editar)")
+    if campos_faltantes:
+        problemas.append("faltan completar estos campos: " + ", ".join(campos_faltantes))
 
     # "Otra..." en Tipo de tarjeta necesita el texto del Detalle para poder
     # completar la casilla de Descripción que aparece al lado en ARCA -- sin
     # eso, ARCA no deja avanzar de esa pantalla.
     if comprobante.tipo_pago == "Otra..." and not comprobante.tipo_pago_detalle:
-        raise ValueError(
-            f"El comprobante #{comprobante.id} tiene \"Otra...\" como Tipo de tarjeta pero le falta "
-            "el Detalle (ej. \"VISA Débito\") -- completalo en Revisión Manual antes de facturar."
+        problemas.append(
+            'tiene "Otra..." como Tipo de tarjeta pero le falta el Detalle (ej. "VISA Débito")'
         )
 
     # Cualquier comprobante "clase A" (Factura A, Nota de Débito/Crédito A,
@@ -581,12 +596,21 @@ def facturar_comprobante(comprobante, modo_prueba=False):
     tipo_doc = (comprobante.tipo_documento or "").strip().upper()
     exige_numero_documento = es_clase_a or tipo_doc in ("CUIT", "CUIL")
     if exige_numero_documento and not comprobante.cuit_receptor:
-        motivo = (
-            f'es "{comprobante.tipo_comprobante}" -- ese tipo exige CUIT del receptor sin importar su Condición de IVA'
-            if es_clase_a else
-            f'tiene "{comprobante.tipo_documento}" como Tipo de documento -- hace falta completar el número'
+        problemas.append(
+            (
+                f'es "{comprobante.tipo_comprobante}" -- ese tipo exige CUIT del receptor sin importar su Condición de IVA'
+                if es_clase_a else
+                f'tiene "{comprobante.tipo_documento}" como Tipo de documento -- hace falta completar el número de CUIT/CUIL'
+            )
         )
-        raise ValueError(f"El comprobante #{comprobante.id} {motivo}. Completalo antes de facturar.")
+
+    if problemas:
+        raise ValueError(
+            f"El comprobante #{comprobante.id} de '{empresa.nombre_interno}' no se puede facturar todavía: "
+            + "; además, ".join(problemas)
+            + ". Completalo en Revisión Manual (o en la configuración de la empresa, si es la Razón Social "
+            "ARCA) y volvé a intentar."
+        )
 
     if es_ri:
         if not comprobante.alicuota_iva or comprobante.alicuota_iva not in MAPA_ALICUOTA_IVA_ARCA:
