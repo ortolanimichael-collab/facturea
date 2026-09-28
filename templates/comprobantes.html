@@ -237,6 +237,10 @@
   .acciones-fila .btn-revisar:hover{background:var(--blue-deep);color:#fff;}
   .acciones-fila .btn-ver-error{border-color:var(--warn-deep);color:var(--warn-deep);background:var(--warn-tint);}
   .acciones-fila .btn-ver-error:hover{background:var(--warn-deep);color:#fff;}
+  .acciones-fila .btn-marcar-facturado{border-color:#1FAA59;color:#1FAA59;}
+  .acciones-fila .btn-marcar-facturado:hover{background:#1FAA59;color:#fff;}
+  .acciones-fila .btn-marcar-pendiente{border-color:var(--muted);color:var(--muted);}
+  .acciones-fila .btn-marcar-pendiente:hover{background:var(--muted);color:#fff;}
 
   #overlayVerError{display:none;position:fixed;inset:0;background:rgba(19,28,51,0.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
   #overlayVerError.abierto{display:flex;}
@@ -651,8 +655,11 @@
               {% if editable %}
               <button class="btn-facturar {{ 'reintentar' if c.estado == 'error' }}" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de facturar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>{{ "Reintentar" if c.estado == "error" else "Facturar" }}</button>
               <button class="btn-probar" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de probar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>Probar</button>
+              <button class="btn-marcar-facturado" data-id="{{ c.id }}" title="Marca este comprobante como facturado sin pasar por ARCA -- para cuando ya lo facturaste por tu cuenta">Marcar como facturado</button>
               <button class="btn-editar-fila" data-id="{{ c.id }}">Editar fila</button>
               <button class="btn-eliminar" data-id="{{ c.id }}">Eliminar</button>
+              {% else %}
+              <button class="btn-marcar-pendiente" data-id="{{ c.id }}" title="Vuelve a poner este comprobante como pendiente">Marcar como pendiente</button>
               {% endif %}
               <button class="btn-preview-pdf" data-id="{{ c.id }}">Vista previa PDF</button>
             </div>
@@ -1401,6 +1408,44 @@ document.querySelectorAll('.btn-eliminar').forEach(btn => {
         btn.closest('tr').remove();
       } else {
         alert('No se pudo eliminar: ' + data.error);
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btn.disabled = false;
+    }
+  });
+});
+
+document.querySelectorAll('.btn-marcar-facturado').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/marcar-facturado`, { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert('No se pudo marcar como facturado: ' + data.error);
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btn.disabled = false;
+    }
+  });
+});
+
+document.querySelectorAll('.btn-marcar-pendiente').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/marcar-pendiente`, { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert('No se pudo marcar como pendiente: ' + data.error);
         btn.disabled = false;
       }
     } catch (e) {
