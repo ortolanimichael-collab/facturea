@@ -455,6 +455,7 @@
   <div class="tabs-nav">
     <button type="button" class="tab-btn activa" data-tab="tabComprobantes" onclick="mostrarTabComprobantes('tabComprobantes')">Comprobantes</button>
     <button type="button" class="tab-btn" data-tab="tabEstadisticas" onclick="mostrarTabComprobantes('tabEstadisticas')">Proceso y estadísticas</button>
+    <button type="button" class="tab-btn" data-tab="tabConfiguraciones" onclick="mostrarTabComprobantes('tabConfiguraciones')">Configuraciones</button>
   </div>
 
   <div id="tabComprobantes" class="tab-contenido activa">
@@ -727,6 +728,10 @@
       <li><span class="stat-label">Comprobantes pendientes</span><span class="stat-num-lista">{{ stats.pendientes }}</span></li>
       <li><span class="stat-label">Monto pendiente total de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_pendiente) }}</span></li>
       <li><span class="stat-label">Monto total facturado de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_facturado_total) }}</span></li>
+      <li><span class="stat-label">IVA total de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.iva_total_facturado) }}</span></li>
+      {% for punto, monto in stats.monto_por_punto_venta %}
+      <li><span class="stat-label">Monto facturado -- Punto de venta {{ punto }}</span><span class="stat-num-lista">$ {{ "%.2f"|format(monto) }}</span></li>
+      {% endfor %}
     </ul>
 
     <h3>Lecturas de capturas</h3>
@@ -798,6 +803,71 @@
   </div>
 </div>
 
+{% set descripciones_config = ((empresa.descripciones_disponibles or "")).split(",") | select | list %}
+{% set porcentajes_config_actuales = ((empresa.descripciones_porcentajes or "")).split(",") %}
+<div id="tabConfiguraciones" class="tab-contenido">
+  <div class="panel-stats">
+    <form method="POST" action="{{ url_for('empresa_configuraciones', empresa_id=empresa.id) }}" id="formConfiguraciones">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <h3>Descripción automática para montos bajos</h3>
+      <p class="tip-edicion">
+        Si un comprobante nuevo tiene un monto menor al que pongas acá, se le va a asignar
+        siempre esta descripción (con su propia alícuota, tipo de comprobante y punto de venta,
+        si los tenés configurados para ella en "Editar empresa"), en vez de la que le hubiera
+        tocado normalmente. Dejá el monto vacío para desactivar esta regla.
+      </p>
+      {% if not descripciones_config %}
+      <p class="hint">Todavía no cargaste ninguna descripción/producto en "Editar empresa" -- cargá al menos una para poder usar esta regla.</p>
+      {% else %}
+      <div class="fila-2">
+        <div class="campo">
+          <label>Monto menor a</label>
+          <input type="number" name="config_umbral_precio_bajo" min="0" step="0.01" placeholder="ej: 5000"
+                 value="{{ empresa.config_umbral_precio_bajo if empresa.config_umbral_precio_bajo is not none else '' }}">
+        </div>
+        <div class="campo">
+          <label>Usar esta descripción</label>
+          <select name="config_descripcion_precio_bajo">
+            <option value="">Sin regla -- no forzar ninguna</option>
+            {% for d in descripciones_config %}
+            <option value="{{ d }}" {{ "selected" if empresa.config_descripcion_precio_bajo == d }}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      {% endif %}
+
+      <h3 style="margin-top:28px;">Reparto por % entre descripciones</h3>
+      <p class="tip-edicion">
+        Solo tiene efecto si en "Editar empresa" activaste "Elegir una descripción al azar entre
+        las cargadas". En vez de que cada descripción salga la misma cantidad de veces, le podés
+        asignar un % propio a cada una -- al subir una, se les baja proporcionalmente a las demás,
+        para que entre todas sigan sumando 100%.
+      </p>
+      {% if descripciones_config|length < 2 %}
+      <p class="hint">Cargá al menos dos descripciones en "Editar empresa" para poder repartirles un %.</p>
+      {% else %}
+      <div id="listaPorcentajesConfig">
+        {% for d in descripciones_config %}
+        {% set porcentaje_d = porcentajes_config_actuales[loop.index0] if loop.index0 < porcentajes_config_actuales|length and porcentajes_config_actuales[loop.index0].strip() else "" %}
+        <div class="fila-porcentaje-desc" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+          <span style="flex:1;font-family:var(--sans);font-size:13.5px;">{{ d }}</span>
+          <input type="number" class="input-porcentaje-desc" data-desc="{{ d }}" min="0" max="100" step="0.01"
+                 style="width:90px;" value="{{ porcentaje_d }}">
+          <span style="font-family:var(--sans);font-size:13px;color:var(--muted);">%</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="hint">Total repartido: <strong id="totalPorcentajeConfig">0%</strong></p>
+      <input type="hidden" name="descripciones_porcentajes" id="descripcionesPorcentajesConfig" value="{{ empresa.descripciones_porcentajes or '' }}">
+      {% endif %}
+
+      <button type="submit" class="btn" style="margin-top:16px;">Guardar configuración</button>
+    </form>
+  </div>
+</div>
+
 <div id="overlayVerError">
   <div class="modal-error">
     <div class="modal-error-head">
@@ -853,6 +923,87 @@ function mostrarTabComprobantes(idPestaña) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('activa', b.dataset.tab === idPestaña));
   document.querySelectorAll('.tab-contenido').forEach(c => c.classList.toggle('activa', c.id === idPestaña));
 }
+
+// Si venimos de guardar el formulario de Configuraciones (esa ruta redirige
+// acá con #tabConfiguraciones en la URL), se reabre esa pestaña sola en vez
+// de volver siempre a "Comprobantes" -- mismo criterio para #tabEstadisticas
+// por si en algún momento se linkea directo a esa pestaña.
+if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadisticas') {
+  mostrarTabComprobantes(location.hash.slice(1));
+}
+
+/* ---------- Reparto por % entre descripciones (pestaña Configuraciones) ----------
+   Cada descripción tiene su propio input de %. Al cambiar uno, se le resta
+   la diferencia a los demás EN PROPORCIÓN a lo que ya tenían (o parejo si
+   todos estaban en 0), así el total entre todas se mantiene siempre en
+   100% sin que el usuario tenga que hacer la cuenta a mano. */
+(function () {
+  const inputs = () => Array.from(document.querySelectorAll('.input-porcentaje-desc'));
+  const campoOculto = document.getElementById('descripcionesPorcentajesConfig');
+  const totalTexto = document.getElementById('totalPorcentajeConfig');
+  if (!campoOculto || inputs().length === 0) return;
+
+  function guardarValoresAnteriores() {
+    inputs().forEach(i => { i.dataset.valorAnterior = i.value || '0'; });
+  }
+
+  function actualizarTotalYCampoOculto() {
+    const total = inputs().reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+    if (totalTexto) totalTexto.textContent = (Math.round(total * 100) / 100) + '%';
+    campoOculto.value = inputs().map(i => i.value || '0').join(',');
+  }
+
+  function redistribuir(inputCambiado) {
+    const todos = inputs();
+    const otros = todos.filter(i => i !== inputCambiado);
+    if (otros.length === 0) return;
+
+    const nuevoValor = Math.max(0, Math.min(100, parseFloat(inputCambiado.value) || 0));
+    inputCambiado.value = nuevoValor;
+
+    const sumaAnteriorOtros = otros.reduce((acc, i) => acc + (parseFloat(i.dataset.valorAnterior) || 0), 0);
+    const restante = Math.max(0, 100 - nuevoValor);
+
+    if (sumaAnteriorOtros <= 0) {
+      const cadaUno = restante / otros.length;
+      otros.forEach(i => { i.value = Math.round(cadaUno * 100) / 100; });
+    } else {
+      otros.forEach(i => {
+        const anterior = parseFloat(i.dataset.valorAnterior) || 0;
+        const proporcion = anterior / sumaAnteriorOtros;
+        i.value = Math.round(restante * proporcion * 100) / 100;
+      });
+    }
+
+    // Ajuste fino: por redondeos de decimales el total puede quedar en
+    // 99.98 o 100.02 en vez de 100 justo -- la diferencia se le suma o
+    // resta al primero de los otros para que siempre cierre exacto.
+    const totalAhora = todos.reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+    const diferencia = Math.round((100 - totalAhora) * 100) / 100;
+    if (diferencia !== 0) {
+      otros[0].value = Math.max(0, Math.round((parseFloat(otros[0].value) + diferencia) * 100) / 100);
+    }
+
+    guardarValoresAnteriores();
+    actualizarTotalYCampoOculto();
+  }
+
+  // Si no había ningún % cargado todavía (empresa nueva usando esto por
+  // primera vez), se arranca con un reparto parejo entre todas en vez de
+  // dejarlas todas en 0 -- 0% en todas haría que _elegir_descripcion caiga
+  // al sorteo parejo de siempre, pero visualmente confunde ver "Total: 0%"
+  // apenas se abre la pestaña.
+  const totalInicial = inputs().reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+  if (totalInicial <= 0) {
+    const todos = inputs();
+    const cadaUno = Math.round((100 / todos.length) * 100) / 100;
+    todos.forEach((i, idx) => { i.value = idx === todos.length - 1 ? (100 - cadaUno * (todos.length - 1)) : cadaUno; });
+  }
+
+  guardarValoresAnteriores();
+  actualizarTotalYCampoOculto();
+  inputs().forEach(inp => inp.addEventListener('input', () => redistribuir(inp)));
+})();
 
 /* ---------- Recargar la página sin que se mueva el scroll ----------
    Varias acciones (marcar como facturado/pendiente, facturar, editar,
