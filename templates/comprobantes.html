@@ -238,7 +238,58 @@
 
   .tip-edicion{font-family:var(--sans);font-size:11.5px;color:var(--muted);margin-bottom:14px;}
 
+  .barra-tabla-info{
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:14px 18px;margin-bottom:14px;
+  }
+  .barra-tabla-info .tip-edicion{margin:0;flex:1;min-width:280px;}
+  .control-orden{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;}
+  .control-orden label{
+    font-family:var(--sans);font-weight:700;font-size:11px;color:var(--muted);white-space:nowrap;
+    text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .control-orden select{
+    font-family:var(--sans);font-size:13px;padding:8px 12px;border-radius:8px;border:1.5px solid var(--line);
+    background:var(--paper-2);color:var(--ink);cursor:pointer;
+  }
+  .control-orden .btn-direccion-orden{
+    font-family:var(--sans);font-weight:700;font-size:12.5px;padding:8px 14px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper-2);color:var(--navy);cursor:pointer;white-space:nowrap;
+  }
+  .control-orden .btn-direccion-orden:hover{background:var(--blue-tint);border-color:var(--blue);}
+  .nota-orden-visual{
+    width:100%;font-family:var(--sans);font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;
+  }
+
   .tabla-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
+
+  /* Casillas de edición inline (doble clic en una celda o en el título de una
+     columna): antes salían con el estilo por defecto del navegador -- ahora
+     usan la misma paleta que el resto de la página (mismo look que los
+     campos de "Revisión manual"). Cubre tanto <td> como <th> (edición de
+     columna completa) y también el contenedor .widget-descripcion, que
+     inserta su propio <input>/<select> adentro de la celda. */
+  #tablaComprobantes td input, #tablaComprobantes td select,
+  #tablaComprobantes th input, #tablaComprobantes th select{
+    width:100%;font-family:var(--sans);font-size:13px;padding:6px 8px;border-radius:7px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+    box-sizing:border-box;
+  }
+  #tablaComprobantes td input:focus, #tablaComprobantes td select:focus,
+  #tablaComprobantes th input:focus, #tablaComprobantes th select:focus{
+    outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-tint);
+  }
+  #tablaComprobantes .widget-descripcion{width:100%;}
+
+  /* Barra de scroll horizontal SIEMPRE visible (no la "overlay" que algunos
+     sistemas -- sobre todo Mac -- ocultan hasta que se toca el trackpad):
+     así queda claro a simple vista que la tabla sigue para los costados,
+     sin tener que arrastrar primero para descubrirlo. */
+  .tabla-scroll{scrollbar-width:auto;scrollbar-color:var(--blue) var(--paper);}
+  .tabla-scroll::-webkit-scrollbar{height:12px;}
+  .tabla-scroll::-webkit-scrollbar-track{background:var(--paper);border-radius:0 0 12px 12px;}
+  .tabla-scroll::-webkit-scrollbar-thumb{background:var(--blue);border-radius:10px;border:2px solid var(--paper);}
+  .tabla-scroll::-webkit-scrollbar-thumb:hover{background:var(--blue-deep);}
 
   /* Barra de scroll horizontal "fantasma": se pega abajo de la ventana
      mientras la tabla está a la vista, para no tener que bajar hasta el
@@ -639,7 +690,20 @@
   {% set conceptos = {"1": "Productos", "2": "Servicios", "3": "Productos y Servicios (Mixto)"} %}
 
   {% if comprobantes %}
-  <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe. Tildá varias filas a la izquierda para marcarlas como facturado o eliminarlas todas juntas con un solo click.</p>
+  <div class="barra-tabla-info">
+    <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe. Tildá varias filas a la izquierda para marcarlas como facturado o eliminarlas todas juntas con un solo click.</p>
+    <div class="control-orden">
+      <label for="selectOrdenTabla">Ordenar por</label>
+      <select id="selectOrdenTabla">
+        <option value="default">Como se cargó</option>
+        <option value="fecha_comprobante">Fecha del comprobante</option>
+        <option value="descripcion">Descripción</option>
+        <option value="precio_unitario">Precio unitario</option>
+      </select>
+      <button type="button" class="btn-direccion-orden" id="btnDireccionOrden" data-direccion="asc" title="Cambiar entre ascendente y descendente">⬆ Ascendente</button>
+    </div>
+    <p class="nota-orden-visual">Este orden es solo visual -- "Facturar todo lo pendiente" siempre arranca por el comprobante con la fecha más antigua, sin importar cómo esté ordenada la tabla acá.</p>
+  </div>
   <div class="barra-seleccion-masiva" id="barraSeleccionMasiva">
     <span class="contador" id="contadorSeleccionados">0 seleccionados</span>
     <button type="button" class="btn-marcar-facturado-masivo" id="btnMarcarFacturadoMasivo">Marcar seleccionados como facturado</button>
@@ -683,7 +747,11 @@
         {% set editable = c.estado != "facturado" %}
         {% set monto_bajo = (c.precio_unitario or 0) < 100 %}
         {% set falta_cuit_a = ((c.tipo_comprobante or "").strip().endswith(" A") or (c.tipo_documento or "").strip().upper() in ("CUIT", "CUIL")) and not c.cuit_receptor %}
-        <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a or c.fecha_no_detectada) }}">
+        <tr data-comprobante-id="{{ c.id }}"
+            data-sort-fecha="{{ c.fecha_comprobante or '' }}"
+            data-sort-descripcion="{{ (c.descripcion or '')|lower }}"
+            data-sort-precio="{{ c.precio_unitario or 0 }}"
+            class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a or c.fecha_no_detectada) }}">
           <td class="col-check"><input type="checkbox" class="chk-fila" data-id="{{ c.id }}" data-estado="{{ c.estado }}"></td>
           <td {% if editable %}data-field="punto_venta" data-type="text" data-value="{{ c.punto_venta or '' }}"{% endif %}>{{ c.punto_venta or "—" }}</td>
           <td {% if editable %}data-field="tipo_comprobante" data-type="select" data-value="{{ c.tipo_comprobante or '' }}"{% endif %}>{{ c.tipo_comprobante or "—" }}</td>
@@ -978,6 +1046,94 @@ function mostrarTabComprobantes(idPestaña) {
 if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadisticas') {
   mostrarTabComprobantes(location.hash.slice(1));
 }
+
+/* ---------- Orden visual de la tabla de comprobantes ----------
+   Reordena las FILAS ya renderizadas en el navegador (nunca vuelve a pedir
+   nada al servidor) -- así "Facturar todo lo pendiente" sigue usando
+   siempre el orden real por fecha de facturación que arma
+   _ordenar_por_fecha_facturacion en el servidor (app.py), sin importar
+   cómo esté ordenada la tabla acá. El orden elegido se guarda en
+   sessionStorage para que sobreviva los recargos de página que disparan
+   las ediciones (ver recargarConservandoScroll más abajo). */
+(function () {
+  const select = document.getElementById('selectOrdenTabla');
+  const btnDireccion = document.getElementById('btnDireccionOrden');
+  const tbody = document.querySelector('#tablaComprobantes tbody');
+  if (!select || !btnDireccion || !tbody) return;
+
+  // El orden en que el servidor mandó las filas ES el orden de prioridad de
+  // facturación -- se guarda tal cual para poder volver a él con "Como se
+  // cargó", sin tener que recargar la página.
+  const filasOriginales = Array.from(tbody.querySelectorAll('tr'));
+
+  function valorOrden(fila, criterio) {
+    if (criterio === 'fecha_comprobante') {
+      const partes = (fila.dataset.sortFecha || '').split('/');
+      if (partes.length === 3) {
+        // dd/mm/yyyy -> yyyymmdd, para que la comparación de texto ordene
+        // cronológicamente en vez de alfabéticamente.
+        return partes[2] + partes[1].padStart(2, '0') + partes[0].padStart(2, '0');
+      }
+      return '';
+    }
+    if (criterio === 'descripcion') {
+      return fila.dataset.sortDescripcion || '';
+    }
+    if (criterio === 'precio_unitario') {
+      return parseFloat(fila.dataset.sortPrecio) || 0;
+    }
+    return null;
+  }
+
+  function guardarEleccion() {
+    try {
+      sessionStorage.setItem('facturea_orden_criterio', select.value);
+      sessionStorage.setItem('facturea_orden_direccion', btnDireccion.dataset.direccion);
+    } catch (e) {}
+  }
+
+  function restaurarEleccion() {
+    try {
+      const criterio = sessionStorage.getItem('facturea_orden_criterio');
+      const direccion = sessionStorage.getItem('facturea_orden_direccion');
+      if (criterio) select.value = criterio;
+      if (direccion) btnDireccion.dataset.direccion = direccion;
+    } catch (e) {}
+  }
+
+  function aplicarOrden() {
+    const criterio = select.value;
+    const direccion = btnDireccion.dataset.direccion;
+    btnDireccion.textContent = direccion === 'asc' ? '⬆ Ascendente' : '⬇ Descendente';
+    btnDireccion.disabled = criterio === 'default';
+
+    if (criterio === 'default') {
+      filasOriginales.forEach(f => tbody.appendChild(f));
+      return;
+    }
+
+    const filas = filasOriginales.slice();
+    filas.sort((a, b) => {
+      const va = valorOrden(a, criterio);
+      const vb = valorOrden(b, criterio);
+      const cmp = (typeof va === 'number' && typeof vb === 'number')
+        ? va - vb
+        : String(va).localeCompare(String(vb), 'es', { numeric: true, sensitivity: 'base' });
+      return direccion === 'asc' ? cmp : -cmp;
+    });
+    filas.forEach(f => tbody.appendChild(f));
+  }
+
+  select.addEventListener('change', () => { guardarEleccion(); aplicarOrden(); });
+  btnDireccion.addEventListener('click', () => {
+    btnDireccion.dataset.direccion = btnDireccion.dataset.direccion === 'asc' ? 'desc' : 'asc';
+    guardarEleccion();
+    aplicarOrden();
+  });
+
+  restaurarEleccion();
+  aplicarOrden();
+})();
 
 /* ---------- Reparto por % entre descripciones (pestaña Configuraciones) ----------
    Cada descripción tiene su propio control deslizante (0-100, en enteros).
