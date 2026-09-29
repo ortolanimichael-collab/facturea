@@ -206,6 +206,22 @@
   }
   .config-total-repartido strong{font-size:15px;color:var(--blue-deep);}
 
+  /* Resumen en vivo del reparto (pestaña Configuraciones) */
+  .resumen-reparto-totales{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
+  .resumen-reparto-item{
+    flex:1;min-width:160px;border:1px solid var(--line);border-radius:10px;background:var(--paper-2);
+    padding:14px 16px;text-align:center;
+  }
+  .resumen-reparto-numero{display:block;font-family:var(--sans);font-weight:800;font-size:26px;color:var(--blue-deep);}
+  .resumen-reparto-etiqueta{display:block;font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;}
+  .tabla-resumen-reparto{width:100%;border-collapse:collapse;}
+  .tabla-resumen-reparto th{
+    font-family:var(--sans);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:0.03em;
+    color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--line);
+  }
+  .tabla-resumen-reparto td{font-family:var(--sans);font-size:13.5px;color:var(--ink);padding:9px 10px;border-bottom:1px solid var(--line);}
+  .tabla-resumen-reparto tr:last-child td{border-bottom:none;}
+
   .comparador-duplicados{display:flex;gap:16px;border:1px solid var(--line);border-radius:12px;background:var(--paper);overflow:hidden;min-height:760px;}
   .lista-duplicados{list-style:none;width:220px;min-width:180px;border-right:1px solid var(--line);max-height:760px;overflow-y:auto;flex-shrink:0;}
   .item-duplicado{padding:10px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line);word-break:break-all;color:var(--ink);}
@@ -956,6 +972,50 @@
             </select>
           </div>
         </div>
+        {% endif %}
+      </div>
+
+      <div class="config-card">
+        <h3>Estado actual de tus comprobantes pendientes</h3>
+        <p class="tip-edicion">
+          Este detalle es informativo y se recalcula solo con lo que ya está cargado -- no hace falta
+          guardar nada para verlo actualizado. Cada comprobante nuevo se reparte automáticamente para
+          que el total se mantenga lo más cerca posible de estos porcentajes.
+        </p>
+        <div class="resumen-reparto-totales">
+          <div class="resumen-reparto-item">
+            <span class="resumen-reparto-numero">{{ resumen_reparto.total_pendientes }}</span>
+            <span class="resumen-reparto-etiqueta">comprobante{{ "s" if resumen_reparto.total_pendientes != 1 }} pendiente{{ "s" if resumen_reparto.total_pendientes != 1 }}</span>
+          </div>
+          {% if resumen_reparto.regla_monto_bajo_activa %}
+          <div class="resumen-reparto-item">
+            <span class="resumen-reparto-numero">{{ resumen_reparto.calificantes_monto_bajo }}</span>
+            <span class="resumen-reparto-etiqueta">con "{{ resumen_reparto.descripcion_especial }}" por monto bajo</span>
+          </div>
+          {% endif %}
+          <div class="resumen-reparto-item">
+            <span class="resumen-reparto-numero">{{ resumen_reparto.restantes }}</span>
+            <span class="resumen-reparto-etiqueta">restantes para repartir por %</span>
+          </div>
+        </div>
+        {% if resumen_reparto.filas_reparto %}
+        <table class="tabla-resumen-reparto">
+          <thead>
+            <tr><th>Descripción</th><th>% configurado</th><th>Actuales</th><th>Corresponderían</th></tr>
+          </thead>
+          <tbody>
+            {% for fila in resumen_reparto.filas_reparto %}
+            <tr>
+              <td>{{ fila.descripcion }}</td>
+              <td>{{ fila.porcentaje|round|int }}%</td>
+              <td>{{ fila.cantidad_actual }}</td>
+              <td>{{ fila.cantidad_objetivo }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% elif resumen_reparto.restantes > 0 %}
+        <p class="hint">Activá "Elegir una descripción al azar entre las cargadas" en "Editar empresa" para repartir estos {{ resumen_reparto.restantes }} comprobante{{ "s" if resumen_reparto.restantes != 1 }} por %.</p>
         {% endif %}
       </div>
 
