@@ -1924,6 +1924,13 @@ def empresa_configuraciones(empresa_id):
 
     empresa.descripciones_porcentajes = request.form.get("descripciones_porcentajes", "").strip() or None
 
+    # La regla de monto bajo recién guardada no solo debe regir los
+    # comprobantes que se carguen de ahora en más -- también se aplica de
+    # una a los que ya estaban pendientes en la tabla y calificaban (ver
+    # aplicar_regla_monto_bajo_retroactiva en procesador.py), para no tener
+    # que revisarlos a mano uno por uno después de cargar el umbral.
+    procesador.aplicar_regla_monto_bajo_retroactiva(empresa)
+
     db.session.commit()
     return redirect(url_for("comprobantes", empresa_id=empresa.id) + "#tabConfiguraciones")
 

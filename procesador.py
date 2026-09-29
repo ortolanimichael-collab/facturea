@@ -142,6 +142,62 @@ def _aplicar_regla_monto_bajo(empresa, descripcion_elegida, monto):
     return descripcion_elegida
 
 
+def aplicar_regla_monto_bajo_retroactiva(empresa):
+    """
+    _aplicar_regla_monto_bajo (arriba) solo se aplica a los comprobantes que
+    se crean DE ACÁ EN ADELANTE -- guardar la regla en la pestaña
+    Configuraciones no tocaba los comprobantes que ya estaban cargados en la
+    tabla desde antes, aunque su monto calificara. Esta función corrige eso:
+    se llama justo después de guardar la configuración (ver
+    empresa_configuraciones en app.py) y les aplica la regla, uno por uno, a
+    todos los comprobantes PENDIENTES (nunca a los ya facturados, que no se
+    tocan) cuyo precio_unitario sea menor al umbral -- reasignándoles la
+    descripción especial junto con su propia alícuota/tipo de
+    comprobante/punto de venta si los tiene (mismo criterio que un
+    comprobante nuevo). Devuelve la cantidad de comprobantes que cambiaron.
+    """
+    umbral = empresa.config_umbral_precio_bajo
+    descripcion_especial = (empresa.config_descripcion_precio_bajo or "").strip()
+    if umbral is None or not descripcion_especial:
+        return 0
+
+    punto_venta_especial, tipo_comprobante_especial = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_especial)
+    alicuota_especial = empresa.alicuota_para_descripcion(descripcion_especial)
+    if alicuota_especial is None:
+        alicuota_especial = (empresa.config_alicuota_iva or "").split(",")[0] or None
+
+    pendientes = Comprobante.query.filter(
+        Comprobante.empresa_id == empresa.id,
+        Comprobante.estado.in_(("pendiente", "error")),
+        # precio_unitario nunca queda NULL de verdad (la columna tiene
+        # default=0.0), así que un monto en 0 es el placeholder que deja
+        # "cargar a mano" antes de que se complete el importe real -- se
+        # excluye para no reasignarle la descripción de monto bajo a un
+        # comprobante que todavía no tiene un monto cargado (mismo criterio
+        # que registro_agregar_manual en app.py, que tampoco le aplica esta
+        # regla en el momento de crearlo).
+        Comprobante.precio_unitario > 0,
+        Comprobante.precio_unitario < umbral,
+    ).all()
+
+    cantidad_cambiada = 0
+    for c in pendientes:
+        if (
+            c.descripcion == descripcion_especial
+            and c.punto_venta == punto_venta_especial
+            and c.tipo_comprobante == tipo_comprobante_especial
+            and c.alicuota_iva == alicuota_especial
+        ):
+            continue  # ya estaba así -- no cuenta como cambio
+        c.descripcion = descripcion_especial
+        c.punto_venta = punto_venta_especial
+        c.tipo_comprobante = tipo_comprobante_especial
+        c.alicuota_iva = alicuota_especial
+        cantidad_cambiada += 1
+
+    return cantidad_cambiada
+
+
 # ---------- Mercado Pago: mapa de payment_method_id -> ARCA ----------
 # Cuando no encuentra un código exacto acá, cae a "Otra..." con el nombre
 # que mandó Mercado Pago como detalle -- mismo criterio que ya se usa para
