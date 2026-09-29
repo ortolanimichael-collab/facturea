@@ -251,6 +251,20 @@ class Empresa(db.Model):
     # Ej: descripciones_disponibles="Carne,Embutidos" y
     # descripciones_alicuotas="21,10.5" -> "Carne" es 21%, "Embutidos" 10.5%.
     descripciones_alicuotas = db.Column(db.String(300))
+    # Mismo patrón que descripciones_alicuotas de arriba (paralela a
+    # descripciones_disponibles, posición a posición) -- solo aplica a
+    # Responsable Inscripto. Le permite a cada descripción tener su PROPIO
+    # tipo de comprobante (ej. "Consultoría" siempre en Factura A, "Venta
+    # mostrador" en Factura B), en vez de que todos los comprobantes nuevos
+    # usen siempre el primer tipo marcado en config_tipo_comprobante. Una
+    # posición vacía (o que no llega a tener entrada) significa "usar el
+    # tipo de comprobante por defecto de la empresa".
+    descripciones_tipos_comprobante = db.Column(db.String(600))
+    # Mismo patrón, para el punto de venta de cada descripción -- por si
+    # esta empresa emite ciertos productos/servicios desde un punto de
+    # venta distinto al de config_punto_venta. Vacío = usar el de la
+    # empresa.
+    descripciones_puntos_venta = db.Column(db.String(300))
     config_descripcion_aleatoria = db.Column(db.Boolean, default=False)  # si hay varias, elegir una al azar por comprobante en vez de usar siempre la primera
     config_unidad_medida = db.Column(db.String(80))
 
@@ -277,11 +291,6 @@ class Empresa(db.Model):
     mercadopago_token_cifrado = db.Column(db.LargeBinary)  # refresh token de Mercado Pago, cifrado igual que el de Drive
     mercadopago_email = db.Column(db.String(200))  # solo para mostrar qué cuenta está conectada
     mercadopago_user_id = db.Column(db.String(50))  # id de vendedor en Mercado Pago -- lo pide la API para buscar sus pagos
-
-    # Conexión con el sistema de gestión de negocios (ver api_externa.py): hash sha256 del
-    # token que usa ese sistema para mandar sus ventas como comprobantes de ESTA empresa.
-    # Nunca se guarda el token en sí -- se muestra una sola vez al generarlo.
-    api_token_hash = db.Column(db.String(64), index=True)
 
     def set_google_drive_token(self, refresh_token):
         self.google_drive_token_cifrado = _fernet().encrypt(refresh_token.encode())
@@ -322,15 +331,16 @@ class Empresa(db.Model):
         ]
         return all(campos)
 
-    def alicuota_para_descripcion(self, descripcion):
+    def _valor_paralelo_para_descripcion(self, descripcion, lista_paralela):
         """
-        Busca, entre las descripciones cargadas para esta empresa, la que
-        coincide EXACTO con `descripcion` y devuelve la alícuota que se le
-        asignó (por posición: descripciones_disponibles[i] <->
-        descripciones_alicuotas[i]). None si no hay coincidencia, si la
-        empresa no es Responsable Inscripto, o si esa posición no tiene
-        alícuota cargada (las dos listas no siempre miden lo mismo si se
-        cargó una descripción sin elegirle alícuota).
+        Helper genérico para los tres "por descripción" de abajo (alícuota,
+        tipo de comprobante, punto de venta): busca `descripcion` en
+        descripciones_disponibles y devuelve el valor que está en la MISMA
+        posición dentro de `lista_paralela` (una cadena separada por comas).
+        None si no hay coincidencia, si la empresa no es Responsable
+        Inscripto, o si esa posición no tiene valor cargado (las listas no
+        siempre miden lo mismo si se cargó una descripción sin elegirle
+        alícuota/tipo/punto de venta).
         """
         if self.tipo_contribuyente != "Responsable Inscripto":
             return None
@@ -338,14 +348,41 @@ class Empresa(db.Model):
             return None
 
         descripciones = [d.strip() for d in self.descripciones_disponibles.split(",")]
-        alicuotas = (self.descripciones_alicuotas or "").split(",")
+        valores = (lista_paralela or "").split(",")
         try:
             indice = descripciones.index(descripcion.strip())
         except ValueError:
             return None
-        if indice >= len(alicuotas):
+        if indice >= len(valores):
             return None
-        return alicuotas[indice].strip() or None
+        return valores[indice].strip() or None
+
+    def alicuota_para_descripcion(self, descripcion):
+        """
+        La alícuota de IVA asignada a esta descripción en particular (ej.
+        "Embutidos" -> 10.5%), o None si no tiene una propia -- ver
+        _valor_paralelo_para_descripcion.
+        """
+        return self._valor_paralelo_para_descripcion(descripcion, self.descripciones_alicuotas)
+
+    def tipo_comprobante_para_descripcion(self, descripcion):
+        """
+        El tipo de comprobante asignado a esta descripción en particular
+        (ej. "Consultoría" siempre en Factura A), o None si no tiene uno
+        propio -- en ese caso se sigue usando el primero de
+        config_tipo_comprobante como hasta ahora. Ver
+        _valor_paralelo_para_descripcion.
+        """
+        return self._valor_paralelo_para_descripcion(descripcion, self.descripciones_tipos_comprobante)
+
+    def punto_venta_para_descripcion(self, descripcion):
+        """
+        El punto de venta asignado a esta descripción en particular, o None
+        si no tiene uno propio -- en ese caso se sigue usando
+        config_punto_venta como hasta ahora. Ver
+        _valor_paralelo_para_descripcion.
+        """
+        return self._valor_paralelo_para_descripcion(descripcion, self.descripciones_puntos_venta)
 
 
 class Comprobante(db.Model):

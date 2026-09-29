@@ -1417,6 +1417,8 @@ def _completar_campos_empresa(empresa, form, usuario=None):
 
     empresa.descripciones_disponibles = form.get("descripciones_disponibles", "").strip()
     empresa.descripciones_alicuotas = form.get("descripciones_alicuotas", "").strip() or None
+    empresa.descripciones_tipos_comprobante = form.get("descripciones_tipos_comprobante", "").strip() or None
+    empresa.descripciones_puntos_venta = form.get("descripciones_puntos_venta", "").strip() or None
     lista_descripciones = [d.strip() for d in empresa.descripciones_disponibles.split(",") if d.strip()]
     empresa.config_producto_servicio = lista_descripciones[0] if lista_descripciones else ""
     empresa.config_descripcion_aleatoria = form.get("config_descripcion_aleatoria") == "on"
@@ -2761,15 +2763,17 @@ def registro_agregar_manual(empresa_id, registro_id):
     else:
         opciones_descripcion = []
     descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    punto_venta_elegido, tipo_comprobante_elegido = procesador._punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
+    alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(descripcion_elegida)
 
     comprobante = Comprobante(
         usuario_id=current_user.id,
         empresa_id=empresa.id,
         id_transaccion=None,  # cargado a mano, sin lectura de OCR -- no participa de la detección de duplicados
-        punto_venta=empresa.config_punto_venta,
-        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        punto_venta=punto_venta_elegido,
+        tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
-        alicuota_iva=(empresa.config_alicuota_iva or "").split(",")[0] or None,
+        alicuota_iva=alicuota_de_la_descripcion or (empresa.config_alicuota_iva or "").split(",")[0] or None,
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
         precio_unitario=0.0,

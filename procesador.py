@@ -64,6 +64,24 @@ def _estado_inicial_para_transaccion(id_transaccion, empresa_id):
     return True, "pendiente", None
 
 
+def _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida):
+    """
+    Punto de venta y tipo de comprobante con los que se arma un Comprobante
+    nuevo para `descripcion_elegida`: si esa descripción tiene su propio
+    punto de venta y/o tipo de comprobante asignado en "Editar empresa"
+    (solo disponible para Responsable Inscripto -- ver
+    Empresa.punto_venta_para_descripcion / tipo_comprobante_para_descripcion
+    en models.py), se usa ese; si no, se cae al default de siempre de la
+    empresa (config_punto_venta / el primero de config_tipo_comprobante).
+    """
+    punto_venta = empresa.punto_venta_para_descripcion(descripcion_elegida) or empresa.config_punto_venta
+    tipo_comprobante = (
+        empresa.tipo_comprobante_para_descripcion(descripcion_elegida)
+        or (empresa.config_tipo_comprobante or "").split(",")[0]
+    )
+    return punto_venta, tipo_comprobante
+
+
 # ---------- Mercado Pago: mapa de payment_method_id -> ARCA ----------
 # Cuando no encuentra un código exacto acá, cae a "Otra..." con el nombre
 # que mandó Mercado Pago como detalle -- mismo criterio que ya se usa para
@@ -151,6 +169,7 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
     alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
     if alicuota_elegida is None:
         alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
+    punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
 
     payer = pago.get("payer") or {}
     nombre_pagador = (
@@ -190,8 +209,8 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         empresa_id=empresa.id,
         id_transaccion=id_transaccion,
 
-        punto_venta=empresa.config_punto_venta,
-        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        punto_venta=punto_venta_elegido,
+        tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
@@ -352,6 +371,7 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
     else:
         opciones_descripcion = []
     descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
 
     # Últimos dígitos de la tarjeta -- Payway ya los manda enmascarados
     # ("************1518"), así que se toman tal cual vienen (los últimos
@@ -367,8 +387,8 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
         empresa_id=empresa.id,
         id_transaccion=id_transaccion,
 
-        punto_venta=empresa.config_punto_venta,
-        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        punto_venta=punto_venta_elegido,
+        tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
@@ -535,6 +555,7 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
     else:
         opciones_descripcion = []
     descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
 
     cuit = fila_galicia.get("cuit")
     nombre = fila_galicia.get("nombre")
@@ -553,8 +574,8 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
         empresa_id=empresa.id,
         id_transaccion=id_transaccion,
 
-        punto_venta=empresa.config_punto_venta,
-        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        punto_venta=punto_venta_elegido,
+        tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
@@ -736,6 +757,7 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
     else:
         opciones_descripcion = []
     descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
 
     # El documento viene en su propia columna, sin ambigüedad: 11 dígitos es
     # CUIT/CUIL, cualquier otra longitud (normalmente 7-8) es DNI.
@@ -754,8 +776,8 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
         empresa_id=empresa.id,
         id_transaccion=id_transaccion,
 
-        punto_venta=empresa.config_punto_venta,
-        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0],
+        punto_venta=punto_venta_elegido,
+        tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
@@ -891,14 +913,18 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
         if alicuota_elegida is None:
             alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
 
+    punto_venta_elegido, tipo_comprobante_elegido = (None, None)
+    if empresa:
+        punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
+
     fila = Comprobante(
         usuario_id=usuario_id,
         empresa_id=empresa_id,
         drive_file_id=drive_file_id,
         id_transaccion=datos.get("ID_Transaccion"),
 
-        punto_venta=empresa.config_punto_venta if empresa else None,
-        tipo_comprobante=(empresa.config_tipo_comprobante or "").split(",")[0] if empresa else None,
+        punto_venta=punto_venta_elegido,
+        tipo_comprobante=tipo_comprobante_elegido,
         concepto=(
             concepto_efectivo(fecha_comprobante_detectada, empresa.config_concepto, dias_atras)
             if empresa else None
