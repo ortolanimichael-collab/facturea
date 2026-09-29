@@ -82,6 +82,66 @@ def _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida):
     return punto_venta, tipo_comprobante
 
 
+def _elegir_descripcion(empresa):
+    """
+    Elige la descripción para un comprobante nuevo -- reemplaza el bloque
+    "if config_descripcion_aleatoria: ... random.choice(...)" que antes
+    estaba repetido en cada función de creación de más abajo. Sigue el modo
+    configurado:
+
+    - Si "elegir al azar" (config_descripcion_aleatoria) está desactivado,
+      o no hay ninguna descripción cargada: siempre la default de la
+      empresa (config_producto_servicio -- la primera que se cargó).
+    - Si está activado y hay un reparto por % cargado (pestaña
+      Configuraciones, ver descripciones_porcentajes en models.py): sorteo
+      PESADO por esos porcentajes -- una descripción con 70% sale
+      aproximadamente 7 de cada 10 veces.
+    - Si está activado pero no hay porcentajes cargados (o suman 0): sorteo
+      parejo entre todas las cargadas, como funcionaba antes de que
+      existiera el reparto por %.
+    """
+    descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    if not empresa.config_descripcion_aleatoria or not descripciones:
+        return empresa.config_producto_servicio
+
+    porcentajes_crudos = (empresa.descripciones_porcentajes or "").split(",")
+    pesos = []
+    for i in range(len(descripciones)):
+        try:
+            peso = float(porcentajes_crudos[i]) if i < len(porcentajes_crudos) and porcentajes_crudos[i].strip() else 0.0
+        except ValueError:
+            peso = 0.0
+        pesos.append(max(peso, 0.0))
+
+    if sum(pesos) > 0:
+        return random.choices(descripciones, weights=pesos, k=1)[0]
+    return random.choice(descripciones)
+
+
+def _aplicar_regla_monto_bajo(empresa, descripcion_elegida, monto):
+    """
+    Regla de "monto bajo" (pestaña Configuraciones): si la empresa tiene
+    cargado un umbral (config_umbral_precio_bajo) y una descripción
+    especial para eso (config_descripcion_precio_bajo), y este comprobante
+    no llega a ese umbral, se IGNORA la descripción que le hubiera tocado
+    por _elegir_descripcion (azar/reparto/default) y se usa siempre esa
+    descripción especial -- con su propia alícuota/tipo de
+    comprobante/punto de venta si los tiene asignados (ver
+    _punto_venta_y_tipo_comprobante_para, que se llama DESPUÉS de esto en
+    cada función de creación, ya con la descripción final).
+
+    Devuelve la descripción sin cambios si la regla no está cargada, o si
+    el monto no calificó.
+    """
+    umbral = empresa.config_umbral_precio_bajo
+    descripcion_especial = (empresa.config_descripcion_precio_bajo or "").strip()
+    if umbral is None or not descripcion_especial:
+        return descripcion_elegida
+    if monto is not None and monto < umbral:
+        return descripcion_especial
+    return descripcion_elegida
+
+
 # ---------- Mercado Pago: mapa de payment_method_id -> ARCA ----------
 # Cuando no encuentra un código exacto acá, cae a "Otra..." con el nombre
 # que mandó Mercado Pago como detalle -- mismo criterio que ya se usa para
@@ -160,11 +220,8 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
     except (TypeError, ValueError):
         fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
 
-    if empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    descripcion_elegida = _elegir_descripcion(empresa)
+    descripcion_elegida = _aplicar_regla_monto_bajo(empresa, descripcion_elegida, importe_total)
 
     alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
     if alicuota_elegida is None:
@@ -212,6 +269,7 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         punto_venta=punto_venta_elegido,
         tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        alicuota_iva=alicuota_elegida,
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
         precio_unitario=importe_total / cantidad,
@@ -366,12 +424,12 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
     except ValueError:
         fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
 
-    if empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    descripcion_elegida = _elegir_descripcion(empresa)
+    descripcion_elegida = _aplicar_regla_monto_bajo(empresa, descripcion_elegida, importe_total)
     punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
+    alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
+    if alicuota_elegida is None:
+        alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
 
     # Últimos dígitos de la tarjeta -- Payway ya los manda enmascarados
     # ("************1518"), así que se toman tal cual vienen (los últimos
@@ -390,6 +448,7 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
         punto_venta=punto_venta_elegido,
         tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        alicuota_iva=alicuota_elegida,
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
         precio_unitario=importe_total / cantidad,
@@ -550,12 +609,12 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
     cantidad = 1.0
     dias_atras = empresa.config_dias_atras_fecha_emision or 10
 
-    if empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    descripcion_elegida = _elegir_descripcion(empresa)
+    descripcion_elegida = _aplicar_regla_monto_bajo(empresa, descripcion_elegida, monto)
     punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
+    alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
+    if alicuota_elegida is None:
+        alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
 
     cuit = fila_galicia.get("cuit")
     nombre = fila_galicia.get("nombre")
@@ -577,6 +636,7 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
         punto_venta=punto_venta_elegido,
         tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        alicuota_iva=alicuota_elegida,
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
         precio_unitario=monto / cantidad,
@@ -745,6 +805,21 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
 
     medio_pago_detectado, tipo_pago, tipo_pago_detalle = _mapear_medio_pago_nave(fila_nave["medio_de_pago"])
 
+    # NAVE nunca manda el número de tarjeta (ni siquiera enmascarado, a
+    # diferencia de Payway) porque el cobro se hace con QR, no pasando una
+    # tarjeta física -- aunque el "Medio de Pago" diga "Visa Crédito" o
+    # "Mastercard Débito", no hay ninguna tarjeta real asociada al cobro que
+    # se pueda cargar en ARCA. Sin un número que lo respalde, se factura
+    # como Transferencia en vez de Débito/Crédito -- mismo criterio que ya
+    # se usaba para "Dinero en cuenta" (el otro caso sin tarjeta de por
+    # medio), solo que ahora se aplica a cualquier medio sin número, no
+    # nada más a ese texto puntual.
+    numero_pago = None  # NAVE no informa esto en ningún caso
+    if medio_pago_detectado in ("Débito", "Crédito") and not numero_pago:
+        medio_pago_detectado = "Transferencia"
+        tipo_pago = None
+        tipo_pago_detalle = None
+
     if medio_pago_detectado == "Débito":
         condicion_venta_default = "Tarjeta de Débito"
     elif medio_pago_detectado == "Crédito":
@@ -752,22 +827,25 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
     else:
         condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else ""
 
-    if empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    descripcion_elegida = _elegir_descripcion(empresa)
+    descripcion_elegida = _aplicar_regla_monto_bajo(empresa, descripcion_elegida, monto)
     punto_venta_elegido, tipo_comprobante_elegido = _punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
+    alicuota_elegida = empresa.alicuota_para_descripcion(descripcion_elegida)
+    if alicuota_elegida is None:
+        alicuota_elegida = (empresa.config_alicuota_iva or "").split(",")[0] or None
 
     # El documento viene en su propia columna, sin ambigüedad: 11 dígitos es
-    # CUIT/CUIL, cualquier otra longitud (normalmente 7-8) es DNI.
+    # CUIT/CUIL, cualquier otra longitud (normalmente 7-8) es DNI. Antes,
+    # cuando era DNI, no se guardaba ningún número (quedaba "—" en la tabla
+    # aunque el informe de NAVE sí lo traía) -- ahora se guarda igual en
+    # cuit_receptor para que se vea en la columna "CUIL/CUIT/Documento",
+    # aunque ARCA no lo exija con tipo de documento "DNI".
     documento = fila_nave.get("documento")
     if documento and len(documento) == 11 and documento.isdigit():
         tipo_documento = "CUIT"
-        cuit_receptor = documento
     else:
         tipo_documento = "DNI"
-        cuit_receptor = None
+    cuit_receptor = documento or None
 
     nombre = fila_nave.get("nombre")
 
@@ -779,6 +857,7 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
         punto_venta=punto_venta_elegido,
         tipo_comprobante=tipo_comprobante_elegido,
         concepto=concepto_efectivo(fecha_comprobante, empresa.config_concepto, dias_atras),
+        alicuota_iva=alicuota_elegida,
         descripcion=descripcion_elegida,
         unidad_medida=empresa.config_unidad_medida,
         precio_unitario=monto / cantidad,
@@ -789,6 +868,7 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
         medio_pago_detectado=medio_pago_detectado,
         tipo_pago=tipo_pago,
         tipo_pago_detalle=tipo_pago_detalle,
+        numero_pago=numero_pago,
         tipo_documento=tipo_documento,
         cuit_receptor=cuit_receptor,
         condicion_iva=empresa.config_condicion_iva,
@@ -897,11 +977,9 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
     # Descripción del ítem: si la empresa cargó varias (para no repetir siempre
     # la misma en todas las facturas) y activó "elegir al azar", se sortea una;
     # si no, se usa la que tiene configurada como default.
-    if empresa and empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else (empresa.config_producto_servicio if empresa else None)
+    descripcion_elegida = _elegir_descripcion(empresa) if empresa else None
+    if empresa:
+        descripcion_elegida = _aplicar_regla_monto_bajo(empresa, descripcion_elegida, importe_total)
 
     # Si esa descripción tiene una alícuota propia cargada (ej. "Embutidos"
     # -> 10.5%, para un Responsable Inscripto que vende cosas con distinta

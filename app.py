@@ -30,7 +30,7 @@ import drive_sync
 from procesador import procesar_archivo
 import procesador
 from lector import lector_core
-from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_facturacion, concepto_efectivo
+from automatizacion.arca_bot import facturar_comprobante, calcular_fecha_facturacion, concepto_efectivo, descomponer_neto_iva
 from previsualizacion_pdf import generar_pdf_preview, CONCEPTOS
 from almacenamiento import ruta_absoluta, eliminar_archivo_persistente
 import google_drive_cliente
@@ -1843,6 +1843,25 @@ def _calcular_estadisticas(empresa_id):
     monto_pendiente = sum((c.importe_total or 0) for c in pendientes)
     monto_facturado_total = sum((c.importe_total or 0) for c in facturados)
 
+    # IVA total de lo ya facturado: se descompone cada comprobante en
+    # neto/IVA con la misma fórmula que usa el bot al facturar de verdad
+    # (descomponer_neto_iva, arca_bot.py) -- así el número que se ve acá
+    # coincide con lo que declaró ARCA. Un comprobante sin alícuota cargada
+    # (puede pasar en Monotributo, que no discrimina IVA) simplemente no
+    # suma nada acá, en vez de romper la cuenta.
+    iva_total_facturado = 0.0
+    monto_por_punto_venta = {}
+    for c in facturados:
+        monto_por_punto_venta[c.punto_venta or "Sin punto de venta"] = (
+            monto_por_punto_venta.get(c.punto_venta or "Sin punto de venta", 0.0) + (c.importe_total or 0)
+        )
+        if c.alicuota_iva:
+            try:
+                _neto, iva = descomponer_neto_iva(c.importe_total, c.alicuota_iva)
+                iva_total_facturado += iva
+            except (ValueError, TypeError):
+                pass
+
     return {
         "total_subidos": len(registros),
         "imagenes": len(imagenes),
@@ -1871,7 +1890,42 @@ def _calcular_estadisticas(empresa_id):
         "pendientes": len(pendientes),
         "monto_pendiente": monto_pendiente,
         "monto_facturado_total": monto_facturado_total,
+        "iva_total_facturado": iva_total_facturado,
+        "monto_por_punto_venta": sorted(monto_por_punto_venta.items()),
     }
+
+
+@app.route("/empresas/<int:empresa_id>/configuraciones", methods=["POST"])
+@login_required
+def empresa_configuraciones(empresa_id):
+    """
+    Guarda las reglas de la pestaña "Configuraciones" de la pantalla de
+    comprobantes: la regla de "monto bajo" (ver
+    _aplicar_regla_monto_bajo en procesador.py) y el reparto por % entre
+    las descripciones cargadas (ver _elegir_descripcion). Son campos
+    aparte del formulario de "Editar empresa" -- viven ahí para no mezclar
+    la configuración de acceso a ARCA con reglas operativas del día a día.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return redirect(url_for("empresas"))
+
+    umbral_str = request.form.get("config_umbral_precio_bajo", "").strip()
+    if umbral_str:
+        try:
+            empresa.config_umbral_precio_bajo = float(umbral_str.replace(",", "."))
+        except ValueError:
+            pass  # se ignora un valor no numérico en vez de romper el guardado del resto
+    else:
+        empresa.config_umbral_precio_bajo = None
+
+    descripcion_precio_bajo = request.form.get("config_descripcion_precio_bajo", "").strip()
+    empresa.config_descripcion_precio_bajo = descripcion_precio_bajo or None
+
+    empresa.descripciones_porcentajes = request.form.get("descripciones_porcentajes", "").strip() or None
+
+    db.session.commit()
+    return redirect(url_for("comprobantes", empresa_id=empresa.id) + "#tabConfiguraciones")
 
 
 @app.route("/api/empresas/<int:empresa_id>/subir", methods=["POST"])
@@ -2758,11 +2812,11 @@ def registro_agregar_manual(empresa_id, registro_id):
     fecha_comprobante = (datetime.now() - timedelta(days=dias_atras)).strftime("%d/%m/%Y")
 
     cantidad = 1.0
-    if empresa.config_descripcion_aleatoria:
-        opciones_descripcion = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    else:
-        opciones_descripcion = []
-    descripcion_elegida = random.choice(opciones_descripcion) if opciones_descripcion else empresa.config_producto_servicio
+    # No se aplica acá la regla de "monto bajo" (Configuraciones): este
+    # comprobante placeholder siempre arranca en $0 hasta que se completa a
+    # mano desde Revisión Manual, así que compararlo contra el umbral
+    # siempre daría "por debajo" sin decir nada real sobre la venta.
+    descripcion_elegida = procesador._elegir_descripcion(empresa)
     punto_venta_elegido, tipo_comprobante_elegido = procesador._punto_venta_y_tipo_comprobante_para(empresa, descripcion_elegida)
     alicuota_de_la_descripcion = empresa.alicuota_para_descripcion(descripcion_elegida)
 

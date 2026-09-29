@@ -266,6 +266,24 @@ class Empresa(db.Model):
     # empresa.
     descripciones_puntos_venta = db.Column(db.String(300))
     config_descripcion_aleatoria = db.Column(db.Boolean, default=False)  # si hay varias, elegir una al azar por comprobante en vez de usar siempre la primera
+    # Mismo patrón que descripciones_alicuotas/tipos_comprobante/puntos_venta
+    # de arriba (paralela a descripciones_disponibles, posición a posición),
+    # pero esta SÍ aplica a cualquier tipo de contribuyente. Es el % de las
+    # veces que le toca a cada descripción cuando "elegir al azar" está
+    # activo -- siempre suman 100 entre todas. Vacío (o todo en 0) significa
+    # que no se cargó un reparto y se sigue sorteando parejo entre todas,
+    # como antes de que existiera esto. Se configura desde la pestaña
+    # "Configuraciones" de la pantalla de comprobantes, no desde "Editar
+    # empresa" (ver _elegir_descripcion en procesador.py).
+    descripciones_porcentajes = db.Column(db.String(300))
+    # Regla de "monto bajo" (pestaña Configuraciones): si un comprobante
+    # nuevo tiene un importe menor a este umbral, se le fuerza la
+    # descripción de config_descripcion_precio_bajo en vez de la que le
+    # hubiera tocado por el sorteo/default normal -- pensado para separar
+    # ventas chicas (ej. propinas, accesorios sueltos) del resto sin tener
+    # que revisarlas a mano. None = regla desactivada.
+    config_umbral_precio_bajo = db.Column(db.Float)
+    config_descripcion_precio_bajo = db.Column(db.String(150))
     config_unidad_medida = db.Column(db.String(80))
 
     # Cuántos días hacia atrás de HOY se usa como fecha de emisión por
