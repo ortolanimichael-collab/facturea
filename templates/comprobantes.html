@@ -150,6 +150,47 @@
     border:1.5px solid var(--line);background:var(--paper-2);color:var(--ink);
   }
 
+  /* ---------- Pestaña Configuraciones ---------- */
+  .config-card{
+    border:1px solid var(--line);border-radius:14px;background:var(--paper);padding:24px 26px;margin-bottom:22px;
+  }
+  .config-card h3{
+    margin:0 0 8px;text-transform:none;letter-spacing:0;font-size:15.5px;font-weight:800;color:var(--ink);
+  }
+  .config-card > .tip-edicion{margin:0 0 20px;max-width:760px;}
+  .config-card .fila-2{margin-bottom:0;}
+  .config-card .campo{margin-bottom:0;}
+
+  .config-slider-item{margin-bottom:24px;}
+  .config-slider-item:last-child{margin-bottom:4px;}
+  .config-slider-label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;gap:12px;}
+  .config-slider-nombre{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);}
+  .config-slider-valor{font-family:var(--sans);font-weight:800;font-size:14px;color:var(--blue-deep);white-space:nowrap;}
+
+  input[type="range"].slider-porcentaje{
+    -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;
+    background:var(--line);outline:none;cursor:pointer;margin:0;display:block;
+  }
+  input[type="range"].slider-porcentaje::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
+    background:var(--blue);border:3px solid #fff;box-shadow:0 1px 5px rgba(19,28,51,0.3);cursor:pointer;
+    margin-top:-8px;
+  }
+  input[type="range"].slider-porcentaje::-webkit-slider-runnable-track{
+    height:6px;border-radius:999px;background:var(--line);
+  }
+  input[type="range"].slider-porcentaje::-moz-range-thumb{
+    width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid #fff;
+    box-shadow:0 1px 5px rgba(19,28,51,0.3);cursor:pointer;
+  }
+  input[type="range"].slider-porcentaje::-moz-range-track{background:var(--line);height:6px;border-radius:999px;}
+
+  .config-total-repartido{
+    display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13px;color:var(--muted);
+    background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:9px 18px;margin-top:4px;
+  }
+  .config-total-repartido strong{font-size:15px;color:var(--blue-deep);}
+
   .comparador-duplicados{display:flex;gap:16px;border:1px solid var(--line);border-radius:12px;background:var(--paper);overflow:hidden;min-height:760px;}
   .lista-duplicados{list-style:none;width:220px;min-width:180px;border-right:1px solid var(--line);max-height:760px;overflow-y:auto;flex-shrink:0;}
   .item-duplicado{padding:10px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line);word-break:break-all;color:var(--ink);}
@@ -810,60 +851,66 @@
     <form method="POST" action="{{ url_for('empresa_configuraciones', empresa_id=empresa.id) }}" id="formConfiguraciones">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <h3>Descripción automática para montos bajos</h3>
-      <p class="tip-edicion">
-        Si un comprobante nuevo tiene un monto menor al que pongas acá, se le va a asignar
-        siempre esta descripción (con su propia alícuota, tipo de comprobante y punto de venta,
-        si los tenés configurados para ella en "Editar empresa"), en vez de la que le hubiera
-        tocado normalmente. Dejá el monto vacío para desactivar esta regla.
-      </p>
-      {% if not descripciones_config %}
-      <p class="hint">Todavía no cargaste ninguna descripción/producto en "Editar empresa" -- cargá al menos una para poder usar esta regla.</p>
-      {% else %}
-      <div class="fila-2">
-        <div class="campo">
-          <label>Monto menor a</label>
-          <input type="number" name="config_umbral_precio_bajo" min="0" step="0.01" placeholder="ej: 5000"
-                 value="{{ empresa.config_umbral_precio_bajo if empresa.config_umbral_precio_bajo is not none else '' }}">
+      <div class="config-card">
+        <h3>Descripción automática para montos bajos</h3>
+        <p class="tip-edicion">
+          Si un comprobante nuevo tiene un monto menor al que pongas acá, se le va a asignar
+          siempre esta descripción (con su propia alícuota, tipo de comprobante y punto de venta,
+          si los tenés configurados para ella en "Editar empresa"), en vez de la que le hubiera
+          tocado normalmente. Dejá el monto vacío para desactivar esta regla.
+        </p>
+        {% if not descripciones_config %}
+        <p class="hint">Todavía no cargaste ninguna descripción/producto en "Editar empresa" -- cargá al menos una para poder usar esta regla.</p>
+        {% else %}
+        <div class="fila-2">
+          <div class="campo">
+            <label>Monto menor a</label>
+            <input type="number" name="config_umbral_precio_bajo" min="0" step="0.01" placeholder="ej: 5000"
+                   value="{{ empresa.config_umbral_precio_bajo if empresa.config_umbral_precio_bajo is not none else '' }}">
+          </div>
+          <div class="campo">
+            <label>Usar esta descripción</label>
+            <select name="config_descripcion_precio_bajo">
+              <option value="">Sin regla -- no forzar ninguna</option>
+              {% for d in descripciones_config %}
+              <option value="{{ d }}" {{ "selected" if empresa.config_descripcion_precio_bajo == d }}>{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
-        <div class="campo">
-          <label>Usar esta descripción</label>
-          <select name="config_descripcion_precio_bajo">
-            <option value="">Sin regla -- no forzar ninguna</option>
-            {% for d in descripciones_config %}
-            <option value="{{ d }}" {{ "selected" if empresa.config_descripcion_precio_bajo == d }}>{{ d }}</option>
-            {% endfor %}
-          </select>
-        </div>
+        {% endif %}
       </div>
-      {% endif %}
 
-      <h3 style="margin-top:28px;">Reparto por % entre descripciones</h3>
-      <p class="tip-edicion">
-        Solo tiene efecto si en "Editar empresa" activaste "Elegir una descripción al azar entre
-        las cargadas". En vez de que cada descripción salga la misma cantidad de veces, le podés
-        asignar un % propio a cada una -- al subir una, se les baja proporcionalmente a las demás,
-        para que entre todas sigan sumando 100%.
-      </p>
-      {% if descripciones_config|length < 2 %}
-      <p class="hint">Cargá al menos dos descripciones en "Editar empresa" para poder repartirles un %.</p>
-      {% else %}
-      <div id="listaPorcentajesConfig">
-        {% for d in descripciones_config %}
-        {% set porcentaje_d = porcentajes_config_actuales[loop.index0] if loop.index0 < porcentajes_config_actuales|length and porcentajes_config_actuales[loop.index0].strip() else "" %}
-        <div class="fila-porcentaje-desc" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-          <span style="flex:1;font-family:var(--sans);font-size:13.5px;">{{ d }}</span>
-          <input type="number" class="input-porcentaje-desc" data-desc="{{ d }}" min="0" max="100" step="0.01"
-                 style="width:90px;" value="{{ porcentaje_d }}">
-          <span style="font-family:var(--sans);font-size:13px;color:var(--muted);">%</span>
+      <div class="config-card">
+        <h3>Reparto por % entre descripciones</h3>
+        <p class="tip-edicion">
+          Solo tiene efecto si en "Editar empresa" activaste "Elegir una descripción al azar entre
+          las cargadas". En vez de que cada descripción salga la misma cantidad de veces, le podés
+          asignar un % propio a cada una con el control deslizante -- al mover uno, se les ajusta
+          proporcionalmente a los demás, para que entre todos sigan sumando 100%.
+        </p>
+        {% if descripciones_config|length < 2 %}
+        <p class="hint">Cargá al menos dos descripciones en "Editar empresa" para poder repartirles un %.</p>
+        {% else %}
+        <div id="listaPorcentajesConfig">
+          {% for d in descripciones_config %}
+          {% set porcentaje_d = porcentajes_config_actuales[loop.index0] if loop.index0 < porcentajes_config_actuales|length and porcentajes_config_actuales[loop.index0].strip() else "" %}
+          <div class="config-slider-item">
+            <div class="config-slider-label">
+              <span class="config-slider-nombre">{{ d }}</span>
+              <span class="config-slider-valor"><span class="valor-porcentaje-num">{{ porcentaje_d|float(0)|round|int }}</span>% asignado</span>
+            </div>
+            <input type="range" class="slider-porcentaje input-porcentaje-desc" data-desc="{{ d }}"
+                   min="0" max="100" step="1" value="{{ porcentaje_d|float(0)|round|int }}">
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
+        <div class="config-total-repartido">Total repartido: <strong id="totalPorcentajeConfig">0%</strong></div>
+        <input type="hidden" name="descripciones_porcentajes" id="descripcionesPorcentajesConfig" value="{{ empresa.descripciones_porcentajes or '' }}">
+        {% endif %}
       </div>
-      <p class="hint">Total repartido: <strong id="totalPorcentajeConfig">0%</strong></p>
-      <input type="hidden" name="descripciones_porcentajes" id="descripcionesPorcentajesConfig" value="{{ empresa.descripciones_porcentajes or '' }}">
-      {% endif %}
 
-      <button type="submit" class="btn" style="margin-top:16px;">Guardar configuración</button>
+      <button type="submit" class="btn">Guardar configuración</button>
     </form>
   </div>
 </div>
@@ -933,10 +980,11 @@ if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadistic
 }
 
 /* ---------- Reparto por % entre descripciones (pestaña Configuraciones) ----------
-   Cada descripción tiene su propio input de %. Al cambiar uno, se le resta
-   la diferencia a los demás EN PROPORCIÓN a lo que ya tenían (o parejo si
-   todos estaban en 0), así el total entre todas se mantiene siempre en
-   100% sin que el usuario tenga que hacer la cuenta a mano. */
+   Cada descripción tiene su propio control deslizante (0-100, en enteros).
+   Al mover uno, se le resta la diferencia a los demás EN PROPORCIÓN a lo
+   que ya tenían (o parejo si todos estaban en 0), así el total entre todas
+   se mantiene siempre en 100% sin que el usuario tenga que hacer la cuenta
+   a mano -- y el numerito de al lado de cada slider se actualiza en vivo. */
 (function () {
   const inputs = () => Array.from(document.querySelectorAll('.input-porcentaje-desc'));
   const campoOculto = document.getElementById('descripcionesPorcentajesConfig');
@@ -947,10 +995,19 @@ if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadistic
     inputs().forEach(i => { i.dataset.valorAnterior = i.value || '0'; });
   }
 
+  function actualizarValoresVisibles() {
+    inputs().forEach(i => {
+      const item = i.closest('.config-slider-item');
+      const span = item && item.querySelector('.valor-porcentaje-num');
+      if (span) span.textContent = Math.round(parseFloat(i.value) || 0);
+    });
+  }
+
   function actualizarTotalYCampoOculto() {
     const total = inputs().reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
-    if (totalTexto) totalTexto.textContent = (Math.round(total * 100) / 100) + '%';
-    campoOculto.value = inputs().map(i => i.value || '0').join(',');
+    if (totalTexto) totalTexto.textContent = Math.round(total) + '%';
+    campoOculto.value = inputs().map(i => Math.round(parseFloat(i.value) || 0)).join(',');
+    actualizarValoresVisibles();
   }
 
   function redistribuir(inputCambiado) {
@@ -958,30 +1015,29 @@ if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadistic
     const otros = todos.filter(i => i !== inputCambiado);
     if (otros.length === 0) return;
 
-    const nuevoValor = Math.max(0, Math.min(100, parseFloat(inputCambiado.value) || 0));
+    const nuevoValor = Math.max(0, Math.min(100, Math.round(parseFloat(inputCambiado.value) || 0)));
     inputCambiado.value = nuevoValor;
 
     const sumaAnteriorOtros = otros.reduce((acc, i) => acc + (parseFloat(i.dataset.valorAnterior) || 0), 0);
     const restante = Math.max(0, 100 - nuevoValor);
 
     if (sumaAnteriorOtros <= 0) {
-      const cadaUno = restante / otros.length;
-      otros.forEach(i => { i.value = Math.round(cadaUno * 100) / 100; });
+      const base = Math.floor(restante / otros.length);
+      otros.forEach(i => { i.value = base; });
     } else {
       otros.forEach(i => {
         const anterior = parseFloat(i.dataset.valorAnterior) || 0;
-        const proporcion = anterior / sumaAnteriorOtros;
-        i.value = Math.round(restante * proporcion * 100) / 100;
+        i.value = Math.floor(restante * (anterior / sumaAnteriorOtros));
       });
     }
 
-    // Ajuste fino: por redondeos de decimales el total puede quedar en
-    // 99.98 o 100.02 en vez de 100 justo -- la diferencia se le suma o
-    // resta al primero de los otros para que siempre cierre exacto.
+    // Ajuste fino: repartir en enteros puede dejar 1-2 puntos sin asignar
+    // (por el redondeo hacia abajo de arriba) -- se los suma al primero de
+    // los otros para que el total siempre cierre en 100 justo.
     const totalAhora = todos.reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
-    const diferencia = Math.round((100 - totalAhora) * 100) / 100;
+    const diferencia = Math.round(100 - totalAhora);
     if (diferencia !== 0) {
-      otros[0].value = Math.max(0, Math.round((parseFloat(otros[0].value) + diferencia) * 100) / 100);
+      otros[0].value = Math.max(0, parseFloat(otros[0].value) + diferencia);
     }
 
     guardarValoresAnteriores();
@@ -996,8 +1052,8 @@ if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadistic
   const totalInicial = inputs().reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
   if (totalInicial <= 0) {
     const todos = inputs();
-    const cadaUno = Math.round((100 / todos.length) * 100) / 100;
-    todos.forEach((i, idx) => { i.value = idx === todos.length - 1 ? (100 - cadaUno * (todos.length - 1)) : cadaUno; });
+    const base = Math.floor(100 / todos.length);
+    todos.forEach((i, idx) => { i.value = idx === todos.length - 1 ? (100 - base * (todos.length - 1)) : base; });
   }
 
   guardarValoresAnteriores();
