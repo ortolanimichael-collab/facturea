@@ -1062,6 +1062,16 @@ function mostrarTabComprobantes(idPestaña) {
   if (idPestaña === 'tabComprobantes' && tablaScroll && scrollXTablaGuardado !== null) {
     requestAnimationFrame(() => { tablaScroll.scrollLeft = scrollXTablaGuardado; });
   }
+  if (idPestaña === 'tabComprobantes' && window.actualizarScrollFantasma) {
+    // Si la página cargó directo en otra pestaña (ver más abajo, viene de
+    // guardar Configuraciones), la barra fantasma se calculó estando la
+    // tabla oculta (display:none) y todos sus anchos daban 0 -- por eso
+    // quedaba escondida para siempre y "desaparecía" el scroll. Se
+    // recalcula acá, ya con la tabla visible, cada vez que se vuelve a esta
+    // pestaña. Dos frames de margen para que el navegador termine de
+    // acomodar el layout antes de medir anchos reales.
+    requestAnimationFrame(() => requestAnimationFrame(window.actualizarScrollFantasma));
+  }
 }
 
 // Si venimos de guardar el formulario de Configuraciones (esa ruta redirige
@@ -1556,6 +1566,14 @@ function opcionesCondicionIvaPara(tipoComprobante) {
 
   window.addEventListener('resize', actualizar);
   actualizar();
+
+  // Expuesta para que mostrarTabComprobantes (más arriba) pueda recalcularla
+  // al volver a la pestaña "Comprobantes" -- si la página cargó con otra
+  // pestaña activa (ej. justo después de guardar Configuraciones, que
+  // redirige acá con #tabConfiguraciones), esta misma cuenta se hizo con la
+  // tabla oculta y todos los anchos en 0, dejando la barra escondida para
+  // siempre sin este recalculo.
+  window.actualizarScrollFantasma = actualizar;
 })();
 
 function ddmmyyyyAIso(f) {
