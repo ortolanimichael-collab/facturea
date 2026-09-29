@@ -294,10 +294,23 @@
      muestra por JS únicamente si la tabla realmente desborda a los lados. */
   .scroll-fantasma-wrap{
     display:none; position:sticky; bottom:0; z-index:20;
-    overflow-x:auto; overflow-y:hidden; height:14px;
+    overflow-x:auto; overflow-y:hidden; height:16px;
     background:var(--paper); border:1px solid var(--line); border-top:none;
     border-radius:0 0 12px 12px;
   }
+  /* Esta barra "fantasma" tiene su propio scroll nativo (por eso se puede
+     arrastrar) -- sin este mismo tratamiento se topaba con el mismo problema
+     que .tabla-scroll de arriba: en Mac (y algunos sistemas más) el
+     scrollbar quedaba invisible hasta tocar el trackpad, así que aunque la
+     barra estuviera técnicamente pegada abajo de la pantalla todo el
+     tiempo, no se veía -- por eso parecía que el scroll "solo estaba abajo
+     de todo" (esa era la barra nativa de .tabla-scroll, al final de la
+     tabla, la única que se llegaba a ver). */
+  .scroll-fantasma-wrap{scrollbar-width:auto;scrollbar-color:var(--blue) var(--paper);}
+  .scroll-fantasma-wrap::-webkit-scrollbar{height:14px;}
+  .scroll-fantasma-wrap::-webkit-scrollbar-track{background:var(--paper);border-radius:0 0 12px 12px;}
+  .scroll-fantasma-wrap::-webkit-scrollbar-thumb{background:var(--blue);border-radius:10px;border:2px solid var(--paper);}
+  .scroll-fantasma-wrap::-webkit-scrollbar-thumb:hover{background:var(--blue-deep);}
   .scroll-fantasma{height:1px;}
   table{width:max-content;min-width:100%;border-collapse:collapse;background:var(--paper-2);}
   thead th{font-family:var(--sans);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1.5px solid var(--line);white-space:nowrap;background:var(--paper);}
