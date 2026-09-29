@@ -2471,6 +2471,82 @@ def comprobante_marcar_pendiente(empresa_id, comprobante_id):
     return jsonify(ok=True)
 
 
+@app.route("/empresas/<int:empresa_id>/comprobantes/marcar-facturado-multiple", methods=["POST"])
+@login_required
+def comprobantes_marcar_facturado_multiple(empresa_id):
+    """
+    Versión masiva de comprobante_marcar_facturado -- recibe una lista de
+    ids (los que el usuario tildó en la tabla) y los pasa TODOS a
+    "facturado" de una sola vez, en un solo click, sin pedir confirmación.
+    Los que ya estaban facturados o no pertenecen a esta empresa se
+    ignoran en silencio (no cuentan como error).
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    ids = (request.get_json(silent=True) or {}).get("ids") or []
+    ids = [i for i in ids if isinstance(i, int)] or [int(i) for i in ids if str(i).isdigit()]
+    if not ids:
+        return jsonify(ok=False, error="No se seleccionó ningún comprobante."), 400
+
+    comprobantes = Comprobante.query.filter(
+        Comprobante.id.in_(ids), Comprobante.empresa_id == empresa.id,
+    ).all()
+
+    marcados = 0
+    for comprobante in comprobantes:
+        if comprobante.estado == "facturado":
+            continue
+        comprobante.estado = "facturado"
+        comprobante.error_facturacion = None
+        if not comprobante.facturado_en:
+            comprobante.facturado_en = datetime.utcnow()
+        _registrar_id_transaccion_facturada(comprobante)
+        marcados += 1
+    db.session.commit()
+    return jsonify(ok=True, marcados=marcados)
+
+
+@app.route("/empresas/<int:empresa_id>/comprobantes/eliminar-multiple", methods=["POST"])
+@login_required
+def comprobantes_eliminar_multiple(empresa_id):
+    """
+    Versión masiva de comprobante_eliminar -- recibe una lista de ids y los
+    borra TODOS de una sola vez. Igual que la versión de a uno, un
+    comprobante ya facturado no se borra (para no perder ese registro sin
+    querer) -- se cuentan aparte y se avisan en la respuesta, no se tratan
+    como error.
+    """
+    empresa = current_user.empresas.filter_by(id=empresa_id).first()
+    if not empresa:
+        return jsonify(ok=False, error="Esa empresa no existe o no te pertenece."), 404
+
+    ids = (request.get_json(silent=True) or {}).get("ids") or []
+    ids = [i for i in ids if isinstance(i, int)] or [int(i) for i in ids if str(i).isdigit()]
+    if not ids:
+        return jsonify(ok=False, error="No se seleccionó ningún comprobante."), 400
+
+    comprobantes = Comprobante.query.filter(
+        Comprobante.id.in_(ids), Comprobante.empresa_id == empresa.id,
+    ).all()
+
+    a_borrar = [c for c in comprobantes if c.estado != "facturado"]
+    omitidos_facturados = len(comprobantes) - len(a_borrar)
+    ids_a_borrar = [c.id for c in a_borrar]
+
+    if ids_a_borrar:
+        RegistroSubida.query.filter(RegistroSubida.comprobante_id.in_(ids_a_borrar)).update(
+            {"comprobante_id": None}, synchronize_session=False
+        )
+        for comprobante in a_borrar:
+            eliminar_archivo_persistente(empresa, comprobante.archivo_ruta, comprobante.archivo_drive_id)
+            db.session.delete(comprobante)
+        db.session.commit()
+
+    return jsonify(ok=True, eliminados=len(a_borrar), omitidos_facturados=omitidos_facturados)
+
+
 @app.route("/empresas/<int:empresa_id>/comprobantes/eliminar-todos", methods=["POST"])
 @login_required
 def comprobantes_eliminar_todos(empresa_id):
@@ -2835,51 +2911,6 @@ def facturar_todos_estado(empresa_id):
         return jsonify(ok=True, en_curso=False, terminado=False)
 
     return jsonify(ok=True, **estado_copia)
-
-
-def _iniciar_lote_facturacion(empresa, prefijo_id_transaccion=None, estados=("pendiente", "error"), limite_monto=None):
-    """
-    Misma lógica que facturar_todos() pero invocable sin un pedido del navegador -- la usa la
-    API externa (api_externa.py) para facturar las ventas que manda el sistema de gestión.
-    Si viene prefijo_id_transaccion, solo toma los comprobantes cuyo id_transaccion empieza
-    así (ej. "NEG-"), para no facturar sin querer otros que el usuario todavía no revisó.
-    Devuelve (cantidad_lanzada, None) o (None, mensaje_de_error).
-    """
-    with _lock_facturacion_lote:
-        estado_actual = _estado_facturacion_lote.get(empresa.id)
-        if estado_actual and estado_actual.get("en_curso"):
-            return None, "Ya hay una facturación en lote en curso para esta empresa."
-
-    consulta = Comprobante.query.filter(
-        Comprobante.empresa_id == empresa.id,
-        Comprobante.estado.in_(list(estados)),
-    )
-    if prefijo_id_transaccion:
-        consulta = consulta.filter(Comprobante.id_transaccion.like(prefijo_id_transaccion + "%"))
-    pendientes = _ordenar_por_fecha_facturacion(consulta.all(), empresa)
-    pendientes_ids = [c.id for c in pendientes]
-    if not pendientes_ids:
-        return 0, None
-
-    _detener_facturacion_solicitado.discard(empresa.id)
-    with _lock_facturacion_lote:
-        _estado_facturacion_lote[empresa.id] = _estado_inicial_lote(len(pendientes_ids))
-    threading.Thread(
-        target=_facturar_todos_en_segundo_plano,
-        args=(app, empresa.id, pendientes_ids, limite_monto),
-        daemon=True,
-    ).start()
-    return len(pendientes_ids), None
-
-
-def _estado_lote_facturacion(empresa_id):
-    with _lock_facturacion_lote:
-        estado = _estado_facturacion_lote.get(empresa_id)
-        if estado is None:
-            return None
-        copia = dict(estado)
-        copia["detalle"] = list(copia["detalle"])
-        return copia
 
 
 @app.route("/empresas/<int:empresa_id>/comprobantes/<int:comprobante_id>/vista-previa.pdf")
@@ -3506,20 +3537,6 @@ def crear_admin():
     db.session.add(admin)
     db.session.commit()
     print(f"Administrador '{email}' creado correctamente.")
-
-
-# ---------- API para el sistema de gestión de negocios (ver api_externa.py) ----------
-from api_externa import crear_blueprint_api_externa
-
-_bp_api_panel, _bp_api_externa = crear_blueprint_api_externa(
-    csrf=csrf,
-    limiter=limiter,
-    chequear_cuil=_chequear_cuil_no_abusado,
-    iniciar_lote=lambda empresa, prefijo, estados: _iniciar_lote_facturacion(empresa, prefijo, estados),
-    estado_lote=_estado_lote_facturacion,
-)
-app.register_blueprint(_bp_api_panel)
-app.register_blueprint(_bp_api_externa)
 
 
 if __name__ == "__main__":
