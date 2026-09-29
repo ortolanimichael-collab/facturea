@@ -98,6 +98,27 @@
   .btn.btn-facturar-todo{background:var(--navy);border-color:var(--navy);}
   .resumen{font-family:var(--sans);font-weight:600;font-size:12.5px;color:var(--blue-deep);background:var(--blue-tint);padding:10px 14px;border-radius:8px;margin-bottom:18px;display:none;}
 
+  .barra-seleccion-masiva{
+    display:none;align-items:center;gap:14px;flex-wrap:wrap;
+    border:1.5px solid var(--navy);border-radius:10px;background:var(--navy);color:#fff;
+    padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:20;
+  }
+  .barra-seleccion-masiva.visible{display:flex;}
+  .barra-seleccion-masiva .contador{font-family:var(--sans);font-weight:700;font-size:13px;margin-right:auto;}
+  .barra-seleccion-masiva button{
+    font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;
+    border:1.5px solid transparent;
+  }
+  .barra-seleccion-masiva .btn-marcar-facturado-masivo{background:#1FAA59;border-color:#1FAA59;color:#fff;}
+  .barra-seleccion-masiva .btn-marcar-facturado-masivo:hover{filter:brightness(1.08);}
+  .barra-seleccion-masiva .btn-eliminar-masivo{background:var(--danger);border-color:var(--danger);color:#fff;}
+  .barra-seleccion-masiva .btn-eliminar-masivo:hover{filter:brightness(1.08);}
+  .barra-seleccion-masiva .btn-cancelar-seleccion{background:transparent;border-color:rgba(255,255,255,0.5);color:#fff;}
+  .barra-seleccion-masiva .btn-cancelar-seleccion:hover{background:rgba(255,255,255,0.15);}
+  .barra-seleccion-masiva button:disabled{opacity:0.6;cursor:default;}
+  th.col-check, td.col-check{text-align:center;width:34px;}
+  td.col-check input[type=checkbox], th.col-check input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+
   .tabs-nav{display:flex;gap:8px;margin:22px 0 0;font-family:var(--sans);font-size:13.5px;font-weight:600;}
   .tab-btn{padding:10px 18px;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;background:var(--paper);cursor:pointer;color:var(--muted);}
   .tab-btn.activa{background:var(--paper-2);color:var(--navy);font-weight:700;}
@@ -576,11 +597,18 @@
   {% set conceptos = {"1": "Productos", "2": "Servicios", "3": "Productos y Servicios (Mixto)"} %}
 
   {% if comprobantes %}
-  <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe.</p>
+  <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe. Tildá varias filas a la izquierda para marcarlas como facturado o eliminarlas todas juntas con un solo click.</p>
+  <div class="barra-seleccion-masiva" id="barraSeleccionMasiva">
+    <span class="contador" id="contadorSeleccionados">0 seleccionados</span>
+    <button type="button" class="btn-marcar-facturado-masivo" id="btnMarcarFacturadoMasivo">Marcar seleccionados como facturado</button>
+    <button type="button" class="btn-eliminar-masivo" id="btnEliminarMasivo">Eliminar seleccionados</button>
+    <button type="button" class="btn-cancelar-seleccion" id="btnCancelarSeleccion">Cancelar selección</button>
+  </div>
   <div class="tabla-scroll" id="tablaScroll">
     <table id="tablaComprobantes">
       <thead>
         <tr>
+          <th class="col-check"><input type="checkbox" id="chkSeleccionarTodos" title="Seleccionar/deseleccionar todas las filas"></th>
           <th data-field="punto_venta" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Punto de venta</th>
           <th data-field="tipo_comprobante" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de factura</th>
           <th data-field="fecha_comprobante" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Fecha del comprobante</th>
@@ -614,6 +642,7 @@
         {% set monto_bajo = (c.precio_unitario or 0) < 100 %}
         {% set falta_cuit_a = ((c.tipo_comprobante or "").strip().endswith(" A") or (c.tipo_documento or "").strip().upper() in ("CUIT", "CUIL")) and not c.cuit_receptor %}
         <tr data-comprobante-id="{{ c.id }}" class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a or c.fecha_no_detectada) }}">
+          <td class="col-check"><input type="checkbox" class="chk-fila" data-id="{{ c.id }}" data-estado="{{ c.estado }}"></td>
           <td {% if editable %}data-field="punto_venta" data-type="text" data-value="{{ c.punto_venta or '' }}"{% endif %}>{{ c.punto_venta or "—" }}</td>
           <td {% if editable %}data-field="tipo_comprobante" data-type="select" data-value="{{ c.tipo_comprobante or '' }}"{% endif %}>{{ c.tipo_comprobante or "—" }}</td>
           <td {% if editable %}data-field="fecha_comprobante" data-type="date" data-value="{{ c.fecha_comprobante or '' }}"{% endif %} class="{{ 'monto-revisar' if c.fecha_no_detectada }}" {% if c.fecha_no_detectada %}title="No se encontró una fecha en el comprobante -- se usó la fecha de hoy por defecto. Revisala."{% endif %}>{{ c.fecha_comprobante or "—" }}{% if c.fecha_no_detectada %} ⚠{% endif %}</td>
@@ -1499,6 +1528,118 @@ document.querySelectorAll('.btn-preview-pdf').forEach(btn => {
     window.open(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/vista-previa.pdf`, '_blank');
   });
 });
+
+/* ---------- Selección múltiple: marcar como facturado / eliminar en masa ----------
+   Tildando varias filas a la izquierda aparece una barra fija arriba con dos
+   botones que actúan sobre TODAS las tildadas de una sola vez -- para no
+   tener que repetir la acción fila por fila. */
+(function () {
+  const chkTodos = document.getElementById('chkSeleccionarTodos');
+  const filasCheckbox = Array.from(document.querySelectorAll('.chk-fila'));
+  const barra = document.getElementById('barraSeleccionMasiva');
+  const contador = document.getElementById('contadorSeleccionados');
+  const btnMarcarFacturadoMasivo = document.getElementById('btnMarcarFacturadoMasivo');
+  const btnEliminarMasivo = document.getElementById('btnEliminarMasivo');
+  const btnCancelarSeleccion = document.getElementById('btnCancelarSeleccion');
+  if (!barra || filasCheckbox.length === 0) return; // no hay tabla o no hay filas
+
+  function seleccionados() {
+    return filasCheckbox.filter(chk => chk.checked);
+  }
+
+  function actualizarBarra() {
+    const sel = seleccionados();
+    if (sel.length === 0) {
+      barra.classList.remove('visible');
+      return;
+    }
+    barra.classList.add('visible');
+    contador.textContent = sel.length === 1 ? '1 seleccionado' : `${sel.length} seleccionados`;
+    // "Marcar como facturado" no tiene sentido si TODOS los tildados ya
+    // están facturados -- se deshabilita para que no parezca que hizo algo.
+    const hayNoFacturados = sel.some(chk => chk.dataset.estado !== 'facturado');
+    btnMarcarFacturadoMasivo.disabled = !hayNoFacturados;
+  }
+
+  filasCheckbox.forEach(chk => chk.addEventListener('change', () => {
+    if (!chk.checked) chkTodos.checked = false;
+    else if (filasCheckbox.every(c => c.checked)) chkTodos.checked = true;
+    actualizarBarra();
+  }));
+
+  if (chkTodos) {
+    chkTodos.addEventListener('change', () => {
+      filasCheckbox.forEach(chk => { chk.checked = chkTodos.checked; });
+      actualizarBarra();
+    });
+  }
+
+  btnCancelarSeleccion.addEventListener('click', () => {
+    filasCheckbox.forEach(chk => { chk.checked = false; });
+    if (chkTodos) chkTodos.checked = false;
+    actualizarBarra();
+  });
+
+  btnMarcarFacturadoMasivo.addEventListener('click', async () => {
+    const ids = seleccionados().map(chk => parseInt(chk.dataset.id, 10));
+    if (!ids.length) return;
+    btnMarcarFacturadoMasivo.disabled = true;
+    btnEliminarMasivo.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/marcar-facturado-multiple`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        alert('No se pudo marcar como facturado: ' + (data.error || 'error desconocido'));
+        btnMarcarFacturadoMasivo.disabled = false;
+        btnEliminarMasivo.disabled = false;
+        return;
+      }
+      recargarConservandoScroll();
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btnMarcarFacturadoMasivo.disabled = false;
+      btnEliminarMasivo.disabled = false;
+    }
+  });
+
+  btnEliminarMasivo.addEventListener('click', async () => {
+    const sel = seleccionados();
+    const ids = sel.map(chk => parseInt(chk.dataset.id, 10));
+    if (!ids.length) return;
+    // Único cartel de confirmación para todo el lote (no uno por fila) --
+    // borrar en masa no se puede deshacer, así que vale la pena un click
+    // extra de seguridad acá aunque el resto de las acciones no pregunte.
+    if (!confirm(`¿Eliminar ${ids.length} comprobante(s) seleccionado(s)? No se puede deshacer.`)) return;
+    btnMarcarFacturadoMasivo.disabled = true;
+    btnEliminarMasivo.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/eliminar-multiple`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        alert('No se pudo eliminar: ' + (data.error || 'error desconocido'));
+        btnMarcarFacturadoMasivo.disabled = false;
+        btnEliminarMasivo.disabled = false;
+        return;
+      }
+      if (data.omitidos_facturados) {
+        alert(`Se eliminaron ${data.eliminados}. ${data.omitidos_facturados} no se borraron porque ya estaban facturados.`);
+      }
+      recargarConservandoScroll();
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btnMarcarFacturadoMasivo.disabled = false;
+      btnEliminarMasivo.disabled = false;
+    }
+  });
+})();
 
 // ---------- Modal "Ver error" + reportar a soporte ----------
 let idComprobanteError = null;
