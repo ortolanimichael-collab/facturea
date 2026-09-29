@@ -99,6 +99,14 @@ def _elegir_descripcion(empresa):
     - Si está activado pero no hay porcentajes cargados (o suman 0): sorteo
       parejo entre todas las cargadas, como funcionaba antes de que
       existiera el reparto por %.
+
+    Si la regla de "monto bajo" está activa (config_umbral_precio_bajo +
+    config_descripcion_precio_bajo cargados, ver _aplicar_regla_monto_bajo),
+    la descripción especial de esa regla se saca del sorteo -- es una
+    descripción RESERVADA para los montos bajos, así que no debe poder
+    tocarle por azar a un comprobante de cualquier monto (antes sí podía,
+    porque seguía siendo una opción más de la lista normal). Si sacarla deja
+    la lista vacía, se la deja igual -- mejor que sortear entre nada.
     """
     descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
     if not empresa.config_descripcion_aleatoria or not descripciones:
@@ -112,6 +120,14 @@ def _elegir_descripcion(empresa):
         except ValueError:
             peso = 0.0
         pesos.append(max(peso, 0.0))
+
+    descripcion_especial = (empresa.config_descripcion_precio_bajo or "").strip()
+    if empresa.config_umbral_precio_bajo is not None and descripcion_especial in descripciones:
+        indice_especial = descripciones.index(descripcion_especial)
+        descripciones_sin_especial = descripciones[:indice_especial] + descripciones[indice_especial + 1:]
+        pesos_sin_especial = pesos[:indice_especial] + pesos[indice_especial + 1:]
+        if descripciones_sin_especial:  # si era la única cargada, se la deja -- no hay entre qué elegir
+            descripciones, pesos = descripciones_sin_especial, pesos_sin_especial
 
     if sum(pesos) > 0:
         return random.choices(descripciones, weights=pesos, k=1)[0]
