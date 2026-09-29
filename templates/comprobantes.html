@@ -158,6 +158,21 @@
     margin:0 0 8px;text-transform:none;letter-spacing:0;font-size:15.5px;font-weight:800;color:var(--ink);
   }
   .config-card > .tip-edicion{margin:0 0 20px;max-width:760px;}
+
+  /* .campo/.fila-2/.hint no tenían estilo propio acá (a diferencia de
+     empresas.html, que sí los define) -- por eso el monto y el desplegable
+     de "Descripción automática para montos bajos" salían con el look crudo
+     del navegador. Mismo estilo que el resto de los campos de la página. */
+  .fila-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:560px){ .fila-2{grid-template-columns:1fr;} }
+  .campo{margin-bottom:16px;}
+  .campo label{font-family:var(--sans);font-weight:700;font-size:12px;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.02em;}
+  .campo input, .campo select{
+    width:100%;font-family:var(--sans);font-size:14px;padding:9px 12px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper-2);color:var(--ink);box-sizing:border-box;
+  }
+  .campo input:focus, .campo select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-tint);}
+  .hint{font-family:var(--sans);font-size:12.5px;color:var(--muted);font-style:italic;}
   .config-card .fila-2{margin-bottom:0;}
   .config-card .campo{margin-bottom:0;}
 
@@ -262,24 +277,6 @@
   }
 
   .tabla-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
-
-  /* Casillas de edición inline (doble clic en una celda o en el título de una
-     columna): antes salían con el estilo por defecto del navegador -- ahora
-     usan la misma paleta que el resto de la página (mismo look que los
-     campos de "Revisión manual"). Cubre tanto <td> como <th> (edición de
-     columna completa) y también el contenedor .widget-descripcion, que
-     inserta su propio <input>/<select> adentro de la celda. */
-  #tablaComprobantes td input, #tablaComprobantes td select,
-  #tablaComprobantes th input, #tablaComprobantes th select{
-    width:100%;font-family:var(--sans);font-size:13px;padding:6px 8px;border-radius:7px;
-    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
-    box-sizing:border-box;
-  }
-  #tablaComprobantes td input:focus, #tablaComprobantes td select:focus,
-  #tablaComprobantes th input:focus, #tablaComprobantes th select:focus{
-    outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-tint);
-  }
-  #tablaComprobantes .widget-descripcion{width:100%;}
 
   /* Barra de scroll horizontal SIEMPRE visible (no la "overlay" que algunos
      sistemas -- sobre todo Mac -- ocultan hasta que se toca el trackpad):
@@ -1034,9 +1031,24 @@
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 </script>
 <script>
+// Al ocultar la pestaña "Comprobantes" (display:none) el navegador pierde
+// el scroll horizontal de #tablaScroll -- vuelve a 0 solo, aunque no se haya
+// tocado nada más. Por eso el scroll deslizable "se borraba" al pasar a
+// Configuraciones y volver, o al guardar esa pestaña (que recarga la
+// página). Se guarda la posición en esta variable cada vez que se sale de
+// "Comprobantes", y se restaura cada vez que se vuelve a esa pestaña.
+let scrollXTablaGuardado = null;
 function mostrarTabComprobantes(idPestaña) {
+  const tablaScroll = document.getElementById('tablaScroll');
+  const pestañaActual = document.querySelector('.tab-contenido.activa');
+  if (tablaScroll && pestañaActual && pestañaActual.id === 'tabComprobantes' && idPestaña !== 'tabComprobantes') {
+    scrollXTablaGuardado = tablaScroll.scrollLeft;
+  }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('activa', b.dataset.tab === idPestaña));
   document.querySelectorAll('.tab-contenido').forEach(c => c.classList.toggle('activa', c.id === idPestaña));
+  if (idPestaña === 'tabComprobantes' && tablaScroll && scrollXTablaGuardado !== null) {
+    requestAnimationFrame(() => { tablaScroll.scrollLeft = scrollXTablaGuardado; });
+  }
 }
 
 // Si venimos de guardar el formulario de Configuraciones (esa ruta redirige
@@ -1254,6 +1266,28 @@ function recargarConservandoScroll() {
   // aplicar el scroll -- si se hace antes de tiempo, el navegador todavía
   // no calculó el ancho/alto real y la restauración no tiene efecto.
   requestAnimationFrame(() => requestAnimationFrame(restaurar));
+})();
+
+// "Guardar configuración" (pestaña Configuraciones) manda un formulario común
+// (no un fetch), así que el navegador hace una recarga de página normal al
+// volver -- eso reseteaba el scroll horizontal de la tabla de comprobantes a
+// cero. Se guarda la posición justo antes de mandar el formulario, con el
+// mismo mecanismo de recargarConservandoScroll() de arriba, para que quede
+// donde estaba al volver a la pestaña Comprobantes.
+(function () {
+  const formConfiguraciones = document.getElementById('formConfiguraciones');
+  if (!formConfiguraciones) return;
+  formConfiguraciones.addEventListener('submit', () => {
+    try {
+      // Para cuando llega acá, la pestaña Comprobantes ya está oculta y su
+      // scrollLeft ya se perdió solo -- se usa el valor que quedó guardado
+      // al salir de esa pestaña (ver mostrarTabComprobantes más arriba).
+      const tablaScroll = document.getElementById('tablaScroll');
+      const x = scrollXTablaGuardado !== null ? scrollXTablaGuardado : (tablaScroll ? tablaScroll.scrollLeft : 0);
+      sessionStorage.setItem('facturea_scroll_x', String(x));
+      sessionStorage.setItem('facturea_scroll_y', String(window.scrollY || window.pageYOffset || 0));
+    } catch (e) {}
+  });
 })();
 
 const EMPRESA_ID = {{ empresa.id }};
