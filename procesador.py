@@ -163,14 +163,26 @@ def aplicar_regla_monto_bajo_retroactiva(empresa):
     _aplicar_regla_monto_bajo (arriba) solo se aplica a los comprobantes que
     se crean DE ACÁ EN ADELANTE -- guardar la regla en la pestaña
     Configuraciones no tocaba los comprobantes que ya estaban cargados en la
-    tabla desde antes, aunque su monto calificara. Esta función corrige eso:
-    se llama justo después de guardar la configuración (ver
-    empresa_configuraciones en app.py) y les aplica la regla, uno por uno, a
-    todos los comprobantes PENDIENTES (nunca a los ya facturados, que no se
-    tocan) cuyo precio_unitario sea menor al umbral -- reasignándoles la
-    descripción especial junto con su propia alícuota/tipo de
-    comprobante/punto de venta si los tiene (mismo criterio que un
-    comprobante nuevo). Devuelve la cantidad de comprobantes que cambiaron.
+    tabla desde antes. Esta función corrige eso de una, en los dos sentidos,
+    para todos los comprobantes PENDIENTES (nunca los ya facturados):
+
+    1. Los que califican por monto (precio_unitario menor al umbral) pasan a
+       tener la descripción especial, con su propia alícuota/tipo de
+       comprobante/punto de venta si los tiene -- mismo criterio que un
+       comprobante nuevo.
+    2. Los que YA tenían cargada la descripción especial pero su monto está
+       en el umbral o por arriba (quedó de una carga vieja, de antes de que
+       existiera esta regla, o de un sorteo al azar de cuando esa
+       descripción todavía no estaba reservada -- ver _elegir_descripcion)
+       se les asigna otra descripción, porque ahora esa es exclusiva de los
+       montos bajos y no debe repetirse en montos que no calificaron.
+
+    Nunca toca un comprobante con precio_unitario en 0 -- ese es el
+    placeholder que deja "cargar a mano" antes de completar el importe real
+    (ver registro_agregar_manual en app.py), así que ni se le fuerza la
+    descripción especial ni se le saca si por algún motivo ya la tenía.
+
+    Devuelve la cantidad de comprobantes que cambiaron.
     """
     umbral = empresa.config_umbral_precio_bajo
     descripcion_especial = (empresa.config_descripcion_precio_bajo or "").strip()
@@ -182,22 +194,16 @@ def aplicar_regla_monto_bajo_retroactiva(empresa):
     if alicuota_especial is None:
         alicuota_especial = (empresa.config_alicuota_iva or "").split(",")[0] or None
 
-    pendientes = Comprobante.query.filter(
+    cantidad_cambiada = 0
+
+    # 1. Monto bajo -> descripción especial.
+    pendientes_bajos = Comprobante.query.filter(
         Comprobante.empresa_id == empresa.id,
         Comprobante.estado.in_(("pendiente", "error")),
-        # precio_unitario nunca queda NULL de verdad (la columna tiene
-        # default=0.0), así que un monto en 0 es el placeholder que deja
-        # "cargar a mano" antes de que se complete el importe real -- se
-        # excluye para no reasignarle la descripción de monto bajo a un
-        # comprobante que todavía no tiene un monto cargado (mismo criterio
-        # que registro_agregar_manual en app.py, que tampoco le aplica esta
-        # regla en el momento de crearlo).
         Comprobante.precio_unitario > 0,
         Comprobante.precio_unitario < umbral,
     ).all()
-
-    cantidad_cambiada = 0
-    for c in pendientes:
+    for c in pendientes_bajos:
         if (
             c.descripcion == descripcion_especial
             and c.punto_venta == punto_venta_especial
@@ -209,6 +215,32 @@ def aplicar_regla_monto_bajo_retroactiva(empresa):
         c.punto_venta = punto_venta_especial
         c.tipo_comprobante = tipo_comprobante_especial
         c.alicuota_iva = alicuota_especial
+        cantidad_cambiada += 1
+
+    # 2. Descripción especial pero monto que YA NO califica -> se le sortea
+    # otra descripción normal (_elegir_descripcion ya excluye la especial
+    # sola mientras esta regla esté activa, ver arriba).
+    pendientes_altos_con_especial = Comprobante.query.filter(
+        Comprobante.empresa_id == empresa.id,
+        Comprobante.estado.in_(("pendiente", "error")),
+        Comprobante.descripcion == descripcion_especial,
+        Comprobante.precio_unitario >= umbral,
+    ).all()
+    for c in pendientes_altos_con_especial:
+        nueva_descripcion = _elegir_descripcion(empresa)
+        if nueva_descripcion == descripcion_especial:
+            # No quedó ninguna otra descripción cargada para sortear (ver
+            # _elegir_descripcion) -- se la deja como está en vez de dejarla
+            # sin ninguna descripción.
+            continue
+        nuevo_punto_venta, nuevo_tipo_comprobante = _punto_venta_y_tipo_comprobante_para(empresa, nueva_descripcion)
+        nueva_alicuota = empresa.alicuota_para_descripcion(nueva_descripcion)
+        if nueva_alicuota is None:
+            nueva_alicuota = (empresa.config_alicuota_iva or "").split(",")[0] or None
+        c.descripcion = nueva_descripcion
+        c.punto_venta = nuevo_punto_venta
+        c.tipo_comprobante = nuevo_tipo_comprobante
+        c.alicuota_iva = nueva_alicuota
         cantidad_cambiada += 1
 
     return cantidad_cambiada
