@@ -2,6 +2,8 @@ import os
 import random
 from datetime import datetime, timedelta
 
+from sqlalchemy import func
+
 from automatizacion.arca_bot import concepto_efectivo
 from lector import lector_core
 from models import db, Comprobante, Empresa, Usuario, IdTransaccionFacturada
@@ -92,21 +94,18 @@ def _elegir_descripcion(empresa):
     - Si "elegir al azar" (config_descripcion_aleatoria) está desactivado,
       o no hay ninguna descripción cargada: siempre la default de la
       empresa (config_producto_servicio -- la primera que se cargó).
-    - Si está activado y hay un reparto por % cargado (pestaña
-      Configuraciones, ver descripciones_porcentajes en models.py): sorteo
-      PESADO por esos porcentajes -- una descripción con 70% sale
-      aproximadamente 7 de cada 10 veces.
-    - Si está activado pero no hay porcentajes cargados (o suman 0): sorteo
-      parejo entre todas las cargadas, como funcionaba antes de que
-      existiera el reparto por %.
+    - Si está activado: reparto DETERMINÍSTICO por los % cargados en la
+      pestaña Configuraciones (descripciones_porcentajes), o parejo entre
+      todas si no se cargó ninguno -- ver _elegir_por_reparto_deterministico
+      más abajo para el detalle de cómo se reparte.
 
     Si la regla de "monto bajo" está activa (config_umbral_precio_bajo +
     config_descripcion_precio_bajo cargados, ver _aplicar_regla_monto_bajo),
-    la descripción especial de esa regla se saca del sorteo -- es una
+    la descripción especial de esa regla se saca del reparto -- es una
     descripción RESERVADA para los montos bajos, así que no debe poder
-    tocarle por azar a un comprobante de cualquier monto (antes sí podía,
-    porque seguía siendo una opción más de la lista normal). Si sacarla deja
-    la lista vacía, se la deja igual -- mejor que sortear entre nada.
+    tocarle a un comprobante de cualquier monto (antes sí podía, porque
+    seguía siendo una opción más de la lista normal). Si sacarla deja la
+    lista vacía, se la deja igual -- mejor que repartir entre nada.
     """
     descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
     if not empresa.config_descripcion_aleatoria or not descripciones:
@@ -129,9 +128,53 @@ def _elegir_descripcion(empresa):
         if descripciones_sin_especial:  # si era la única cargada, se la deja -- no hay entre qué elegir
             descripciones, pesos = descripciones_sin_especial, pesos_sin_especial
 
-    if sum(pesos) > 0:
-        return random.choices(descripciones, weights=pesos, k=1)[0]
-    return random.choice(descripciones)
+    if sum(pesos) <= 0:
+        pesos = [1.0] * len(descripciones)  # sin % cargado -> reparto parejo entre todas
+
+    return _elegir_por_reparto_deterministico(empresa, descripciones, pesos)
+
+
+def _elegir_por_reparto_deterministico(empresa, descripciones, pesos):
+    """
+    Reparte las descripciones según su % configurado de forma EXACTA en vez
+    de sortear al azar -- con un sorteo, repartir 50/50 entre dos
+    descripciones podía dar (por pura casualidad) 60/40 o peor en una tanda
+    chica de comprobantes, que es justo lo que no se quería. Este método
+    (el mismo criterio que usan los sistemas de reparto de bancas -- "resto
+    mayor"/"deficit round-robin") elige siempre la descripción que está más
+    atrasada respecto de su proporción objetivo, mirando cuántas veces salió
+    cada una hasta ahora entre TODOS los comprobantes ya cargados de esta
+    empresa (de cualquier estado, facturados incluidos -- así el reparto se
+    mantiene correcto de manera acumulada a lo largo del tiempo, no solo
+    dentro de una tanda). El resultado: para un lote cargado de una sola vez
+    partiendo de cero, el reparto real queda clavado en el % configurado
+    (ej. 90 comprobantes al 50/50 -> exactamente 45 y 45), y en cualquier
+    otro momento converge al % apenas se sigan cargando comprobantes.
+    """
+    conteos_actuales = dict(
+        db.session.query(Comprobante.descripcion, func.count(Comprobante.id))
+        .filter(
+            Comprobante.empresa_id == empresa.id,
+            Comprobante.descripcion.in_(descripciones),
+        )
+        .group_by(Comprobante.descripcion)
+        .all()
+    )
+
+    total_pesos = sum(pesos)
+    total_con_este = sum(conteos_actuales.get(d, 0) for d in descripciones) + 1
+
+    mejor_descripcion = descripciones[0]
+    mejor_deficit = None
+    for descripcion, peso in zip(descripciones, pesos):
+        objetivo = (peso / total_pesos) * total_con_este
+        actual = conteos_actuales.get(descripcion, 0)
+        deficit = objetivo - actual
+        if mejor_deficit is None or deficit > mejor_deficit:
+            mejor_deficit = deficit
+            mejor_descripcion = descripcion
+
+    return mejor_descripcion
 
 
 def _aplicar_regla_monto_bajo(empresa, descripcion_elegida, monto):

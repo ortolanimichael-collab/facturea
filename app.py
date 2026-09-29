@@ -1817,8 +1817,68 @@ def comprobantes(empresa_id):
     return render_template(
         "comprobantes.html", comprobantes=filas, usuario=current_user, empresa=empresa,
         datos_revision=datos_revision, stats=_calcular_estadisticas(empresa.id), conceptos=CONCEPTOS,
-        support_whatsapp=SUPPORT_WHATSAPP,
+        support_whatsapp=SUPPORT_WHATSAPP, resumen_reparto=_resumen_reparto_descripciones(empresa, filas),
     )
+
+
+def _resumen_reparto_descripciones(empresa, comprobantes):
+    """
+    Para la pestaña Configuraciones: el detalle en vivo de cuántos
+    comprobantes pendientes hay ahora mismo, cuántos de esos ya calificaron
+    (o van a calificar) por la regla de "monto bajo", y cómo está repartida
+    la descripción entre los restantes -- para poder chequear a simple vista
+    que el % configurado se está cumpliendo de verdad (ver
+    _elegir_por_reparto_deterministico en procesador.py, que es el que
+    decide esto en cada comprobante nuevo).
+    """
+    pendientes = [c for c in comprobantes if c.estado in ("pendiente", "error")]
+    total_pendientes = len(pendientes)
+
+    umbral = empresa.config_umbral_precio_bajo
+    descripcion_especial = (empresa.config_descripcion_precio_bajo or "").strip()
+    regla_monto_bajo_activa = umbral is not None and bool(descripcion_especial)
+
+    calificantes = (
+        [c for c in pendientes if c.precio_unitario and 0 < c.precio_unitario < umbral]
+        if regla_monto_bajo_activa else []
+    )
+    ids_calificantes = {id(c) for c in calificantes}
+    restantes = [c for c in pendientes if id(c) not in ids_calificantes]
+
+    descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    if regla_monto_bajo_activa and descripcion_especial in descripciones:
+        descripciones = [d for d in descripciones if d != descripcion_especial]
+
+    filas_reparto = []
+    if empresa.config_descripcion_aleatoria and descripciones:
+        porcentajes_crudos = (empresa.descripciones_porcentajes or "").split(",")
+        pesos = []
+        for i in range(len(descripciones)):
+            try:
+                peso = float(porcentajes_crudos[i]) if i < len(porcentajes_crudos) and porcentajes_crudos[i].strip() else 0.0
+            except ValueError:
+                peso = 0.0
+            pesos.append(max(peso, 0.0))
+        if sum(pesos) <= 0:
+            pesos = [1.0] * len(descripciones)  # sin % cargado -> objetivo parejo, para mostrar igual
+        total_pesos = sum(pesos)
+        total_restantes = len(restantes)
+        for descripcion, peso in zip(descripciones, pesos):
+            filas_reparto.append({
+                "descripcion": descripcion,
+                "porcentaje": peso,
+                "cantidad_actual": sum(1 for c in restantes if c.descripcion == descripcion),
+                "cantidad_objetivo": round((peso / total_pesos) * total_restantes) if total_pesos else 0,
+            })
+
+    return {
+        "total_pendientes": total_pendientes,
+        "regla_monto_bajo_activa": regla_monto_bajo_activa,
+        "descripcion_especial": descripcion_especial,
+        "calificantes_monto_bajo": len(calificantes),
+        "restantes": len(restantes),
+        "filas_reparto": filas_reparto,
+    }
 
 
 def _calcular_estadisticas(empresa_id):
