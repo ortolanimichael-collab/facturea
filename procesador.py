@@ -314,6 +314,12 @@ def crear_comprobante_desde_pago_mercadopago(pago, usuario_id, empresa):
         condicion_venta_default = "Tarjeta de Débito"
     elif medio_pago_detectado == "Crédito":
         condicion_venta_default = "Tarjeta de Crédito"
+    elif medio_pago_detectado == "Transferencia":
+        # Nunca el default configurado en la empresa (que podría ser
+        # "Tarjeta de Crédito" si así la configuraron) -- si el medio de
+        # pago detectado es Transferencia, la condición de venta tiene que
+        # ser específicamente esta, sin excepción.
+        condicion_venta_default = "Otros medios de pago electrónico"
     else:
         condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0]
 
@@ -518,6 +524,8 @@ def crear_comprobante_desde_fila_payway(fila_csv, usuario_id, empresa):
         condicion_venta_default = "Tarjeta de Débito"
     elif medio_pago_detectado == "Crédito":
         condicion_venta_default = "Tarjeta de Crédito"
+    elif medio_pago_detectado == "Transferencia":
+        condicion_venta_default = "Otros medios de pago electrónico"
     else:
         condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0]
 
@@ -757,7 +765,12 @@ def crear_comprobante_desde_transferencia_galicia(fila_galicia, usuario_id, empr
         tipo_documento=tipo_documento,
         cuit_receptor=cuit_receptor,
         condicion_iva=empresa.config_condicion_iva,
-        condicion_venta=(empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else "",
+        # Acá el medio de pago siempre es "Transferencia" (es un movimiento
+        # bancario, no puede ser otra cosa), así que la condición de venta
+        # va directamente forzada a "Otros medios de pago electrónico" en
+        # vez del default configurado en la empresa -- mismo criterio que
+        # el resto de los orígenes (Mercado Pago, Payway, NAVE, OCR).
+        condicion_venta="Otros medios de pago electrónico",
         fecha_desde=fecha_comprobante,
         fecha_hasta=fecha_comprobante,
         importe_total=monto,
@@ -928,6 +941,8 @@ def crear_comprobante_desde_cobro_nave(fila_nave, usuario_id, empresa):
         condicion_venta_default = "Tarjeta de Débito"
     elif medio_pago_detectado == "Crédito":
         condicion_venta_default = "Tarjeta de Crédito"
+    elif medio_pago_detectado == "Transferencia":
+        condicion_venta_default = "Otros medios de pago electrónico"
     else:
         condicion_venta_default = (empresa.config_condicion_venta or "").split(",")[0] if empresa.config_condicion_venta else ""
 
@@ -1060,6 +1075,8 @@ def procesar_archivo(ruta_local, nombre_original, usuario_id, empresa_id, fecha_
         condicion_venta_default = "Tarjeta de Débito"
     elif medio_pago_detectado == "Crédito":
         condicion_venta_default = "Tarjeta de Crédito"
+    elif medio_pago_detectado == "Transferencia":
+        condicion_venta_default = "Otros medios de pago electrónico"
     else:
         # La primera condición de venta configurada en la empresa -- el
         # checkbox real de ARCA solo permite una por factura.
