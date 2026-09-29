@@ -1,0 +1,3428 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+// Agrega el token CSRF a todos los fetch() que no sean GET/HEAD, sin tener
+// que tocar cada llamada una por una -- necesario porque el servidor ahora
+// exige ese token en cualquier POST (protección contra CSRF).
+(function () {
+  var token = document.querySelector('meta[name="csrf-token"]').content;
+  var fetchOriginal = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    var metodo = (init.method || 'GET').toUpperCase();
+    if (metodo !== 'GET' && metodo !== 'HEAD') {
+      init.headers = new Headers(init.headers || {});
+      if (!init.headers.has('X-CSRFToken')) {
+        init.headers.set('X-CSRFToken', token);
+      }
+    }
+    return fetchOriginal.call(this, input, init);
+  };
+})();
+</script>
+<title>AutoFacturación — Comprobantes</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/logo-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --navy-mid:#1E3170;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --warn-tint:#FDF1D9; --warn-deep:#8A5A0A;
+    --danger:#D64545; --danger-tint:#FBE9E9;
+    --sans: "Manrope", "Roboto", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1800px;margin:0 auto;padding:0 24px 80px;}
+
+  /* ---------- HEADER ---------- */
+  header.app-header{background:var(--navy-deep);border-bottom:2px solid var(--blue);margin-bottom:28px;}
+  header.app-header .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;gap:14px;flex-wrap:wrap;}
+  .logo{font-family:var(--sans);font-weight:800;font-size:18px;display:flex;align-items:center;gap:9px;text-decoration:none;color:#FFFFFF;}
+  .logo .dot{width:9px;height:9px;background:var(--blue);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--sans);font-size:13.5px;font-weight:600;}
+  .nav-links a{color:#D6E1F5;text-decoration:none;}
+  .nav-links a:hover{color:#fff;}
+
+  h1{font-family:var(--sans);font-weight:800;font-size:22px;margin:20px 0 4px;color:var(--ink);}
+  p.sub{color:var(--muted);font-size:14.5px;}
+
+  .barra-acciones{
+    border:1px solid var(--line);border-radius:14px;background:var(--paper-2);padding:22px;margin:22px 0;
+  }
+  .grupo-cargas{
+    display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;
+  }
+  .carga-card{
+    border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:16px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .carga-card > .btn{margin-top:auto;}
+  .carga-card-titulo{
+    display:flex;align-items:center;gap:8px;font-family:var(--sans);font-weight:800;font-size:13.5px;color:var(--ink);
+  }
+  .carga-card-icono{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .carga-card-desc{font-family:var(--sans);font-size:12px;color:var(--muted);margin:-4px 0 0;line-height:1.4;}
+  .carga-card-fila{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .btn-elegir-archivo{
+    font-family:var(--sans);font-weight:700;font-size:12.5px;padding:9px 14px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper-2);color:var(--navy);cursor:pointer;white-space:nowrap;
+  }
+  .btn-elegir-archivo:hover{background:var(--blue-tint);}
+  .nombre-archivo-elegido{
+    font-family:var(--sans);font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:100%;
+  }
+  .upload-box{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .upload-box input[type=file]{font-family:var(--sans);font-size:13px;}
+  .grupo-acciones-generales{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding-top:16px;border-top:1px solid var(--line);}
+  .btn{font-family:var(--sans);font-weight:700;font-size:13.5px;padding:11px 20px;border-radius:8px;border:1.5px solid transparent;background:var(--blue);color:#FFFFFF;cursor:pointer;transition:filter .15s ease;}
+  .btn:hover{filter:brightness(1.06);}
+  .btn:disabled{opacity:0.6;cursor:default;}
+  .btn.btn-facturar-todo{background:var(--navy);border-color:var(--navy);}
+  .resumen{font-family:var(--sans);font-weight:600;font-size:12.5px;color:var(--blue-deep);background:var(--blue-tint);padding:10px 14px;border-radius:8px;margin-bottom:18px;display:none;}
+
+  .barra-seleccion-masiva{
+    display:none;align-items:center;gap:14px;flex-wrap:wrap;
+    border:1.5px solid var(--navy);border-radius:10px;background:var(--navy);color:#fff;
+    padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:20;
+  }
+  .barra-seleccion-masiva.visible{display:flex;}
+  .barra-seleccion-masiva .contador{font-family:var(--sans);font-weight:700;font-size:13px;margin-right:auto;}
+  .barra-seleccion-masiva button{
+    font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;
+    border:1.5px solid transparent;
+  }
+  .barra-seleccion-masiva .btn-marcar-facturado-masivo{background:#1FAA59;border-color:#1FAA59;color:#fff;}
+  .barra-seleccion-masiva .btn-marcar-facturado-masivo:hover{filter:brightness(1.08);}
+  .barra-seleccion-masiva .btn-eliminar-masivo{background:var(--danger);border-color:var(--danger);color:#fff;}
+  .barra-seleccion-masiva .btn-eliminar-masivo:hover{filter:brightness(1.08);}
+  .barra-seleccion-masiva .btn-cancelar-seleccion{background:transparent;border-color:rgba(255,255,255,0.5);color:#fff;}
+  .barra-seleccion-masiva .btn-cancelar-seleccion:hover{background:rgba(255,255,255,0.15);}
+  .barra-seleccion-masiva button:disabled{opacity:0.6;cursor:default;}
+  th.col-check, td.col-check{text-align:center;width:34px;}
+  td.col-check input[type=checkbox], th.col-check input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+
+  .tabs-nav{display:flex;gap:8px;margin:22px 0 0;font-family:var(--sans);font-size:13.5px;font-weight:600;}
+  .tab-btn{padding:10px 18px;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;background:var(--paper);cursor:pointer;color:var(--muted);}
+  .tab-btn.activa{background:var(--paper-2);color:var(--navy);font-weight:700;}
+  .tab-contenido{display:none;border:1px solid var(--line);border-radius:0 12px 12px 12px;background:var(--paper-2);padding:24px;margin-bottom:28px;}
+  .tab-contenido.activa{display:block;}
+
+  .panel-stats h2{font-family:var(--sans);font-weight:800;font-size:16px;margin-bottom:16px;color:var(--ink);}
+  .panel-stats h3{font-family:var(--sans);font-weight:700;font-size:12.5px;color:var(--muted);margin:20px 0 12px;text-transform:uppercase;letter-spacing:0.03em;}
+
+  .lista-stats{list-style:none;border-top:1px solid var(--line);}
+  .lista-stats li{
+    display:flex;justify-content:space-between;align-items:center;padding:10px 4px;
+    border-bottom:1px solid var(--line);
+  }
+  .lista-stats .stat-label{font-size:13.5px;color:var(--ink);}
+  .lista-stats .stat-num-lista{font-family:var(--sans);font-weight:800;font-size:15px;color:var(--ink);}
+  .lista-stats li.advertencia .stat-num-lista{color:var(--danger);}
+
+  .herramienta-monto{
+    border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:16px 18px;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:8px;
+  }
+  .herramienta-monto-info{display:flex;flex-direction:column;gap:3px;}
+  .herramienta-monto-info .stat-num-lista{font-size:20px;color:var(--blue-deep);}
+  .herramienta-monto-accion{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .herramienta-monto-accion label{font-family:var(--sans);font-weight:700;font-size:11px;color:var(--muted);white-space:nowrap;}
+  .herramienta-monto-accion input[type=number]{
+    width:130px;font-family:var(--sans);font-size:13px;padding:9px 10px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper-2);color:var(--ink);
+  }
+
+  /* ---------- Pestaña Configuraciones ---------- */
+  .config-card{
+    border:1px solid var(--line);border-radius:14px;background:var(--paper);padding:24px 26px;margin-bottom:22px;
+  }
+  .config-card h3{
+    margin:0 0 8px;text-transform:none;letter-spacing:0;font-size:15.5px;font-weight:800;color:var(--ink);
+  }
+  .config-card > .tip-edicion{margin:0 0 20px;max-width:760px;}
+  .config-card .fila-2{margin-bottom:0;}
+  .config-card .campo{margin-bottom:0;}
+
+  .config-slider-item{margin-bottom:24px;}
+  .config-slider-item:last-child{margin-bottom:4px;}
+  .config-slider-label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;gap:12px;}
+  .config-slider-nombre{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);}
+  .config-slider-valor{font-family:var(--sans);font-weight:800;font-size:14px;color:var(--blue-deep);white-space:nowrap;}
+
+  input[type="range"].slider-porcentaje{
+    -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;
+    background:var(--line);outline:none;cursor:pointer;margin:0;display:block;
+  }
+  input[type="range"].slider-porcentaje::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
+    background:var(--blue);border:3px solid #fff;box-shadow:0 1px 5px rgba(19,28,51,0.3);cursor:pointer;
+    margin-top:-8px;
+  }
+  input[type="range"].slider-porcentaje::-webkit-slider-runnable-track{
+    height:6px;border-radius:999px;background:var(--line);
+  }
+  input[type="range"].slider-porcentaje::-moz-range-thumb{
+    width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid #fff;
+    box-shadow:0 1px 5px rgba(19,28,51,0.3);cursor:pointer;
+  }
+  input[type="range"].slider-porcentaje::-moz-range-track{background:var(--line);height:6px;border-radius:999px;}
+
+  .config-total-repartido{
+    display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13px;color:var(--muted);
+    background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:9px 18px;margin-top:4px;
+  }
+  .config-total-repartido strong{font-size:15px;color:var(--blue-deep);}
+
+  .comparador-duplicados{display:flex;gap:16px;border:1px solid var(--line);border-radius:12px;background:var(--paper);overflow:hidden;min-height:760px;}
+  .lista-duplicados{list-style:none;width:220px;min-width:180px;border-right:1px solid var(--line);max-height:760px;overflow-y:auto;flex-shrink:0;}
+  .item-duplicado{padding:10px 14px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line);word-break:break-all;color:var(--ink);}
+  .item-duplicado:hover{background:var(--blue-tint);}
+  .item-duplicado.seleccionado{background:var(--blue);color:#fff;font-weight:700;}
+  .visor-duplicado{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .visor-duplicado-topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;
+    border-bottom:1px solid var(--line);font-family:var(--sans);font-weight:600;font-size:12px;color:var(--muted);
+  }
+  .visor-duplicado-topbar button{
+    font-family:var(--sans);font-weight:700;font-size:11.5px;padding:7px 12px;border-radius:8px;border:1.5px solid var(--navy);
+    background:var(--paper-2);color:var(--navy);cursor:pointer;
+  }
+  .visor-duplicado-topbar button:hover{background:var(--navy);color:#fff;}
+  .visor-duplicado-imagen{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;min-height:700px;}
+  .visor-duplicado-imagen img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:8px;box-shadow:0 2px 12px rgba(19,28,51,0.15);}
+  .visor-duplicado-imagen canvas{max-width:100%;height:auto;border-radius:8px;box-shadow:0 2px 12px rgba(19,28,51,0.15);}
+  .visor-duplicado-imagen .sin-seleccion{font-family:var(--sans);font-size:12.5px;color:var(--muted);}
+
+  .form-agregar-manual{border-top:1px solid var(--line);padding:16px 14px;background:var(--paper-2);}
+  .form-agregar-manual .fila{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  .form-agregar-manual .fila > div{flex:1;min-width:160px;}
+  .form-agregar-manual label{display:block;font-family:var(--sans);font-weight:700;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.02em;}
+  .form-agregar-manual input{
+    width:100%;font-family:var(--sans);font-size:13px;padding:9px 10px;border-radius:8px;
+    border:1.5px solid var(--line);background:#fff;color:var(--ink);
+  }
+  .form-agregar-manual .acciones{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .form-agregar-manual .btn-cancelar{
+    font-family:var(--sans);font-weight:600;font-size:12.5px;color:var(--muted);background:none;border:none;
+    cursor:pointer;text-decoration:underline;
+  }
+  .form-agregar-manual .msg{font-family:var(--sans);font-weight:600;font-size:12px;}
+  .form-agregar-manual .msg.error{color:var(--danger);}
+  .form-agregar-manual .msg.success{color:var(--blue-deep);}
+
+  .listas-nombres{margin-top:16px;display:flex;flex-direction:column;gap:8px;}
+  .listas-nombres details{
+    background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+  }
+  .listas-nombres summary{font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;color:var(--ink);}
+  .listas-nombres ul{margin:10px 0 0 18px;font-size:12.5px;color:var(--muted);}
+  .listas-nombres li{margin-bottom:3px;word-break:break-all;}
+
+  .tip-edicion{font-family:var(--sans);font-size:11.5px;color:var(--muted);margin-bottom:14px;}
+
+  .barra-tabla-info{
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:14px 18px;margin-bottom:14px;
+  }
+  .barra-tabla-info .tip-edicion{margin:0;flex:1;min-width:280px;}
+  .control-orden{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;}
+  .control-orden label{
+    font-family:var(--sans);font-weight:700;font-size:11px;color:var(--muted);white-space:nowrap;
+    text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .control-orden select{
+    font-family:var(--sans);font-size:13px;padding:8px 12px;border-radius:8px;border:1.5px solid var(--line);
+    background:var(--paper-2);color:var(--ink);cursor:pointer;
+  }
+  .control-orden .btn-direccion-orden{
+    font-family:var(--sans);font-weight:700;font-size:12.5px;padding:8px 14px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper-2);color:var(--navy);cursor:pointer;white-space:nowrap;
+  }
+  .control-orden .btn-direccion-orden:hover{background:var(--blue-tint);border-color:var(--blue);}
+  .nota-orden-visual{
+    width:100%;font-family:var(--sans);font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;
+  }
+
+  .tabla-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
+
+  /* Barra de scroll horizontal SIEMPRE visible (no la "overlay" que algunos
+     sistemas -- sobre todo Mac -- ocultan hasta que se toca el trackpad):
+     así queda claro a simple vista que la tabla sigue para los costados,
+     sin tener que arrastrar primero para descubrirlo. */
+  .tabla-scroll{scrollbar-width:auto;scrollbar-color:var(--blue) var(--paper);}
+  .tabla-scroll::-webkit-scrollbar{height:12px;}
+  .tabla-scroll::-webkit-scrollbar-track{background:var(--paper);border-radius:0 0 12px 12px;}
+  .tabla-scroll::-webkit-scrollbar-thumb{background:var(--blue);border-radius:10px;border:2px solid var(--paper);}
+  .tabla-scroll::-webkit-scrollbar-thumb:hover{background:var(--blue-deep);}
+
+  /* Barra de scroll horizontal "fantasma": se pega abajo de la ventana
+     mientras la tabla está a la vista, para no tener que bajar hasta el
+     final de todas las filas solo para desplazarse a los costados. Se
+     muestra por JS únicamente si la tabla realmente desborda a los lados. */
+  .scroll-fantasma-wrap{
+    display:none; position:sticky; bottom:0; z-index:20;
+    overflow-x:auto; overflow-y:hidden; height:14px;
+    background:var(--paper); border:1px solid var(--line); border-top:none;
+    border-radius:0 0 12px 12px;
+  }
+  .scroll-fantasma{height:1px;}
+  table{width:max-content;min-width:100%;border-collapse:collapse;background:var(--paper-2);}
+  thead th{font-family:var(--sans);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1.5px solid var(--line);white-space:nowrap;background:var(--paper);}
+  thead th[data-field]{cursor:pointer;}
+  thead th[data-field]:hover{background:var(--blue-tint);color:var(--blue-deep);}
+  thead th[data-field] input, thead th[data-field] select{
+    font-family:var(--sans);font-size:12px;padding:4px 6px;border-radius:6px;
+    border:1.5px solid var(--blue);background:#fff;color:var(--ink);min-width:100px;text-transform:none;
+  }
+  tbody td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .col-fecha-ajustada{color:var(--muted);font-style:italic;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.facturado{opacity:0.7;}
+  tbody tr:hover td{background:var(--blue-tint);}
+
+  td[data-field]{cursor:pointer;position:relative;}
+  td[data-field]:hover{background:var(--blue-tint);}
+  td[data-field] input, td[data-field] select{
+    font-family:var(--sans);font-size:13px;padding:4px 6px;border-radius:6px;
+    border:1.5px solid var(--blue);background:#fff;color:var(--ink);min-width:110px;
+  }
+
+  .estado{font-family:var(--sans);font-weight:700;font-size:11px;padding:3px 9px;border-radius:20px;display:inline-block;}
+  .estado.pendiente{background:var(--warn-tint);color:var(--warn-deep);}
+  .estado.facturado{background:var(--blue-tint);color:var(--blue-deep);}
+  .estado.error{background:var(--danger-tint);color:var(--danger);cursor:help;}
+  .vacio{text-align:center;padding:60px 20px;color:var(--muted);font-family:var(--sans);font-size:13.5px;}
+
+  .acciones-fila{display:flex;gap:6px;flex-wrap:wrap;}
+  .acciones-fila button{
+    font-family:var(--sans);font-weight:700;font-size:11px;padding:6px 10px;border-radius:7px;
+    cursor:pointer;white-space:nowrap;border:1.5px solid var(--navy);background:var(--paper-2);color:var(--navy);
+  }
+  .acciones-fila button:hover{background:var(--navy);color:#fff;}
+  .btn-facturar{border-color:var(--blue-deep);background:var(--blue);color:#fff;}
+  .btn-facturar:hover{background:var(--blue-deep);color:#fff;}
+  .btn-facturar.reintentar{border-color:var(--danger);background:var(--danger);color:#fff;}
+  .btn-probar{border-color:var(--navy);background:var(--paper-2);color:var(--navy);}
+  .btn-eliminar{border-color:var(--danger);color:var(--danger);}
+  .btn-eliminar:hover{background:var(--danger);color:#fff;}
+  .acciones-fila button:disabled{opacity:0.6;cursor:default;}
+  .btn.btn-revision{border-color:var(--navy);background:var(--paper-2);color:var(--navy);}
+  .btn.btn-revision:hover{background:var(--navy);color:#fff;}
+  .btn.btn-peligro{border-color:var(--danger);background:var(--paper-2);color:var(--danger);}
+  .btn.btn-peligro:hover{background:var(--danger);color:#fff;}
+  .acciones-fila .btn-revisar{border-color:var(--blue-deep);color:var(--blue-deep);}
+  .acciones-fila .btn-revisar:hover{background:var(--blue-deep);color:#fff;}
+  .acciones-fila .btn-ver-error{border-color:var(--warn-deep);color:var(--warn-deep);background:var(--warn-tint);}
+  .acciones-fila .btn-ver-error:hover{background:var(--warn-deep);color:#fff;}
+  .acciones-fila .btn-marcar-facturado{border-color:#1FAA59;color:#1FAA59;}
+  .acciones-fila .btn-marcar-facturado:hover{background:#1FAA59;color:#fff;}
+  .acciones-fila .btn-marcar-pendiente{border-color:var(--muted);color:var(--muted);}
+  .acciones-fila .btn-marcar-pendiente:hover{background:var(--muted);color:#fff;}
+
+  #overlayVerError{display:none;position:fixed;inset:0;background:rgba(19,28,51,0.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
+  #overlayVerError.abierto{display:flex;}
+  .modal-error{background:var(--paper-2);border-radius:14px;max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+  .modal-error-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .modal-error-head h3{font-family:var(--sans);font-size:16px;font-weight:800;color:var(--ink);margin:0;}
+  .modal-error-head .archivo{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .modal-error-cerrar{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:4px;}
+  .modal-error-cuerpo{padding:18px 22px;overflow-y:auto;}
+  .modal-error-texto{font-family:ui-monospace,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word;background:var(--warn-tint);color:var(--warn-deep);border-radius:10px;padding:14px;border:1px solid rgba(138,90,10,0.25);}
+  .modal-error-pie{padding:16px 22px;border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .modal-error-pie .msg{font-size:12.5px;color:var(--muted);}
+  .btn-enviar-whatsapp{font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;border:1.5px solid #1FAA59;background:#1FAA59;color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+  .btn-enviar-whatsapp:hover{background:#178A46;}
+  .btn-enviar-email{font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;border:1.5px solid var(--navy);background:var(--paper-2);color:var(--navy);}
+  .btn-enviar-email:hover{background:var(--navy);color:#fff;}
+  .btn-enviar-email:disabled{opacity:0.6;cursor:default;}
+
+  /* ---------- Revisión manual ---------- */
+  #overlayRevision{
+    display:none;position:fixed;inset:0;background:rgba(15,27,61,0.92);z-index:1000;
+    flex-direction:column;
+  }
+  .revision-topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    padding:14px 24px;border-bottom:1.5px solid rgba(255,255,255,0.15);
+  }
+  .revision-topbar .info-izq{display:flex;align-items:center;gap:14px;font-family:var(--sans);font-weight:600;color:#fff;font-size:13px;}
+  .revision-topbar .nav-revision{display:flex;align-items:center;gap:10px;}
+  .revision-topbar button{
+    font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;
+    cursor:pointer;border:1.5px solid var(--blue);background:transparent;color:#fff;
+  }
+  .revision-topbar button:hover{background:rgba(255,255,255,0.1);}
+  .revision-topbar button:disabled{opacity:0.35;cursor:default;}
+  .revision-topbar .btn-cerrar{border-color:var(--danger);color:#F5B8B8;}
+  .revision-tip{font-family:var(--sans);font-size:11px;color:#9FB3D9;}
+
+  .revision-cuerpo{flex:1;display:flex;overflow:hidden;}
+  .revision-panel-izq{
+    width:400px;min-width:340px;overflow-y:auto;padding:22px;background:var(--paper-2);
+    border-right:1px solid rgba(255,255,255,0.12);
+  }
+  .revision-panel-der{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;overflow:auto;background:#0B1330;gap:10px;}
+  .revision-panel-der img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
+  .revision-panel-der canvas{max-width:100%;height:auto;display:block;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.4);}
+  .revision-panel-der .sin-archivo{color:#9FB3D9;font-family:var(--sans);font-size:13px;text-align:center;}
+
+  .campo-revision{margin-bottom:14px;}
+
+  .widget-descripcion{display:flex;flex-direction:column;gap:4px;}
+  .btn-volver-lista{
+    align-self:flex-start;background:none;border:none;color:var(--muted);
+    font-family:var(--sans);font-weight:600;font-size:11px;cursor:pointer;padding:2px 0;text-decoration:underline;
+  }
+  .btn-volver-lista:hover{color:var(--ink);}
+
+  .seccion-lineas-extra{
+    margin-top:20px;padding-top:16px;border-top:1px solid var(--line);
+  }
+  .seccion-lineas-extra h3{font-family:var(--sans);font-weight:800;font-size:13px;margin:0 0 12px;color:var(--ink);}
+  .linea-extra{
+    background:var(--paper-2);border:1px solid var(--line);border-radius:10px;
+    padding:14px;margin-bottom:14px;
+  }
+  .linea-extra-encabezado{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:var(--sans);font-weight:600;font-size:12px;color:var(--muted);margin-bottom:10px;
+  }
+  .btn-eliminar-linea{
+    background:none;border:1.5px solid var(--danger);color:var(--danger);border-radius:7px;
+    padding:3px 10px;font-family:var(--sans);font-weight:700;font-size:11px;cursor:pointer;
+  }
+  .btn-eliminar-linea:hover{background:var(--danger);color:var(--paper);}
+  .btn-agregar-linea{
+    display:block;width:100%;background:var(--paper-2);border:1.5px dashed var(--navy);
+    border-radius:10px;padding:10px;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer;color:var(--navy);
+  }
+  .btn-agregar-linea:hover{background:var(--blue-tint);}
+  .btn-agregar-linea:disabled{opacity:0.6;cursor:default;}
+  .campo-revision label{font-family:var(--sans);font-weight:700;font-size:11px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.02em;}
+  .campo-revision input, .campo-revision select{
+    width:100%;font-family:var(--sans);font-size:14px;padding:9px 10px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+  .campo-revision input:focus, .campo-revision select:focus{outline:none;border-color:var(--blue);}
+  .btn-usar-otro-cuit{
+    display:block;width:100%;margin-top:6px;background:none;border:none;cursor:pointer;
+    font-family:var(--sans);font-weight:600;font-size:11px;color:var(--blue-deep);text-decoration:underline;
+    text-align:left;padding:0;
+  }
+  .btn-usar-otro-cuit:hover{color:var(--danger);}
+
+  tr.fila-monto-bajo{background:rgba(214,69,69,0.06);}
+  td.celda-monto{white-space:nowrap;}
+  td.monto-revisar{color:var(--danger);font-weight:700;}
+  .aviso-fecha-no-detectada{color:var(--danger);font-size:11.5px;font-weight:700;margin:-2px 0 6px;}
+  .badge-revisar{
+    display:inline-block;margin-left:8px;padding:2px 7px;border-radius:6px;
+    background:var(--danger);color:#fff;font-family:var(--sans);font-size:10px;
+    font-weight:700;letter-spacing:0.4px;vertical-align:middle;
+  }
+  .badge-revisar-bloque{display:block;margin:6px 0 0;width:fit-content;}
+  .campo-revision .valor-solo-lectura{
+    font-family:var(--sans);font-size:14px;padding:9px 10px;border-radius:8px;
+    border:1.5px solid var(--line);background:var(--paper);color:var(--muted);
+  }
+
+  /* ==================================================================
+     MÓVIL — todo lo de acá abajo solo aplica en pantallas angostas.
+     La regla general: los botones se achican, y la Revisión Manual pasa
+     de "imagen al lado de los datos" (dos columnas fijas, pensado para
+     escritorio) a "imagen arriba, datos abajo" con todo en un solo
+     scroll vertical -- las dos columnas fijas de 400px+ no entran en el
+     ancho de un celular ni por asomo.
+     ================================================================== */
+  @media (max-width:820px){
+    .wrap{padding:0 14px 60px;}
+    header.app-header{margin-bottom:18px;}
+    header.app-header .wrap{padding:12px 14px;gap:10px;}
+    .logo{font-size:16px;}
+    .nav-links{gap:12px;font-size:12px;flex-wrap:wrap;}
+    h1{font-size:18px;}
+    p.sub{font-size:13px;}
+
+    .barra-acciones{padding:14px;margin:14px 0;}
+    .grupo-cargas{grid-template-columns:1fr;gap:10px;margin-bottom:14px;}
+    .grupo-acciones-generales{gap:8px;padding-top:12px;}
+    .upload-box{gap:10px;width:100%;}
+    .upload-box input[type=file]{font-size:12px;max-width:100%;}
+    .btn{font-size:12px;padding:8px 12px;}
+    .tabs-nav{gap:6px;}
+    .tab-btn{padding:8px 12px;font-size:12px;}
+    .tab-contenido{padding:14px;}
+
+    .acciones-fila{gap:4px;}
+    .acciones-fila button{font-size:10px;padding:5px 8px;}
+
+    /* ---- Revisión manual: apilada, con un solo scroll ---- */
+    .revision-topbar{padding:10px 12px;gap:8px;}
+    .revision-topbar .info-izq{font-size:11px;gap:8px;}
+    .revision-topbar button{font-size:11px;padding:7px 10px;}
+    .revision-tip{display:none;} /* el tip de teclado (↓ ↑ ← →) no aplica tocando la pantalla */
+
+    .revision-cuerpo{flex-direction:column;overflow:hidden;}
+    .revision-panel-der{
+      order:-1; /* la imagen/PDF va primero: mirás el comprobante antes de revisar los datos */
+      flex:0 0 60vh; /* tamaño FIJO -- ocupa la mayor parte de la pantalla y no se mueve ni se achica al scrollear los datos de abajo */
+      width:100%;padding:10px;overflow:auto; /* overflow:auto solo por si un PDF de varias páginas no entra entero */
+      min-height:0;
+    }
+    .revision-panel-izq{
+      flex:1 1 auto;min-width:0;min-height:0; /* ocupa el resto -- es la ÚNICA parte que se scrollea */
+      width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;
+      border-right:none;border-top:1px solid rgba(255,255,255,0.12);
+    }
+
+    /* ---- Comparador de duplicados / archivos con error: mismo criterio --
+       la imagen o PDF ocupa la parte grande y fija de la pantalla, y la
+       lista de nombres de archivo (antes al costado, angosta pero alta)
+       pasa a ser una franja compacta y acotada en altura, no en ancho. ---- */
+    .comparador-duplicados{flex-direction:column;min-height:0;}
+    .visor-duplicado{order:1;width:100%;min-width:0;}
+    .lista-duplicados{
+      order:2;width:100%;min-width:0;max-height:130px;
+      border-right:none;border-top:1px solid var(--line);
+    }
+    .visor-duplicado-imagen{min-height:0;height:56vh;padding:10px;}
+  }
+</style>
+
+</head>
+<body>
+<header class="app-header">
+  <div class="wrap">
+    <a href="/panel" class="logo"><img src="/static/img/logo-icon.png" alt="AutoFacturación" style="width:26px;height:26px;">AutoFacturación</a>
+    <div class="nav-links">
+      <a href="/panel">← Panel</a>
+      <a href="/empresas/{{ empresa.id }}/editar">Editar empresa</a>
+      {% if current_user.es_admin %}<a href="/admin">Panel admin</a>{% endif %}
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </div>
+</header>
+<div class="wrap content">
+  {% include '_aviso_membresia.html' %}
+
+  <h1>Comprobantes — {{ empresa.nombre_interno }}</h1>
+  <p class="sub">Subí las capturas de tus transferencias y se arman solas en la tabla de abajo.</p>
+
+  <div class="tabs-nav">
+    <button type="button" class="tab-btn activa" data-tab="tabComprobantes" onclick="mostrarTabComprobantes('tabComprobantes')">Comprobantes</button>
+    <button type="button" class="tab-btn" data-tab="tabEstadisticas" onclick="mostrarTabComprobantes('tabEstadisticas')">Proceso y estadísticas</button>
+    <button type="button" class="tab-btn" data-tab="tabConfiguraciones" onclick="mostrarTabComprobantes('tabConfiguraciones')">Configuraciones</button>
+  </div>
+
+  <div id="tabComprobantes" class="tab-contenido activa">
+  <div class="barra-acciones">
+    <div class="grupo-cargas">
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:var(--blue);"></span>Comprobantes propios</div>
+        <p class="carga-card-desc">Capturas de pantalla o PDF de transferencias/pagos ya recibidos</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivos">Seleccionar capturas o PDF</label>
+          <input type="file" id="archivos" multiple accept="image/png,image/jpeg,application/pdf" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivosNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubir" class="btn" data-track="subir_comprobante">Subir y leer archivos</button>
+      </div>
+
+      {% if empresa.tiene_mercadopago_conectado() %}
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#009EE3;"></span>Mercado Pago</div>
+        <p class="carga-card-desc">Trae directo desde tu cuenta conectada los cobros nuevos, sin subir ningún archivo</p>
+        <button id="btnTraerMercadoPago" class="btn" style="background:#009EE3;border-color:#009EE3;">Traer movimientos de Mercado Pago</button>
+      </div>
+      {% endif %}
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#1E4DB7;"></span>Payway</div>
+        <p class="carga-card-desc">Archivo .csv que descargás de MyPayway (Historial &gt; Movimientos)</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivoPayway">Seleccionar CSV de Payway</label>
+          <input type="file" id="archivoPayway" accept=".csv,text/csv" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivoPaywayNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubirPayway" class="btn" style="background:#1E4DB7;border-color:#1E4DB7;">Cargar CSV de Payway a la tabla</button>
+      </div>
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#FF6600;"></span>Banco Galicia</div>
+        <p class="carga-card-desc">Excel de movimientos del home banking (pestaña Cuentas &gt; Movimientos)</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivoGalicia">Seleccionar Excel de Galicia</label>
+          <input type="file" id="archivoGalicia" accept=".xlsx" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivoGaliciaNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubirGalicia" class="btn" style="background:#FF6600;border-color:#FF6600;">Cargar Excel de Galicia a la tabla</button>
+      </div>
+
+      <div class="carga-card">
+        <div class="carga-card-titulo"><span class="carga-card-icono" style="background:#6E2FC4;"></span>NAVE</div>
+        <p class="carga-card-desc">Informe de "Cobros con QR" que descargás del panel de NAVE</p>
+        <div class="carga-card-fila">
+          <label class="btn-elegir-archivo" for="archivoNave">Seleccionar Excel de NAVE</label>
+          <input type="file" id="archivoNave" accept=".xlsx" hidden>
+        </div>
+        <span class="nombre-archivo-elegido" id="archivoNaveNombre">Ningún archivo seleccionado</span>
+        <button id="btnSubirNave" class="btn" style="background:#6E2FC4;border-color:#6E2FC4;">Cargar Excel de NAVE a la tabla</button>
+      </div>
+
+    </div>
+
+    <div class="grupo-acciones-generales">
+      <button id="btnFacturarTodo" class="btn btn-facturar-todo" data-track="facturar_todo">Facturar todo lo pendiente</button>
+      <button id="btnDetenerFacturacion" class="btn btn-peligro" style="display:none;">Detener</button>
+      <button id="btnRevisionManual" class="btn btn-revision">Revisión manual</button>
+      <button id="btnEliminarFacturados" class="btn btn-peligro">Eliminar todos los facturados</button>
+      <button id="btnEliminarTodos" class="btn btn-peligro">Eliminar todos los archivos</button>
+    </div>
+  </div>
+  <span class="msg" id="mercadopagoMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="paywayMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="galiciaMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="naveMsg" style="display:block;margin:-8px 0 8px;"></span>
+  <span class="msg" id="facturacionMsg" style="display:none;margin:-8px 0 8px;"></span>
+
+  <div id="resumen" class="resumen"></div>
+
+  {% set opciones_tipo_comprobante_ri = [
+    "Factura A", "Nota de Débito A", "Nota de Crédito A", "Recibo A",
+    "Factura B", "Nota de Débito B", "Nota de Crédito B", "Recibo B",
+    "Factura T", "Nota de Débito T", "Nota de Crédito T",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) A",
+    "Nota de Débito Electrónica MiPyMEs (FCE) A",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) A",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) B",
+    "Nota de Débito Electrónica MiPyMEs (FCE) B",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) B"
+  ] %}
+  {% set opciones_tipo_comprobante_monotributo = [
+    "Factura C", "Nota de Débito C", "Nota de Crédito C", "Recibo C",
+    "Factura de Crédito Electrónica MiPyMEs (FCE) C",
+    "Nota de Débito Electrónica MiPyMEs (FCE) C",
+    "Nota de Crédito Electrónica MiPyMEs (FCE) C"
+  ] %}
+  {% set opciones_tipo_comprobante = opciones_tipo_comprobante_ri if empresa.tipo_contribuyente == "Responsable Inscripto" else opciones_tipo_comprobante_monotributo %}
+  {# Los 8 valores reales del desplegable "Alícuota IVA" de ARCA, confirmados
+     con una captura real -- No Gravado, Exento y 0% son TRES conceptos
+     legalmente distintos, no una sola opción "0" como había antes acá. #}
+  {% set opciones_alicuota_iva = [
+    ("NO_GRAVADO", "No Gravado"), ("EXENTO", "Exento"), ("0", "0%"),
+    ("2.5", "2,5%"), ("5", "5%"), ("10.5", "10,5%"), ("21", "21%"), ("27", "27%")
+  ] %}
+  {% set mapa_alicuota_etiquetas = dict(opciones_alicuota_iva) %}
+  {% set desc_list = (empresa.descripciones_disponibles or "").split(",") | select | list %}
+  {% set alic_list = (empresa.descripciones_alicuotas or "").split(",") %}
+  {% set descripciones_con_alicuota = [] %}
+  {% for d in desc_list %}
+    {% set alic = alic_list[loop.index0] if loop.index0 < alic_list|length else "" %}
+    {% set _ = descripciones_con_alicuota.append([d, alic]) %}
+  {% endfor %}
+  {% set opciones_condicion_iva = [
+    "IVA Responsable Inscripto", "IVA Sujeto Exento", "Consumidor Final",
+    "Responsable Monotributo", "Sujeto No Categorizado", "Proveedor del Exterior",
+    "Cliente del Exterior", "IVA Liberado - Ley Nº 19.640", "Monotributista Social",
+    "IVA No Alcanzado", "Monotributista Trabajador Independiente Promovido"
+  ] %}
+  {% set opciones_tipo_doc = [
+    "CUIT", "CUIL", "CDI", "LE", "LC", "CI Extranjera", "DNI",
+    "Pasaporte", "CI Policía Federal", "Certificado de Migración"
+  ] %}
+  {% set opciones_condicion_venta = [
+    "Contado", "Tarjeta de Débito", "Tarjeta de Crédito", "Cuenta Corriente",
+    "Cheque", "Transferencia Bancaria", "Otra", "Otros medios de pago electrónico"
+  ] %}
+  {% set opciones_medio_pago_detectado = ["Transferencia", "Débito", "Crédito"] %}
+  {% set opciones_tipo_pago_debito = ["Maestro", "Visa Electrón", "Cabal 24 hs", "Mastercard Débito", "Otra..."] %}
+  {% set opciones_tipo_pago_credito = [
+    "American Express", "Visa", "Mastercard", "Credencial", "Carta Franca",
+    "Cabal", "Diners", "Tarjeta Shopping", "Tarjeta Naranja", "Otra..."
+  ] %}
+  {% set opciones_unidad_medida = [
+    "kilogramos", "metros", "metros cuadrados", "metros cúbicos", "litros", "1000 kWh",
+    "unidades", "pares", "docenas", "quilates", "millares", "gramos", "milímetros",
+    "mm cúbicos", "kilómetros", "hectolitros", "centímetros", "jgo. pqt. mazo naipes",
+    "cm cúbicos", "toneladas", "dam cúbicos", "hm cúbicos", "km cúbicos", "microgramos",
+    "nanogramos", "picogramos", "miligramos", "mililitros", "curie", "milicurie",
+    "microcurie", "uiacthor", "muiacthor", "kg base", "gruesa", "kg bruto", "uiactant",
+    "muiactant", "uiactig", "muiactig", "kg activo", "gramo activo", "gramo base",
+    "packs", "otras unidades"
+  ] %}
+  {% set conceptos = {"1": "Productos", "2": "Servicios", "3": "Productos y Servicios (Mixto)"} %}
+
+  {% if comprobantes %}
+  <div class="barra-tabla-info">
+    <p class="tip-edicion">Doble clic en cualquier casilla para editarla (menos en comprobantes ya facturados). Doble clic en el TÍTULO de una columna aplica ese mismo valor a todas las filas pendientes de golpe. Tildá varias filas a la izquierda para marcarlas como facturado o eliminarlas todas juntas con un solo click.</p>
+    <div class="control-orden">
+      <label for="selectOrdenTabla">Ordenar por</label>
+      <select id="selectOrdenTabla">
+        <option value="default">Como se cargó</option>
+        <option value="fecha_comprobante">Fecha del comprobante</option>
+        <option value="descripcion">Descripción</option>
+        <option value="precio_unitario">Precio unitario</option>
+      </select>
+      <button type="button" class="btn-direccion-orden" id="btnDireccionOrden" data-direccion="asc" title="Cambiar entre ascendente y descendente">⬆ Ascendente</button>
+    </div>
+    <p class="nota-orden-visual">Este orden es solo visual -- "Facturar todo lo pendiente" siempre arranca por el comprobante con la fecha más antigua, sin importar cómo esté ordenada la tabla acá.</p>
+  </div>
+  <div class="barra-seleccion-masiva" id="barraSeleccionMasiva">
+    <span class="contador" id="contadorSeleccionados">0 seleccionados</span>
+    <button type="button" class="btn-marcar-facturado-masivo" id="btnMarcarFacturadoMasivo">Marcar seleccionados como facturado</button>
+    <button type="button" class="btn-eliminar-masivo" id="btnEliminarMasivo">Eliminar seleccionados</button>
+    <button type="button" class="btn-cancelar-seleccion" id="btnCancelarSeleccion">Cancelar selección</button>
+  </div>
+  <div class="tabla-scroll" id="tablaScroll">
+    <table id="tablaComprobantes">
+      <thead>
+        <tr>
+          <th class="col-check"><input type="checkbox" id="chkSeleccionarTodos" title="Seleccionar/deseleccionar todas las filas"></th>
+          <th data-field="punto_venta" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Punto de venta</th>
+          <th data-field="tipo_comprobante" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de factura</th>
+          <th data-field="fecha_comprobante" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Fecha del comprobante</th>
+          <th title="La que realmente va a quedar en ARCA -- puede ser distinta a la fecha real de arriba si esta es más nueva que la fecha de emisión por defecto de la empresa. No se edita acá, se recalcula sola.">Fecha de facturación</th>
+          <th data-field="concepto" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Concepto</th>
+          <th data-field="fecha_desde" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Desde</th>
+          <th data-field="fecha_hasta" data-type="date" title="Doble clic para aplicar un valor a toda la columna">Hasta</th>
+          <th data-field="tipo_documento" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de documento</th>
+          <th data-field="cuit_receptor" data-type="text" title="Doble clic para aplicar un valor a toda la columna">CUIL/CUIT/Documento</th>
+          <th data-field="medio_pago_detectado" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Medio de pago detectado</th>
+          <th data-field="condicion_iva" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Condición de IVA</th>
+          <th data-field="condicion_venta" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Condición de venta</th>
+          <th data-field="tipo_pago" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Tipo de tarjeta</th>
+          <th data-field="numero_pago" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Número de tarjeta</th>
+          <th data-field="descripcion" data-type="{{ 'select' if empresa.tipo_contribuyente == 'Responsable Inscripto' else 'text' }}" title="Doble clic para aplicar un valor a toda la columna">Descripción</th>
+          <th data-field="cantidad" data-type="number" title="Doble clic para aplicar un valor a toda la columna">Cantidad</th>
+          <th data-field="unidad_medida" data-type="select" title="Doble clic para aplicar un valor a toda la columna">Unidad de medida</th>
+          <th data-field="precio_unitario" data-type="number" title="Doble clic para aplicar un valor a toda la columna">Precio unitario</th>
+          <th data-field="alicuota_iva" data-type="select" title="Solo aplica a Responsable Inscripto. Doble clic para aplicar un valor a toda la columna">Alícuota de IVA</th>
+          <th data-field="nombre_razon_social" data-type="text" title="Doble clic para aplicar un valor a toda la columna">Recibe</th>
+          <th data-field="id_transaccion" data-type="text" title="Doble clic para aplicar un valor a toda la columna">ID transacción</th>
+          <th>Imagen origen</th>
+          <th>Estado</th>
+          <th>Facturado el</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in comprobantes %}
+        {% set editable = c.estado != "facturado" %}
+        {% set monto_bajo = (c.precio_unitario or 0) < 100 %}
+        {% set falta_cuit_a = ((c.tipo_comprobante or "").strip().endswith(" A") or (c.tipo_documento or "").strip().upper() in ("CUIT", "CUIL")) and not c.cuit_receptor %}
+        <tr data-comprobante-id="{{ c.id }}"
+            data-sort-fecha="{{ c.fecha_comprobante or '' }}"
+            data-sort-descripcion="{{ (c.descripcion or '')|lower }}"
+            data-sort-precio="{{ c.precio_unitario or 0 }}"
+            class="{{ 'facturado' if not editable }} {{ 'fila-monto-bajo' if (monto_bajo or falta_cuit_a or c.fecha_no_detectada) }}">
+          <td class="col-check"><input type="checkbox" class="chk-fila" data-id="{{ c.id }}" data-estado="{{ c.estado }}"></td>
+          <td {% if editable %}data-field="punto_venta" data-type="text" data-value="{{ c.punto_venta or '' }}"{% endif %}>{{ c.punto_venta or "—" }}</td>
+          <td {% if editable %}data-field="tipo_comprobante" data-type="select" data-value="{{ c.tipo_comprobante or '' }}"{% endif %}>{{ c.tipo_comprobante or "—" }}</td>
+          <td {% if editable %}data-field="fecha_comprobante" data-type="date" data-value="{{ c.fecha_comprobante or '' }}"{% endif %} class="{{ 'monto-revisar' if c.fecha_no_detectada }}" {% if c.fecha_no_detectada %}title="No se encontró una fecha en el comprobante -- se usó la fecha de hoy por defecto. Revisala."{% endif %}>{{ c.fecha_comprobante or "—" }}{% if c.fecha_no_detectada %} ⚠{% endif %}</td>
+          <td class="col-fecha-ajustada">{{ c.fecha_facturacion_ajustada or "—" }}</td>
+          <td {% if editable %}data-field="concepto" data-type="select" data-value="{{ c.concepto or '' }}"{% endif %}>{{ conceptos.get(c.concepto, "—") }}</td>
+          <td {% if editable %}data-field="fecha_desde" data-type="date" data-value="{{ c.fecha_desde or '' }}"{% endif %}>{{ c.fecha_desde or "—" }}</td>
+          <td {% if editable %}data-field="fecha_hasta" data-type="date" data-value="{{ c.fecha_hasta or '' }}"{% endif %}>{{ c.fecha_hasta or "—" }}</td>
+          <td {% if editable %}data-field="tipo_documento" data-type="select" data-value="{{ c.tipo_documento or '' }}"{% endif %}>{{ c.tipo_documento or "—" }}</td>
+          <td {% if editable %}data-field="cuit_receptor" data-type="text" data-value="{{ c.cuit_receptor or '' }}"{% endif %} class="{{ 'monto-revisar' if falta_cuit_a }}">
+            {{ c.cuit_receptor or "—" }}
+            {% if falta_cuit_a %}<span class="badge-revisar" title="Este tipo de comprobante (clase A) exige CUIT del receptor -- corregilo antes de facturar.">REVISAR</span>{% endif %}
+          </td>
+          <td {% if editable %}data-field="medio_pago_detectado" data-type="select" data-value="{{ c.medio_pago_detectado or '' }}"{% endif %}>{{ c.medio_pago_detectado or "—" }}</td>
+          <td {% if editable %}data-field="condicion_iva" data-type="select" data-value="{{ c.condicion_iva or '' }}"{% endif %}>{{ c.condicion_iva or "—" }}</td>
+          <td {% if editable %}data-field="condicion_venta" data-type="select" data-value="{{ c.condicion_venta or '' }}"{% endif %}>{{ c.condicion_venta or "—" }}</td>
+          <td {% if editable %}data-field="tipo_pago" data-type="select" data-value="{{ c.tipo_pago or '' }}"{% endif %}>{{ c.tipo_pago or "—" }}</td>
+          <td {% if editable %}data-field="numero_pago" data-type="text" data-value="{{ c.numero_pago or '' }}"{% endif %}>{{ c.numero_pago or "—" }}</td>
+          <td {% if editable %}data-field="descripcion" data-type="{{ 'select' if empresa.tipo_contribuyente == 'Responsable Inscripto' else 'text' }}" data-value="{{ c.descripcion or '' }}"{% endif %}>{{ c.descripcion or "—" }}</td>
+          <td {% if editable %}data-field="cantidad" data-type="number" data-value="{{ c.cantidad or 1 }}"{% endif %}>{{ c.cantidad or 1 }}</td>
+          <td {% if editable %}data-field="unidad_medida" data-type="select" data-value="{{ c.unidad_medida or '' }}"{% endif %}>{{ c.unidad_medida or "—" }}</td>
+          <td {% if editable %}data-field="precio_unitario" data-type="number" data-value="{{ c.precio_unitario or 0 }}"{% endif %} class="celda-monto{{ ' monto-revisar' if monto_bajo }}">
+            $ {{ "%.2f"|format(c.precio_unitario or 0) }}
+            {% if monto_bajo %}<span class="badge-revisar" title="Un comprobante con este monto no se puede facturar -- corregilo antes.">REVISAR</span>{% endif %}
+          </td>
+          <td {% if editable %}data-field="alicuota_iva" data-type="select" data-value="{{ c.alicuota_iva or '' }}"{% endif %}>{{ mapa_alicuota_etiquetas.get(c.alicuota_iva, c.alicuota_iva) if c.alicuota_iva else "—" }}</td>
+          <td {% if editable %}data-field="nombre_razon_social" data-type="text" data-value="{{ c.nombre_razon_social or '' }}"{% endif %}>{{ c.nombre_razon_social or "No detectado" }}</td>
+          <td {% if editable %}data-field="id_transaccion" data-type="text" data-value="{{ c.id_transaccion or '' }}"{% endif %}>{{ c.id_transaccion or "—" }}</td>
+          <td>{{ c.archivo_origen or "—" }}</td>
+          <td>
+            <span class="estado {{ c.estado }}" {% if c.estado == "error" and c.error_facturacion %}title="{{ c.error_facturacion }}"{% endif %}>{{ c.estado }}</span>
+          </td>
+          <td>{{ c.facturado_en_ar.strftime("%d/%m/%Y %H:%M") if c.facturado_en_ar else "—" }}</td>
+          <td>
+            <div class="acciones-fila">
+              <button class="btn-revisar" data-id="{{ c.id }}">Revisar</button>
+              {% if c.estado == "error" %}
+              <button class="btn-ver-error" data-id="{{ c.id }}" data-archivo="{{ c.archivo_origen or '' }}" data-error="{{ c.error_facturacion or 'No quedó guardado el detalle de este error.' }}">Ver error</button>
+              {% endif %}
+              {% if editable %}
+              <button class="btn-facturar {{ 'reintentar' if c.estado == 'error' }}" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de facturar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>{{ "Reintentar" if c.estado == "error" else "Facturar" }}</button>
+              <button class="btn-probar" data-id="{{ c.id }}" {% if monto_bajo %}disabled title="Monto inválido -- corregilo antes de probar"{% elif falta_cuit_a %}disabled title="Falta el CUIT del receptor -- obligatorio para este tipo de comprobante"{% endif %}>Probar</button>
+              <button class="btn-marcar-facturado" data-id="{{ c.id }}" title="Marca este comprobante como facturado sin pasar por ARCA -- para cuando ya lo facturaste por tu cuenta">Marcar como facturado</button>
+              <button class="btn-editar-fila" data-id="{{ c.id }}">Editar fila</button>
+              <button class="btn-eliminar" data-id="{{ c.id }}">Eliminar</button>
+              {% else %}
+              <button class="btn-marcar-pendiente" data-id="{{ c.id }}" title="Vuelve a poner este comprobante como pendiente">Marcar como pendiente</button>
+              {% endif %}
+              <button class="btn-preview-pdf" data-id="{{ c.id }}">Vista previa PDF</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="scroll-fantasma-wrap" id="scrollFantasmaWrap">
+    <div class="scroll-fantasma" id="scrollFantasma"></div>
+  </div>
+  {% else %}
+  <div class="vacio">Todavía no hay comprobantes. Subí una captura arriba para probarlo.</div>
+  {% endif %}
+  </div>
+
+  <div id="tabEstadisticas" class="tab-contenido">
+  <div class="panel-stats">
+
+    <div class="herramienta-monto">
+      <div class="herramienta-monto-info">
+        <span class="stat-label">Monto pendiente a facturar</span>
+        <span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_pendiente) }}</span>
+      </div>
+      <div class="herramienta-monto-accion">
+        <label for="montoAFacturar">Monto a facturar</label>
+        <input type="number" id="montoAFacturar" placeholder="ej: 50000" min="0" step="0.01">
+        <button id="btnFacturarMontoCargado" class="btn btn-facturar-todo">Facturar el monto cargado</button>
+      </div>
+    </div>
+
+    <ul class="lista-stats">
+      <li><span class="stat-label">Archivos subidos en total</span><span class="stat-num-lista">{{ stats.total_subidos }}</span></li>
+      <li><span class="stat-label">Comprobantes facturados</span><span class="stat-num-lista">{{ stats.facturados }}</span></li>
+      <li><span class="stat-label">Comprobantes pendientes</span><span class="stat-num-lista">{{ stats.pendientes }}</span></li>
+      <li><span class="stat-label">Monto pendiente total de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_pendiente) }}</span></li>
+      <li><span class="stat-label">Monto total facturado de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.monto_facturado_total) }}</span></li>
+      <li><span class="stat-label">IVA total de todas las facturas</span><span class="stat-num-lista">$ {{ "%.2f"|format(stats.iva_total_facturado) }}</span></li>
+      {% for punto, monto in stats.monto_por_punto_venta %}
+      <li><span class="stat-label">Monto facturado -- Punto de venta {{ punto }}</span><span class="stat-num-lista">$ {{ "%.2f"|format(monto) }}</span></li>
+      {% endfor %}
+    </ul>
+
+    <h3>Lecturas de capturas</h3>
+    <ul class="lista-stats">
+      <li><span class="stat-label">Imágenes subidas</span><span class="stat-num-lista">{{ stats.imagenes }}</span></li>
+      <li><span class="stat-label">PDFs subidos</span><span class="stat-num-lista">{{ stats.pdfs }}</span></li>
+      <li><span class="stat-label">Se cargaron a la tabla</span><span class="stat-num-lista">{{ stats.nuevos }}</span></li>
+      <li class="advertencia"><span class="stat-label">Duplicados (ya estaban)</span><span class="stat-num-lista">{{ stats.duplicados }}</span></li>
+      <li class="advertencia"><span class="stat-label">Bloqueados (no es un archivo válido)</span><span class="stat-num-lista">{{ stats.bloqueados }}</span></li>
+      <li class="advertencia"><span class="stat-label">Con error de lectura</span><span class="stat-num-lista">{{ stats.con_error }}</span></li>
+    </ul>
+
+    {% if stats.duplicados_detalle %}
+    <h3>Comparar duplicados</h3>
+    <p class="tip-edicion">Hacé clic en un archivo de la lista (o usá ↓ ↑) para ver SU PROPIA imagen a la derecha. Con → volvés a esa misma imagen propia, con ← ves el comprobante original con el que se lo comparó.</p>
+    <div class="comparador-duplicados">
+      <ul class="lista-duplicados" id="listaDuplicados">
+        {% for d in stats.duplicados_detalle %}
+        <li class="item-duplicado" data-registro-id="{{ d.registro_id }}" data-comprobante-id="{{ d.comprobante_original_id or '' }}" data-tiene-intento="{{ 'true' if d.tiene_imagen_intento else 'false' }}">
+          {{ d.nombre_archivo }}
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="visor-duplicado">
+        <div class="visor-duplicado-topbar">
+          <span id="visorDuplicadoTitulo">Elegí un archivo de la lista</span>
+          <button type="button" id="btnToggleDuplicado" style="display:none;">Ver imagen duplicada</button>
+        </div>
+        <div class="visor-duplicado-imagen" id="visorDuplicadoImagen">
+          <span class="sin-seleccion">Sin selección</span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if stats.errores_detalle %}
+    <h3>Archivos con error de lectura</h3>
+    <p class="tip-edicion">Hacé clic en un archivo para verlo. Si podés leer los datos a simple vista, cargalo a mano con "Agregar a la tabla" -- no hace falta volver a subir la imagen.</p>
+    <div class="comparador-duplicados">
+      <ul class="lista-duplicados" id="listaErrores">
+        {% for er in stats.errores_detalle %}
+        <li class="item-duplicado" data-registro-id="{{ er.registro_id }}" data-tiene-imagen="{{ 'true' if er.tiene_imagen else 'false' }}">
+          {{ er.nombre_archivo }}
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="visor-duplicado">
+        <div class="visor-duplicado-topbar">
+          <span id="visorErrorTitulo">Elegí un archivo de la lista</span>
+          <button type="button" id="btnAgregarManualError" style="display:none;">Agregar y editar</button>
+        </div>
+        <div class="visor-duplicado-imagen" id="visorErrorImagen">
+          <span class="sin-seleccion">Sin selección</span>
+        </div>
+        <span class="msg" id="emFormMsg" style="display:block;padding:8px 14px;"></span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if stats.nombres_bloqueados %}
+    <div class="listas-nombres">
+      <details>
+        <summary>Ver los {{ stats.nombres_bloqueados|length }} archivo(s) bloqueados</summary>
+        <ul>{% for n in stats.nombres_bloqueados %}<li>{{ n }}</li>{% endfor %}</ul>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+  </div>
+</div>
+
+{% set descripciones_config = ((empresa.descripciones_disponibles or "")).split(",") | select | list %}
+{% set porcentajes_config_actuales = ((empresa.descripciones_porcentajes or "")).split(",") %}
+<div id="tabConfiguraciones" class="tab-contenido">
+  <div class="panel-stats">
+    <form method="POST" action="{{ url_for('empresa_configuraciones', empresa_id=empresa.id) }}" id="formConfiguraciones">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="config-card">
+        <h3>Descripción automática para montos bajos</h3>
+        <p class="tip-edicion">
+          Si un comprobante nuevo tiene un monto menor al que pongas acá, se le va a asignar
+          siempre esta descripción (con su propia alícuota, tipo de comprobante y punto de venta,
+          si los tenés configurados para ella en "Editar empresa"), en vez de la que le hubiera
+          tocado normalmente. Dejá el monto vacío para desactivar esta regla.
+        </p>
+        {% if not descripciones_config %}
+        <p class="hint">Todavía no cargaste ninguna descripción/producto en "Editar empresa" -- cargá al menos una para poder usar esta regla.</p>
+        {% else %}
+        <div class="fila-2">
+          <div class="campo">
+            <label>Monto menor a</label>
+            <input type="number" name="config_umbral_precio_bajo" min="0" step="0.01" placeholder="ej: 5000"
+                   value="{{ empresa.config_umbral_precio_bajo if empresa.config_umbral_precio_bajo is not none else '' }}">
+          </div>
+          <div class="campo">
+            <label>Usar esta descripción</label>
+            <select name="config_descripcion_precio_bajo">
+              <option value="">Sin regla -- no forzar ninguna</option>
+              {% for d in descripciones_config %}
+              <option value="{{ d }}" {{ "selected" if empresa.config_descripcion_precio_bajo == d }}>{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="config-card">
+        <h3>Reparto por % entre descripciones</h3>
+        <p class="tip-edicion">
+          Solo tiene efecto si en "Editar empresa" activaste "Elegir una descripción al azar entre
+          las cargadas". En vez de que cada descripción salga la misma cantidad de veces, le podés
+          asignar un % propio a cada una con el control deslizante -- al mover uno, se les ajusta
+          proporcionalmente a los demás, para que entre todos sigan sumando 100%.
+        </p>
+        {% if descripciones_config|length < 2 %}
+        <p class="hint">Cargá al menos dos descripciones en "Editar empresa" para poder repartirles un %.</p>
+        {% else %}
+        <div id="listaPorcentajesConfig">
+          {% for d in descripciones_config %}
+          {% set porcentaje_d = porcentajes_config_actuales[loop.index0] if loop.index0 < porcentajes_config_actuales|length and porcentajes_config_actuales[loop.index0].strip() else "" %}
+          <div class="config-slider-item">
+            <div class="config-slider-label">
+              <span class="config-slider-nombre">{{ d }}</span>
+              <span class="config-slider-valor"><span class="valor-porcentaje-num">{{ porcentaje_d|float(0)|round|int }}</span>% asignado</span>
+            </div>
+            <input type="range" class="slider-porcentaje input-porcentaje-desc" data-desc="{{ d }}"
+                   min="0" max="100" step="1" value="{{ porcentaje_d|float(0)|round|int }}">
+          </div>
+          {% endfor %}
+        </div>
+        <div class="config-total-repartido">Total repartido: <strong id="totalPorcentajeConfig">0%</strong></div>
+        <input type="hidden" name="descripciones_porcentajes" id="descripcionesPorcentajesConfig" value="{{ empresa.descripciones_porcentajes or '' }}">
+        {% endif %}
+      </div>
+
+      <button type="submit" class="btn">Guardar configuración</button>
+    </form>
+  </div>
+</div>
+
+<div id="overlayVerError">
+  <div class="modal-error">
+    <div class="modal-error-head">
+      <div>
+        <h3>Error al facturar</h3>
+        <div class="archivo" id="verErrorArchivo"></div>
+      </div>
+      <button type="button" class="modal-error-cerrar" id="btnCerrarVerError">✕</button>
+    </div>
+    <div class="modal-error-cuerpo">
+      <div class="modal-error-texto" id="verErrorTexto"></div>
+    </div>
+    <div class="modal-error-pie">
+      <a href="#" target="_blank" rel="noopener" class="btn-enviar-whatsapp" id="btnEnviarWhatsapp">Enviar por WhatsApp</a>
+      <button type="button" class="btn-enviar-email" id="btnEnviarEmail">Enviar por email a soporte</button>
+      <span class="msg" id="verErrorMsg"></span>
+    </div>
+  </div>
+</div>
+
+<div id="overlayRevision">
+  <div class="revision-topbar">
+    <div class="info-izq">
+      <span id="revisionContador">0 / 0</span>
+      <span id="revisionEstado" class="estado"></span>
+      <span class="revision-tip">← → para moverte entre comprobantes · Esc para cerrar</span>
+    </div>
+    <div class="nav-revision">
+      <button id="btnRevisionAnterior" type="button">◀ Anterior</button>
+      <button id="btnRevisionSiguiente" type="button">Siguiente ▶</button>
+      <button id="btnCerrarRevision" type="button" class="btn-cerrar">Cerrar ✕</button>
+    </div>
+  </div>
+  <div class="revision-cuerpo">
+    <div class="revision-panel-izq" id="revisionCampos"></div>
+    <div class="revision-panel-der" id="revisionVisor"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  // Renderiza el PDF nosotros mismos con canvas, en vez de un <iframe> --
+  // el visor nativo de PDF del navegador (del que depende un iframe) anda
+  // bien en la mayoría de las PCs, pero en el celular (sobre todo Safari
+  // de iPhone, y a veces Chrome de Android) no lo muestra adentro de la
+  // página y en cambio manda a abrirlo aparte. Con pdf.js dibujado en un
+  // <canvas> se ve exactamente igual en cualquier navegador, celular
+  // incluido.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
+<script>
+function mostrarTabComprobantes(idPestaña) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('activa', b.dataset.tab === idPestaña));
+  document.querySelectorAll('.tab-contenido').forEach(c => c.classList.toggle('activa', c.id === idPestaña));
+}
+
+// Si venimos de guardar el formulario de Configuraciones (esa ruta redirige
+// acá con #tabConfiguraciones en la URL), se reabre esa pestaña sola en vez
+// de volver siempre a "Comprobantes" -- mismo criterio para #tabEstadisticas
+// por si en algún momento se linkea directo a esa pestaña.
+if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadisticas') {
+  mostrarTabComprobantes(location.hash.slice(1));
+}
+
+/* ---------- Orden visual de la tabla de comprobantes ----------
+   Reordena las FILAS ya renderizadas en el navegador (nunca vuelve a pedir
+   nada al servidor) -- así "Facturar todo lo pendiente" sigue usando
+   siempre el orden real por fecha de facturación que arma
+   _ordenar_por_fecha_facturacion en el servidor (app.py), sin importar
+   cómo esté ordenada la tabla acá. El orden elegido se guarda en
+   sessionStorage para que sobreviva los recargos de página que disparan
+   las ediciones (ver recargarConservandoScroll más abajo). */
+(function () {
+  const select = document.getElementById('selectOrdenTabla');
+  const btnDireccion = document.getElementById('btnDireccionOrden');
+  const tbody = document.querySelector('#tablaComprobantes tbody');
+  if (!select || !btnDireccion || !tbody) return;
+
+  // El orden en que el servidor mandó las filas ES el orden de prioridad de
+  // facturación -- se guarda tal cual para poder volver a él con "Como se
+  // cargó", sin tener que recargar la página.
+  const filasOriginales = Array.from(tbody.querySelectorAll('tr'));
+
+  function valorOrden(fila, criterio) {
+    if (criterio === 'fecha_comprobante') {
+      const partes = (fila.dataset.sortFecha || '').split('/');
+      if (partes.length === 3) {
+        // dd/mm/yyyy -> yyyymmdd, para que la comparación de texto ordene
+        // cronológicamente en vez de alfabéticamente.
+        return partes[2] + partes[1].padStart(2, '0') + partes[0].padStart(2, '0');
+      }
+      return '';
+    }
+    if (criterio === 'descripcion') {
+      return fila.dataset.sortDescripcion || '';
+    }
+    if (criterio === 'precio_unitario') {
+      return parseFloat(fila.dataset.sortPrecio) || 0;
+    }
+    return null;
+  }
+
+  function guardarEleccion() {
+    try {
+      sessionStorage.setItem('facturea_orden_criterio', select.value);
+      sessionStorage.setItem('facturea_orden_direccion', btnDireccion.dataset.direccion);
+    } catch (e) {}
+  }
+
+  function restaurarEleccion() {
+    try {
+      const criterio = sessionStorage.getItem('facturea_orden_criterio');
+      const direccion = sessionStorage.getItem('facturea_orden_direccion');
+      if (criterio) select.value = criterio;
+      if (direccion) btnDireccion.dataset.direccion = direccion;
+    } catch (e) {}
+  }
+
+  function aplicarOrden() {
+    const criterio = select.value;
+    const direccion = btnDireccion.dataset.direccion;
+    btnDireccion.textContent = direccion === 'asc' ? '⬆ Ascendente' : '⬇ Descendente';
+    btnDireccion.disabled = criterio === 'default';
+
+    if (criterio === 'default') {
+      filasOriginales.forEach(f => tbody.appendChild(f));
+      return;
+    }
+
+    const filas = filasOriginales.slice();
+    filas.sort((a, b) => {
+      const va = valorOrden(a, criterio);
+      const vb = valorOrden(b, criterio);
+      const cmp = (typeof va === 'number' && typeof vb === 'number')
+        ? va - vb
+        : String(va).localeCompare(String(vb), 'es', { numeric: true, sensitivity: 'base' });
+      return direccion === 'asc' ? cmp : -cmp;
+    });
+    filas.forEach(f => tbody.appendChild(f));
+  }
+
+  select.addEventListener('change', () => { guardarEleccion(); aplicarOrden(); });
+  btnDireccion.addEventListener('click', () => {
+    btnDireccion.dataset.direccion = btnDireccion.dataset.direccion === 'asc' ? 'desc' : 'asc';
+    guardarEleccion();
+    aplicarOrden();
+  });
+
+  restaurarEleccion();
+  aplicarOrden();
+})();
+
+/* ---------- Reparto por % entre descripciones (pestaña Configuraciones) ----------
+   Cada descripción tiene su propio control deslizante (0-100, en enteros).
+   Al mover uno, se le resta la diferencia a los demás EN PROPORCIÓN a lo
+   que ya tenían (o parejo si todos estaban en 0), así el total entre todas
+   se mantiene siempre en 100% sin que el usuario tenga que hacer la cuenta
+   a mano -- y el numerito de al lado de cada slider se actualiza en vivo. */
+(function () {
+  const inputs = () => Array.from(document.querySelectorAll('.input-porcentaje-desc'));
+  const campoOculto = document.getElementById('descripcionesPorcentajesConfig');
+  const totalTexto = document.getElementById('totalPorcentajeConfig');
+  if (!campoOculto || inputs().length === 0) return;
+
+  function guardarValoresAnteriores() {
+    inputs().forEach(i => { i.dataset.valorAnterior = i.value || '0'; });
+  }
+
+  function actualizarValoresVisibles() {
+    inputs().forEach(i => {
+      const item = i.closest('.config-slider-item');
+      const span = item && item.querySelector('.valor-porcentaje-num');
+      if (span) span.textContent = Math.round(parseFloat(i.value) || 0);
+    });
+  }
+
+  function actualizarTotalYCampoOculto() {
+    const total = inputs().reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+    if (totalTexto) totalTexto.textContent = Math.round(total) + '%';
+    campoOculto.value = inputs().map(i => Math.round(parseFloat(i.value) || 0)).join(',');
+    actualizarValoresVisibles();
+  }
+
+  function redistribuir(inputCambiado) {
+    const todos = inputs();
+    const otros = todos.filter(i => i !== inputCambiado);
+    if (otros.length === 0) return;
+
+    const nuevoValor = Math.max(0, Math.min(100, Math.round(parseFloat(inputCambiado.value) || 0)));
+    inputCambiado.value = nuevoValor;
+
+    const sumaAnteriorOtros = otros.reduce((acc, i) => acc + (parseFloat(i.dataset.valorAnterior) || 0), 0);
+    const restante = Math.max(0, 100 - nuevoValor);
+
+    if (sumaAnteriorOtros <= 0) {
+      const base = Math.floor(restante / otros.length);
+      otros.forEach(i => { i.value = base; });
+    } else {
+      otros.forEach(i => {
+        const anterior = parseFloat(i.dataset.valorAnterior) || 0;
+        i.value = Math.floor(restante * (anterior / sumaAnteriorOtros));
+      });
+    }
+
+    // Ajuste fino: repartir en enteros puede dejar 1-2 puntos sin asignar
+    // (por el redondeo hacia abajo de arriba) -- se los suma al primero de
+    // los otros para que el total siempre cierre en 100 justo.
+    const totalAhora = todos.reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+    const diferencia = Math.round(100 - totalAhora);
+    if (diferencia !== 0) {
+      otros[0].value = Math.max(0, parseFloat(otros[0].value) + diferencia);
+    }
+
+    guardarValoresAnteriores();
+    actualizarTotalYCampoOculto();
+  }
+
+  // Si no había ningún % cargado todavía (empresa nueva usando esto por
+  // primera vez), se arranca con un reparto parejo entre todas en vez de
+  // dejarlas todas en 0 -- 0% en todas haría que _elegir_descripcion caiga
+  // al sorteo parejo de siempre, pero visualmente confunde ver "Total: 0%"
+  // apenas se abre la pestaña.
+  const totalInicial = inputs().reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+  if (totalInicial <= 0) {
+    const todos = inputs();
+    const base = Math.floor(100 / todos.length);
+    todos.forEach((i, idx) => { i.value = idx === todos.length - 1 ? (100 - base * (todos.length - 1)) : base; });
+  }
+
+  guardarValoresAnteriores();
+  actualizarTotalYCampoOculto();
+  inputs().forEach(inp => inp.addEventListener('input', () => redistribuir(inp)));
+})();
+
+/* ---------- Recargar la página sin que se mueva el scroll ----------
+   Varias acciones (marcar como facturado/pendiente, facturar, editar,
+   subir CSV/Excel, etc.) recargan la página para que la tabla refleje el
+   cambio -- pero un reload normal siempre vuelve al scroll (0,0), lo que
+   obliga a desplazarse de nuevo hacia la derecha/abajo después de CADA
+   click si se está trabajando fila por fila. Estas dos funciones guardan
+   la posición del scroll (tanto el de la tabla hacia los costados como el
+   de la página hacia abajo) justo antes de recargar, y la restauran apenas
+   carga de nuevo -- así se puede clickear rápido, fila tras fila, sin
+   tener que reubicarse en la tabla cada vez. */
+function recargarConservandoScroll() {
+  try {
+    const tablaScroll = document.getElementById('tablaScroll');
+    sessionStorage.setItem('facturea_scroll_x', String(tablaScroll ? tablaScroll.scrollLeft : 0));
+    sessionStorage.setItem('facturea_scroll_y', String(window.scrollY || window.pageYOffset || 0));
+  } catch (e) {}
+  window.location.reload();
+}
+
+(function restaurarScrollTrasRecargar() {
+  let x, y;
+  try {
+    x = sessionStorage.getItem('facturea_scroll_x');
+    y = sessionStorage.getItem('facturea_scroll_y');
+    if (x === null && y === null) return;
+    sessionStorage.removeItem('facturea_scroll_x');
+    sessionStorage.removeItem('facturea_scroll_y');
+  } catch (e) { return; }
+  const restaurar = () => {
+    const tablaScroll = document.getElementById('tablaScroll');
+    if (tablaScroll && x !== null) tablaScroll.scrollLeft = parseInt(x, 10) || 0;
+    if (y !== null) window.scrollTo(0, parseInt(y, 10) || 0);
+  };
+  // Se espera a que la tabla termine de pintarse (2 frames) antes de
+  // aplicar el scroll -- si se hace antes de tiempo, el navegador todavía
+  // no calculó el ancho/alto real y la restauración no tiene efecto.
+  requestAnimationFrame(() => requestAnimationFrame(restaurar));
+})();
+
+const EMPRESA_ID = {{ empresa.id }};
+const SUPPORT_WHATSAPP = {{ support_whatsapp | tojson }};
+const DATOS_REVISION = {{ datos_revision | tojson }};
+const CAMPOS_REVISION = [
+  { campo: 'precio_unitario', etiqueta: 'Monto', tipo: 'numero' },
+  { campo: 'fecha_facturacion_manual', etiqueta: 'Fecha de facturación', tipo: 'date' },
+  {% if empresa.tipo_contribuyente == "Responsable Inscripto" %}
+  { campo: 'alicuota_iva', etiqueta: 'Alícuota de IVA', tipo: 'select' },
+  {% endif %}
+  { campo: 'tipo_comprobante', etiqueta: 'Tipo de factura', tipo: 'select' },
+  { campo: 'fecha_comprobante', etiqueta: 'Fecha del comprobante', tipo: 'date' },
+  { campo: 'concepto', etiqueta: 'Concepto', tipo: 'select' },
+  { campo: 'fecha_desde', etiqueta: 'Desde', tipo: 'date' },
+  { campo: 'fecha_hasta', etiqueta: 'Hasta', tipo: 'date' },
+  { campo: 'cuit_receptor', etiqueta: 'CUIL/CUIT/Documento', tipo: 'texto' },
+  { campo: 'tipo_documento', etiqueta: 'Tipo de documento', tipo: 'select' },
+  { campo: 'medio_pago_detectado', etiqueta: 'Medio de pago detectado', tipo: 'select' },
+  { campo: 'condicion_iva', etiqueta: 'Condición de IVA', tipo: 'select' },
+  { campo: 'condicion_venta', etiqueta: 'Condición de venta', tipo: 'select' },
+  { campo: 'tipo_pago', etiqueta: 'Tipo de tarjeta', tipo: 'select' },
+  { campo: 'tipo_pago_detalle', etiqueta: 'Detalle (si elegiste "Otra...")', tipo: 'texto' },
+  { campo: 'numero_pago', etiqueta: 'Número de tarjeta', tipo: 'texto' },
+  { campo: 'descripcion', etiqueta: 'Descripción', tipo: '{{ "select" if empresa.tipo_contribuyente == "Responsable Inscripto" else "texto" }}' },
+  { campo: 'cantidad', etiqueta: 'Cantidad', tipo: 'numero' },
+  { campo: 'unidad_medida', etiqueta: 'Unidad de medida', tipo: 'select' },
+  { campo: 'nombre_razon_social', etiqueta: 'Recibe', tipo: 'texto' },
+  { campo: 'id_transaccion', etiqueta: 'ID transacción', tipo: 'texto' },
+  { campo: 'punto_venta', etiqueta: 'Punto de venta', tipo: 'texto' },
+];
+
+const LISTAS = {
+  tipo_comprobante: {{ opciones_tipo_comprobante | tojson }},
+  condicion_iva: {{ opciones_condicion_iva | tojson }},
+  medio_pago_detectado: {{ opciones_medio_pago_detectado | tojson }},
+  tipo_documento: {{ opciones_tipo_doc | tojson }},
+  condicion_venta: {{ opciones_condicion_venta | tojson }},
+  tipo_pago_debito: {{ opciones_tipo_pago_debito | tojson }},
+  tipo_pago_credito: {{ opciones_tipo_pago_credito | tojson }},
+  unidad_medida: {{ opciones_unidad_medida | tojson }},
+  alicuota_iva: ["NO_GRAVADO", "EXENTO", "0", "2.5", "5", "10.5", "21", "27"],
+};
+const MAPA_ALICUOTA_ETIQUETAS = {{ dict(opciones_alicuota_iva) | tojson }};
+const CONCEPTOS = {{ conceptos | tojson }};
+const ES_RESPONSABLE_INSCRIPTO = {{ (empresa.tipo_contribuyente == "Responsable Inscripto") | tojson }};
+const DESCRIPCIONES_ALICUOTA = {{ descripciones_con_alicuota | tojson }};
+
+function opcionesDescripcionPara() {
+  // Cada opción muestra "Descripción (alícuota%)" para elegir a simple
+  // vista, pero el VALOR que se guarda es solo la descripción tal cual --
+  // el mismo texto que después usa alicuota_para_descripcion() del lado
+  // del servidor para reconocerla y aplicar la alícuota sola.
+  return DESCRIPCIONES_ALICUOTA.map(([d, a]) => [d, a ? `${d} (${MAPA_ALICUOTA_ETIQUETAS[a] || a})` : d]);
+}
+
+function opcionesAlicuotaPara() {
+  return LISTAS.alicuota_iva.map(v => [v, MAPA_ALICUOTA_ETIQUETAS[v] || v]);
+}
+
+function opcionesTipoPagoPara(medioPago) {
+  const lista = medioPago === 'Crédito' ? LISTAS.tipo_pago_credito : LISTAS.tipo_pago_debito;
+  return lista.map(v => [v, v]);
+}
+
+function etiquetaAlicuota(valor) {
+  return valor ? (MAPA_ALICUOTA_ETIQUETAS[valor] || valor) : '—';
+}
+
+// Widget reutilizable para "Descripción": un desplegable con las opciones
+// precargadas de la empresa, más una opción para escribir un texto libre a
+// mano -- se usa tanto en el campo principal del comprobante como en cada
+// línea extra. `onGuardar(valorNuevo)` se llama al confirmar un cambio,
+// sea por el desplegable o por el texto escrito a mano.
+function crearWidgetDescripcion(valorActual, onGuardar) {
+  const contenedor = document.createElement('div');
+  contenedor.className = 'widget-descripcion';
+
+  function mostrarTexto(valorInicial) {
+    contenedor.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valorInicial;
+    input.placeholder = 'Escribí la descripción...';
+    input.addEventListener('blur', () => onGuardar(input.value));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    contenedor.appendChild(input);
+
+    const volver = document.createElement('button');
+    volver.type = 'button';
+    volver.className = 'btn-volver-lista';
+    volver.textContent = '▾ elegir de la lista';
+    volver.addEventListener('click', mostrarSelect);
+    contenedor.appendChild(volver);
+    input.focus();
+  }
+
+  function mostrarSelect() {
+    contenedor.innerHTML = '';
+    const select = document.createElement('select');
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    select.appendChild(vacio);
+    opcionesDescripcionPara().forEach(([v, t]) => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = t;
+      if (v === valorActual) opt.selected = true;
+      select.appendChild(opt);
+    });
+    const optManual = document.createElement('option');
+    optManual.value = '__MANUAL__';
+    optManual.textContent = '✏️ Escribir manualmente...';
+    select.appendChild(optManual);
+    select.addEventListener('change', () => {
+      if (select.value === '__MANUAL__') {
+        mostrarTexto('');
+      } else {
+        onGuardar(select.value);
+      }
+    });
+    contenedor.appendChild(select);
+  }
+
+  // Si ya tenía cargado un texto que no coincide con ninguna opción
+  // precargada (lo escribieron a mano antes, o el lector detectó algo
+  // distinto), arranca directo en modo texto en vez de mostrar el
+  // desplegable con nada seleccionado.
+  const coincideConOpcion = DESCRIPCIONES_ALICUOTA.some(([d]) => d === valorActual);
+  if (valorActual && !coincideConOpcion) {
+    mostrarTexto(valorActual);
+  } else {
+    mostrarSelect();
+  }
+
+  return contenedor;
+}
+
+// Widget reutilizable para el "Detalle" de Tipo de tarjeta cuando se elige
+// "Otra...": mismo mecanismo que crearWidgetDescripcion (desplegable con
+// opciones precargadas + opción para escribir a mano), pero con la lista
+// fija de marcas que no son una opción real de ARCA -- hoy solo
+// "VISA Débito" (Visa a secas en Débito, distinto de "Visa Electrón").
+const OPCIONES_DETALLE_TARJETA_OTRA = ["VISA Débito"];
+function crearWidgetDetalleTarjeta(valorActual, onGuardar) {
+  const contenedor = document.createElement('div');
+  contenedor.className = 'widget-descripcion';
+
+  function mostrarTexto(valorInicial) {
+    contenedor.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valorInicial;
+    input.placeholder = 'Escribí el detalle...';
+    input.addEventListener('blur', () => onGuardar(input.value));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    contenedor.appendChild(input);
+
+    const volver = document.createElement('button');
+    volver.type = 'button';
+    volver.className = 'btn-volver-lista';
+    volver.textContent = '▾ elegir de la lista';
+    volver.addEventListener('click', mostrarSelect);
+    contenedor.appendChild(volver);
+    input.focus();
+  }
+
+  function mostrarSelect() {
+    contenedor.innerHTML = '';
+    const select = document.createElement('select');
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    select.appendChild(vacio);
+    OPCIONES_DETALLE_TARJETA_OTRA.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      if (v === valorActual) opt.selected = true;
+      select.appendChild(opt);
+    });
+    const optManual = document.createElement('option');
+    optManual.value = '__MANUAL__';
+    optManual.textContent = '✏️ Escribir manualmente...';
+    select.appendChild(optManual);
+    select.addEventListener('change', () => {
+      if (select.value === '__MANUAL__') {
+        mostrarTexto('');
+      } else {
+        onGuardar(select.value);
+      }
+    });
+    contenedor.appendChild(select);
+  }
+
+  const coincideConOpcion = OPCIONES_DETALLE_TARJETA_OTRA.includes(valorActual);
+  if (valorActual && !coincideConOpcion) {
+    mostrarTexto(valorActual);
+  } else {
+    mostrarSelect();
+  }
+
+  return contenedor;
+}
+
+// Qué "Condición de IVA" del receptor puede elegirse depende de qué Tipo de
+// comprobante se va a emitir -- confirmado con capturas reales de ARCA:
+// Factura A solo puede ir a alguien inscripto/monotributo (no a Consumidor
+// Final ni Exento); Factura B es al revés, para todos los demás. Cualquier
+// otro tipo (C, T, etc.) usa la lista completa de siempre.
+const CONDICION_IVA_FACTURA_A = [
+  "IVA Responsable Inscripto", "Responsable Monotributo",
+  "Monotributista Social", "Monotributista Trabajador Independiente Promovido",
+];
+const CONDICION_IVA_FACTURA_B = [
+  "IVA Sujeto Exento", "Consumidor Final", "Sujeto No Categorizado",
+  "Proveedor del Exterior", "Cliente del Exterior",
+  "IVA Liberado - Ley Nº 19.640", "IVA No Alcanzado",
+];
+function opcionesCondicionIvaPara(tipoComprobante) {
+  const tipo = (tipoComprobante || '').trim();
+  if (tipo.endsWith(' A')) return CONDICION_IVA_FACTURA_A;
+  if (tipo.endsWith(' B')) return CONDICION_IVA_FACTURA_B;
+  return LISTAS.condicion_iva;
+}
+
+/* ---------- Barra de scroll horizontal "fantasma" ---------- */
+(function () {
+  const tablaScroll = document.getElementById('tablaScroll');
+  const tabla = document.getElementById('tablaComprobantes');
+  const wrap = document.getElementById('scrollFantasmaWrap');
+  const fantasma = document.getElementById('scrollFantasma');
+  if (!tablaScroll || !tabla || !wrap || !fantasma) return; // no hay comprobantes cargados, no hay tabla
+
+  let sincronizando = false;
+
+  function actualizar() {
+    fantasma.style.width = tabla.scrollWidth + 'px';
+    // Solo se muestra si la tabla realmente desborda a los costados -- si
+    // entra completa en la pantalla, no hace falta ninguna barra extra.
+    wrap.style.display = (tabla.scrollWidth > tablaScroll.clientWidth) ? 'block' : 'none';
+  }
+
+  tablaScroll.addEventListener('scroll', () => {
+    if (sincronizando) return;
+    sincronizando = true;
+    wrap.scrollLeft = tablaScroll.scrollLeft;
+    sincronizando = false;
+  });
+  wrap.addEventListener('scroll', () => {
+    if (sincronizando) return;
+    sincronizando = true;
+    tablaScroll.scrollLeft = wrap.scrollLeft;
+    sincronizando = false;
+  });
+
+  window.addEventListener('resize', actualizar);
+  actualizar();
+})();
+
+function ddmmyyyyAIso(f) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(f || '');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+function isoADdmmyyyy(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
+function activarEdicion(td) {
+  if (!td.dataset.field || td.querySelector('input,select')) return;
+
+  const campo = td.dataset.field;
+  const tipo = td.dataset.type;
+  const valorActual = td.dataset.value || '';
+  let widget;
+
+  if (tipo === 'select') {
+    widget = document.createElement('select');
+    let opciones;
+    if (campo === 'concepto') {
+      opciones = Object.entries(CONCEPTOS).map(([v, t]) => [v, t]);
+    } else if (campo === 'condicion_iva') {
+      const tdTipoComprobante = td.closest('tr').querySelector('td[data-field="tipo_comprobante"]');
+      opciones = opcionesCondicionIvaPara(tdTipoComprobante ? tdTipoComprobante.dataset.value : '').map(v => [v, v]);
+    } else if (campo === 'descripcion') {
+      opciones = opcionesDescripcionPara();
+    } else if (campo === 'alicuota_iva') {
+      opciones = opcionesAlicuotaPara();
+    } else if (campo === 'tipo_pago') {
+      const tdMedioPago = td.closest('tr').querySelector('td[data-field="medio_pago_detectado"]');
+      opciones = opcionesTipoPagoPara(tdMedioPago ? tdMedioPago.dataset.value : '');
+    } else {
+      opciones = (LISTAS[campo] || []).map(v => [v, v]);
+    }
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    widget.appendChild(vacio);
+    opciones.forEach(([valor, texto]) => {
+      const opt = document.createElement('option');
+      opt.value = valor; opt.textContent = texto;
+      if (valor === valorActual) opt.selected = true;
+      widget.appendChild(opt);
+    });
+    widget.addEventListener('change', () => {
+      const textoMostrar = (campo === 'descripcion') ? widget.value : widget.options[widget.selectedIndex].textContent;
+      guardarCampo(td, campo, widget.value, textoMostrar);
+    });
+  } else if (tipo === 'date') {
+    widget = document.createElement('input');
+    widget.type = 'date';
+    widget.value = ddmmyyyyAIso(valorActual);
+    const confirmarFecha = () => {
+      if (!widget.value) return; // todavía no terminó de tipear una fecha válida
+      const nuevo = isoADdmmyyyy(widget.value);
+      guardarCampo(td, campo, nuevo, nuevo);
+    };
+    widget.addEventListener('blur', confirmarFecha);
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else if (tipo === 'number') {
+    widget = document.createElement('input');
+    widget.type = 'number'; widget.step = '0.01';
+    widget.value = valorActual;
+    const confirmar = () => guardarCampo(td, campo, widget.value, widget.value);
+    widget.addEventListener('blur', confirmar);
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else {
+    widget = document.createElement('input');
+    widget.type = 'text';
+    widget.value = valorActual;
+    const confirmar = () => guardarCampo(td, campo, widget.value, widget.value || '—');
+    widget.addEventListener('blur', confirmar);
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  }
+
+  td.textContent = '';
+  td.appendChild(widget);
+  widget.focus();
+}
+
+function actualizarBotonesFacturarProbar(fila) {
+  const tdMonto = fila.querySelector('td[data-field="precio_unitario"]');
+  const tdTipo = fila.querySelector('td[data-field="tipo_comprobante"]');
+  const tdTipoDoc = fila.querySelector('td[data-field="tipo_documento"]');
+  const tdCuit = fila.querySelector('td[data-field="cuit_receptor"]');
+  const montoBajo = tdMonto ? (parseFloat(tdMonto.dataset.value) || 0) < 100 : false;
+  const tipoComprobante = tdTipo ? (tdTipo.dataset.value || '').trim() : '';
+  const tipoDocumento = tdTipoDoc ? (tdTipoDoc.dataset.value || '').trim().toUpperCase() : '';
+  const cuit = tdCuit ? (tdCuit.dataset.value || '').trim() : '';
+  const exigeCuit = tipoComprobante.endsWith(' A') || tipoDocumento === 'CUIT' || tipoDocumento === 'CUIL';
+  const faltaCuit = exigeCuit && !cuit;
+
+  fila.classList.toggle('fila-monto-bajo', montoBajo || faltaCuit);
+  let titulo = '';
+  if (montoBajo) titulo = 'Monto inválido -- corregilo antes de facturar';
+  else if (faltaCuit) titulo = 'Falta el número de documento -- obligatorio para este tipo de comprobante/documento';
+  [fila.querySelector('.btn-facturar'), fila.querySelector('.btn-probar')].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = montoBajo || faltaCuit;
+    btn.title = titulo;
+  });
+}
+
+function actualizarAvisoCuitFacturaA(fila) {
+  const tdTipo = fila.querySelector('td[data-field="tipo_comprobante"]');
+  const tdTipoDoc = fila.querySelector('td[data-field="tipo_documento"]');
+  const tdCuit = fila.querySelector('td[data-field="cuit_receptor"]');
+  if (!tdCuit) return;
+  const tipoComprobante = tdTipo ? (tdTipo.dataset.value || '').trim() : '';
+  const tipoDocumento = tdTipoDoc ? (tdTipoDoc.dataset.value || '').trim().toUpperCase() : '';
+  const cuit = (tdCuit.dataset.value || '').trim();
+  const exigeCuit = tipoComprobante.endsWith(' A') || tipoDocumento === 'CUIT' || tipoDocumento === 'CUIL';
+  const faltaCuit = exigeCuit && !cuit;
+
+  tdCuit.classList.toggle('monto-revisar', faltaCuit);
+  let badge = tdCuit.querySelector('.badge-revisar');
+  if (faltaCuit && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'badge-revisar';
+    badge.title = 'Este tipo de comprobante o de documento exige el número -- corregilo antes de facturar.';
+    badge.textContent = 'REVISAR';
+    tdCuit.appendChild(badge);
+  } else if (!faltaCuit && badge) {
+    badge.remove();
+  }
+
+  actualizarBotonesFacturarProbar(fila);
+}
+
+async function guardarCampo(td, campo, valor, textoMostrar) {
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${td.closest('tr').dataset.comprobanteId}/editar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campo, valor }),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo guardar: ' + data.error);
+      td.textContent = td.dataset.value || '—';
+      return;
+    }
+    td.dataset.value = valor;
+    if (campo === 'precio_unitario') {
+      const montoNum = parseFloat(valor) || 0;
+      const montoBajo = montoNum < 100;
+      td.className = 'celda-monto' + (montoBajo ? ' monto-revisar' : '');
+      td.textContent = `$ ${montoNum.toFixed(2)}`;
+      if (montoBajo) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-revisar';
+        badge.title = 'Un comprobante con este monto no se puede facturar -- corregilo antes.';
+        badge.textContent = 'REVISAR';
+        td.appendChild(badge);
+      }
+      actualizarBotonesFacturarProbar(td.closest('tr'));
+    } else {
+      td.textContent = textoMostrar || valor || '—';
+    }
+
+    // El servidor ya recalculó Desde, Hasta y la fecha de facturación a
+    // partir de esta fecha nueva -- se refleja acá sin repetir esa cuenta.
+    if (campo === 'fecha_comprobante') {
+      const fila = td.closest('tr');
+      ['fecha_desde', 'fecha_hasta'].forEach(campoDependiente => {
+        if (!data[campoDependiente]) return;
+        const tdDependiente = fila.querySelector(`td[data-field="${campoDependiente}"]`);
+        if (tdDependiente) {
+          tdDependiente.dataset.value = data[campoDependiente];
+          tdDependiente.textContent = data[campoDependiente];
+        }
+      });
+      if (data.fecha_facturacion_manual) {
+        const tdFacturacion = fila.querySelector('.col-fecha-ajustada');
+        if (tdFacturacion) tdFacturacion.textContent = data.fecha_facturacion_manual;
+      }
+      if (data.concepto) {
+        const tdConcepto = fila.querySelector('td[data-field="concepto"]');
+        if (tdConcepto) {
+          tdConcepto.dataset.value = data.concepto;
+          tdConcepto.textContent = CONCEPTOS[data.concepto] || '—';
+        }
+      }
+    }
+
+    // Si esta descripción tiene una alícuota propia cargada para la
+    // empresa, el servidor ya la aplicó sola -- se refleja acá.
+    if (campo === 'descripcion' && data.alicuota_iva) {
+      const fila = td.closest('tr');
+      const tdAlicuota = fila.querySelector('td[data-field="alicuota_iva"]');
+      if (tdAlicuota) {
+        tdAlicuota.dataset.value = data.alicuota_iva;
+        tdAlicuota.textContent = etiquetaAlicuota(data.alicuota_iva);
+      }
+    }
+
+    // Factura A (y variantes: Nota de Débito/Crédito A, Recibo A, FCE A)
+    // exige CUIT del receptor siempre -- si se tocó cualquiera de los dos
+    // campos involucrados, se recalcula el aviso.
+    if (campo === 'tipo_comprobante' || campo === 'cuit_receptor' || campo === 'tipo_documento') {
+      actualizarAvisoCuitFacturaA(td.closest('tr'));
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    td.textContent = td.dataset.value || '—';
+  }
+}
+
+document.querySelectorAll('td[data-field]').forEach(td => {
+  td.addEventListener('dblclick', () => activarEdicion(td));
+});
+
+/* ---------- Edición de columna completa (desde el encabezado) ---------- */
+function activarEdicionColumna(th) {
+  if (!th.dataset.field || th.querySelector('input,select')) return;
+
+  const campo = th.dataset.field;
+  const tipo = th.dataset.type;
+  const tituloOriginal = th.textContent;
+  let widget;
+
+  const confirmarYAplicar = (valor, textoMostrar) => {
+    const cantidadFilas = document.querySelectorAll(`td[data-field="${campo}"]`).length;
+    const ok = confirm(`Esto va a poner "${textoMostrar || valor}" en la columna "${tituloOriginal}" de las ${cantidadFilas} filas pendientes. ¿Confirmás?`);
+    if (!ok) {
+      th.textContent = tituloOriginal;
+      return;
+    }
+    guardarColumnaCompleta(th, campo, valor, tituloOriginal);
+  };
+
+  if (tipo === 'select') {
+    widget = document.createElement('select');
+    let opciones;
+    if (campo === 'concepto') {
+      opciones = Object.entries(CONCEPTOS).map(([v, t]) => [v, t]);
+    } else if (campo === 'descripcion') {
+      opciones = opcionesDescripcionPara();
+    } else if (campo === 'alicuota_iva') {
+      opciones = opcionesAlicuotaPara();
+    } else if (campo === 'tipo_pago') {
+      // Acá se aplica el mismo valor a TODAS las filas pendientes de
+      // golpe, sin una fila puntual de la que sacar el medio de pago -- se
+      // ofrecen débito y crédito juntas nada más para este caso particular.
+      opciones = [...LISTAS.tipo_pago_debito, ...LISTAS.tipo_pago_credito].map(v => [v, v]);
+    } else {
+      opciones = (LISTAS[campo] || []).map(v => [v, v]);
+    }
+    const vacio = document.createElement('option');
+    vacio.value = ''; vacio.textContent = 'seleccionar...';
+    widget.appendChild(vacio);
+    opciones.forEach(([valor, texto]) => {
+      const opt = document.createElement('option');
+      opt.value = valor; opt.textContent = texto;
+      widget.appendChild(opt);
+    });
+    widget.addEventListener('change', () => {
+      const textoMostrar = (campo === 'descripcion') ? widget.value : widget.options[widget.selectedIndex].textContent;
+      confirmarYAplicar(widget.value, textoMostrar);
+    });
+  } else if (tipo === 'date') {
+    widget = document.createElement('input');
+    widget.type = 'date';
+    widget.addEventListener('blur', () => {
+      if (!widget.value) { th.textContent = tituloOriginal; return; } // todavía no terminó de tipear una fecha válida
+      const nuevo = isoADdmmyyyy(widget.value);
+      confirmarYAplicar(nuevo, nuevo);
+    });
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else if (tipo === 'number') {
+    widget = document.createElement('input');
+    widget.type = 'number'; widget.step = '0.01';
+    widget.addEventListener('blur', () => { if (widget.value !== '') confirmarYAplicar(widget.value, widget.value); else th.textContent = tituloOriginal; });
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  } else {
+    widget = document.createElement('input');
+    widget.type = 'text';
+    widget.addEventListener('blur', () => { if (widget.value !== '') confirmarYAplicar(widget.value, widget.value); else th.textContent = tituloOriginal; });
+    widget.addEventListener('keydown', e => { if (e.key === 'Enter') widget.blur(); });
+  }
+
+  th.textContent = '';
+  th.appendChild(widget);
+  widget.focus();
+}
+
+async function guardarColumnaCompleta(th, campo, valor, tituloOriginal) {
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/editar-columna`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campo, valor }),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo aplicar a la columna: ' + data.error);
+      th.textContent = tituloOriginal;
+      return;
+    }
+    recargarConservandoScroll(); // recarga para que todas las filas reflejen el cambio (y recalculen importe si hacía falta)
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    th.textContent = tituloOriginal;
+  }
+}
+
+document.querySelectorAll('thead th[data-field]').forEach(th => {
+  th.addEventListener('dblclick', () => activarEdicionColumna(th));
+});
+
+document.querySelectorAll('.btn-editar-fila').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tr = btn.closest('tr');
+    tr.querySelectorAll('td[data-field]').forEach(td => activarEdicion(td));
+  });
+});
+
+document.querySelectorAll('.btn-eliminar').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!confirm('¿Eliminar este comprobante? No se puede deshacer.')) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/eliminar`, { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        btn.closest('tr').remove();
+      } else {
+        alert('No se pudo eliminar: ' + data.error);
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btn.disabled = false;
+    }
+  });
+});
+
+document.querySelectorAll('.btn-marcar-facturado').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/marcar-facturado`, { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        recargarConservandoScroll();
+      } else {
+        alert('No se pudo marcar como facturado: ' + data.error);
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btn.disabled = false;
+    }
+  });
+});
+
+document.querySelectorAll('.btn-marcar-pendiente').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/marcar-pendiente`, { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        recargarConservandoScroll();
+      } else {
+        alert('No se pudo marcar como pendiente: ' + data.error);
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btn.disabled = false;
+    }
+  });
+});
+
+document.querySelectorAll('.btn-preview-pdf').forEach(btn => {
+  btn.addEventListener('click', () => {
+    window.open(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/vista-previa.pdf`, '_blank');
+  });
+});
+
+/* ---------- Selección múltiple: marcar como facturado / eliminar en masa ----------
+   Tildando varias filas a la izquierda aparece una barra fija arriba con dos
+   botones que actúan sobre TODAS las tildadas de una sola vez -- para no
+   tener que repetir la acción fila por fila. */
+(function () {
+  const chkTodos = document.getElementById('chkSeleccionarTodos');
+  const filasCheckbox = Array.from(document.querySelectorAll('.chk-fila'));
+  const barra = document.getElementById('barraSeleccionMasiva');
+  const contador = document.getElementById('contadorSeleccionados');
+  const btnMarcarFacturadoMasivo = document.getElementById('btnMarcarFacturadoMasivo');
+  const btnEliminarMasivo = document.getElementById('btnEliminarMasivo');
+  const btnCancelarSeleccion = document.getElementById('btnCancelarSeleccion');
+  if (!barra || filasCheckbox.length === 0) return; // no hay tabla o no hay filas
+
+  function seleccionados() {
+    return filasCheckbox.filter(chk => chk.checked);
+  }
+
+  function actualizarBarra() {
+    const sel = seleccionados();
+    if (sel.length === 0) {
+      barra.classList.remove('visible');
+      return;
+    }
+    barra.classList.add('visible');
+    contador.textContent = sel.length === 1 ? '1 seleccionado' : `${sel.length} seleccionados`;
+    // "Marcar como facturado" no tiene sentido si TODOS los tildados ya
+    // están facturados -- se deshabilita para que no parezca que hizo algo.
+    const hayNoFacturados = sel.some(chk => chk.dataset.estado !== 'facturado');
+    btnMarcarFacturadoMasivo.disabled = !hayNoFacturados;
+  }
+
+  filasCheckbox.forEach(chk => chk.addEventListener('change', () => {
+    if (!chk.checked) chkTodos.checked = false;
+    else if (filasCheckbox.every(c => c.checked)) chkTodos.checked = true;
+    actualizarBarra();
+  }));
+
+  if (chkTodos) {
+    chkTodos.addEventListener('change', () => {
+      filasCheckbox.forEach(chk => { chk.checked = chkTodos.checked; });
+      actualizarBarra();
+    });
+  }
+
+  btnCancelarSeleccion.addEventListener('click', () => {
+    filasCheckbox.forEach(chk => { chk.checked = false; });
+    if (chkTodos) chkTodos.checked = false;
+    actualizarBarra();
+  });
+
+  btnMarcarFacturadoMasivo.addEventListener('click', async () => {
+    const ids = seleccionados().map(chk => parseInt(chk.dataset.id, 10));
+    if (!ids.length) return;
+    btnMarcarFacturadoMasivo.disabled = true;
+    btnEliminarMasivo.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/marcar-facturado-multiple`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        alert('No se pudo marcar como facturado: ' + (data.error || 'error desconocido'));
+        btnMarcarFacturadoMasivo.disabled = false;
+        btnEliminarMasivo.disabled = false;
+        return;
+      }
+      recargarConservandoScroll();
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btnMarcarFacturadoMasivo.disabled = false;
+      btnEliminarMasivo.disabled = false;
+    }
+  });
+
+  btnEliminarMasivo.addEventListener('click', async () => {
+    const sel = seleccionados();
+    const ids = sel.map(chk => parseInt(chk.dataset.id, 10));
+    if (!ids.length) return;
+    // Único cartel de confirmación para todo el lote (no uno por fila) --
+    // borrar en masa no se puede deshacer, así que vale la pena un click
+    // extra de seguridad acá aunque el resto de las acciones no pregunte.
+    if (!confirm(`¿Eliminar ${ids.length} comprobante(s) seleccionado(s)? No se puede deshacer.`)) return;
+    btnMarcarFacturadoMasivo.disabled = true;
+    btnEliminarMasivo.disabled = true;
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/eliminar-multiple`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        alert('No se pudo eliminar: ' + (data.error || 'error desconocido'));
+        btnMarcarFacturadoMasivo.disabled = false;
+        btnEliminarMasivo.disabled = false;
+        return;
+      }
+      if (data.omitidos_facturados) {
+        alert(`Se eliminaron ${data.eliminados}. ${data.omitidos_facturados} no se borraron porque ya estaban facturados.`);
+      }
+      recargarConservandoScroll();
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      btnMarcarFacturadoMasivo.disabled = false;
+      btnEliminarMasivo.disabled = false;
+    }
+  });
+})();
+
+// ---------- Modal "Ver error" + reportar a soporte ----------
+let idComprobanteError = null;
+
+function armarTextoWhatsapp(id, archivo, error) {
+  return `Hola! Tengo un error al facturar un comprobante en AutoFacturación.\n` +
+    `Comprobante: #${id}${archivo ? ' -- ' + archivo : ''}\n` +
+    `Error:\n${error}`;
+}
+
+function abrirModalVerError(btn) {
+  idComprobanteError = btn.dataset.id;
+  const archivo = btn.dataset.archivo || '';
+  const error = btn.dataset.error || 'No quedó guardado el detalle de este error.';
+
+  document.getElementById('verErrorArchivo').textContent = archivo;
+  document.getElementById('verErrorTexto').textContent = error;
+  document.getElementById('verErrorMsg').textContent = '';
+
+  const btnWhatsapp = document.getElementById('btnEnviarWhatsapp');
+  btnWhatsapp.href = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(armarTextoWhatsapp(idComprobanteError, archivo, error))}`;
+
+  const btnEmail = document.getElementById('btnEnviarEmail');
+  btnEmail.disabled = false;
+  btnEmail.textContent = 'Enviar por email a soporte';
+
+  document.getElementById('overlayVerError').classList.add('abierto');
+}
+
+function cerrarModalVerError() {
+  document.getElementById('overlayVerError').classList.remove('abierto');
+  idComprobanteError = null;
+}
+
+document.querySelectorAll('.btn-ver-error').forEach(btn => {
+  btn.addEventListener('click', () => abrirModalVerError(btn));
+});
+
+document.getElementById('btnCerrarVerError').addEventListener('click', cerrarModalVerError);
+
+document.getElementById('overlayVerError').addEventListener('click', (e) => {
+  if (e.target.id === 'overlayVerError') cerrarModalVerError();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('overlayVerError').classList.contains('abierto')) {
+    cerrarModalVerError();
+  }
+});
+
+document.getElementById('btnEnviarEmail').addEventListener('click', async () => {
+  if (!idComprobanteError) return;
+  const btnEmail = document.getElementById('btnEnviarEmail');
+  const msg = document.getElementById('verErrorMsg');
+  btnEmail.disabled = true;
+  btnEmail.textContent = 'Enviando...';
+  msg.style.color = '';
+  msg.textContent = '';
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${idComprobanteError}/reportar-error`, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      btnEmail.textContent = 'Enviado ✓';
+      msg.style.color = '#1FAA59';
+      msg.textContent = 'Le avisamos a soporte, te van a contactar a la brevedad.';
+    } else {
+      btnEmail.disabled = false;
+      btnEmail.textContent = 'Enviar por email a soporte';
+      msg.style.color = 'var(--warn-deep)';
+      msg.textContent = data.error || 'No se pudo enviar el reporte.';
+    }
+  } catch (e) {
+    btnEmail.disabled = false;
+    btnEmail.textContent = 'Enviar por email a soporte';
+    msg.style.color = 'var(--warn-deep)';
+    msg.textContent = 'No se pudo conectar con el servidor.';
+  }
+});
+
+document.querySelectorAll('.btn-facturar').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const ok = confirm(
+      'Esto genera una factura REAL en ARCA, con CAE, a nombre de esta empresa. ' +
+      'No se puede deshacer (solo anular con una Nota de Crédito). ¿Confirmás que querés facturar este comprobante?'
+    );
+    if (!ok) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Facturando...';
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/facturar`, { method: 'POST' });
+      const data = await r.json();
+      if (!data.ok) alert('No se pudo facturar: ' + data.error);
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+    }
+    recargarConservandoScroll();
+  });
+});
+
+document.querySelectorAll('.btn-probar').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const ok = confirm(
+      'Modo prueba: hace TODO el recorrido real en ARCA (login, empresa, punto de venta, ' +
+      'período, receptor, detalle) hasta la pantalla final de revisión, pero SIN confirmar -- ' +
+      'no se emite ninguna factura ni se genera CAE. Se va a abrir un navegador y quedarse unos ' +
+      '30 segundos en esa pantalla final para que la mires. ¿Arrancamos?'
+    );
+    if (!ok) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Probando...';
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${btn.dataset.id}/facturar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo_prueba: true }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        alert('Prueba terminada: llegó bien hasta la pantalla final de ARCA sin emitir nada. El comprobante sigue pendiente.');
+      } else {
+        alert('Se cortó durante la prueba: ' + data.error);
+      }
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Probar';
+  });
+});
+
+/* ---------- Facturación en lote: dispara un hilo en el servidor y
+   consulta el progreso por polling, para que se pueda cerrar la pestaña
+   o el navegador entero sin cortar nada -- sigue corriendo del lado del
+   servidor, totalmente aparte del navegador. ---------- */
+
+let pollingFacturacion = null;
+
+function formatoMonto(n) {
+  return `$${(n || 0).toLocaleString('es-AR')}`;
+}
+
+function asegurarPollingFacturacion() {
+  if (!pollingFacturacion) {
+    pollingFacturacion = setInterval(consultarEstadoFacturacion, 2000);
+  }
+}
+
+function detenerPollingFacturacion() {
+  if (pollingFacturacion) {
+    clearInterval(pollingFacturacion);
+    pollingFacturacion = null;
+  }
+}
+
+function actualizarUiProgresoFacturacion(estado) {
+  const btnFacturarTodo = document.getElementById('btnFacturarTodo');
+  const btnFacturarMonto = document.getElementById('btnFacturarMontoCargado');
+  const btnDetener = document.getElementById('btnDetenerFacturacion');
+  const msg = document.getElementById('facturacionMsg');
+
+  btnFacturarTodo.disabled = true;
+  btnFacturarMonto.disabled = true;
+  btnFacturarTodo.textContent = 'Facturando...';
+  btnFacturarMonto.textContent = 'Facturando...';
+  if (btnDetener.style.display === 'none') {
+    btnDetener.style.display = 'inline-block';
+    btnDetener.disabled = false;
+    btnDetener.textContent = 'Detener';
+  }
+  msg.style.display = 'block';
+  msg.textContent =
+    `Facturando ${estado.procesados}/${estado.total} · Facturados: ${estado.facturados} · ` +
+    `Errores: ${estado.errores} · Monto: ${formatoMonto(estado.monto_facturado)} — ` +
+    `podés cerrar esta pestaña o el navegador entero, sigue corriendo en el servidor.`;
+}
+
+async function consultarEstadoFacturacion() {
+  let data;
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos/estado`);
+    data = await r.json();
+  } catch (e) {
+    return; // fallo de red puntual -- se reintenta solo en la próxima vuelta del intervalo
+  }
+  if (!data.ok) return;
+
+  if (data.en_curso) {
+    actualizarUiProgresoFacturacion(data);
+    return;
+  }
+
+  if (!data.terminado) return; // nunca corrió ningún lote todavía -- nada que mostrar
+
+  // Terminó (recién ahora, mientras estábamos consultando activamente).
+  detenerPollingFacturacion();
+  document.getElementById('facturacionMsg').style.display = 'none';
+  document.getElementById('btnDetenerFacturacion').style.display = 'none';
+
+  if (data.error_fatal) {
+    alert(
+      'La facturación en lote se cortó por un error inesperado: ' + data.error_fatal +
+      '\n\nLo que ya se había facturado antes de cortarse quedó guardado; revisá la tabla.'
+    );
+  } else {
+    const corte = data.detenido_por_limite
+      ? '\n\nSe detuvo porque el próximo comprobante superaba el límite cargado. Quedaron comprobantes sin facturar.'
+      : data.detenido_manualmente
+      ? '\n\nSe detuvo porque se tocó "Detener". Quedaron comprobantes sin facturar.'
+      : '';
+    alert(
+      `Listo. Facturados: ${data.facturados} · Errores: ${data.errores} · ` +
+      `Monto facturado: ${formatoMonto(data.monto_facturado)}${corte}`
+    );
+  }
+  recargarConservandoScroll();
+}
+
+async function facturarTodosConLimite(btn, limiteMonto) {
+  const cantidadPendientes = document.querySelectorAll('.btn-facturar').length;
+  if (!cantidadPendientes) {
+    alert('No hay comprobantes pendientes para facturar.');
+    return;
+  }
+
+  const mensajeLimite = limiteMonto
+    ? ` Se va a detener apenas el acumulado facturado llegue a ${formatoMonto(limiteMonto)}.`
+    : '';
+  const ok = confirm(
+    `Esto va a facturar los comprobantes pendientes de esta empresa, UNO POR UNO, contra ARCA real. ` +
+    `Cada uno genera una factura real con CAE. No se puede deshacer.${mensajeLimite} ` +
+    `Podés cerrar esta pestaña o el navegador entero una vez que arranque -- sigue corriendo en el servidor. ¿Confirmás?`
+  );
+  if (!ok) return;
+
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Iniciando...';
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limite_monto: limiteMonto }),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo arrancar: ' + data.error);
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+      return;
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    return;
+  }
+
+  // Arrancó bien del lado del servidor -- desde acá en más, el progreso se
+  // sigue por polling, no importa si se cierra esta pestaña.
+  asegurarPollingFacturacion();
+  consultarEstadoFacturacion();
+}
+
+// Si había un lote corriendo de antes (se cerró la pestaña, o se recargó
+// la página, a mitad de camino), retoma mostrando el progreso apenas
+// carga -- pero solo si de verdad sigue en curso; si ya había terminado
+// de una corrida pasada, no hay nada que avisar de nuevo.
+(async () => {
+  let data;
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/facturar-todos/estado`);
+    data = await r.json();
+  } catch (e) {
+    return;
+  }
+  if (data.ok && data.en_curso) {
+    actualizarUiProgresoFacturacion(data);
+    asegurarPollingFacturacion();
+  }
+})();
+
+document.getElementById('btnDetenerFacturacion').addEventListener('click', async () => {
+  const btnDetener = document.getElementById('btnDetenerFacturacion');
+  btnDetener.disabled = true;
+  btnDetener.textContent = 'Deteniendo...';
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/detener-facturacion`, { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) {
+      alert('No se pudo detener: ' + data.error);
+      btnDetener.disabled = false;
+      btnDetener.textContent = 'Detener';
+    }
+    // Si salió bien, se deja deshabilitado con "Deteniendo..." -- se va a
+    // terminar de ocultar solo cuando la facturación en curso responda
+    // (después de terminar el comprobante que esté procesando en ese
+    // momento, no corta a mitad de uno).
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    btnDetener.disabled = false;
+    btnDetener.textContent = 'Detener';
+  }
+});
+
+document.getElementById('btnFacturarTodo').addEventListener('click', () => {
+  facturarTodosConLimite(document.getElementById('btnFacturarTodo'), null);
+});
+
+document.getElementById('btnFacturarMontoCargado').addEventListener('click', () => {
+  const input = document.getElementById('montoAFacturar');
+  const monto = parseFloat(input.value);
+  if (!monto || monto <= 0) {
+    alert('Cargá primero un monto mayor a 0 para poder facturar.');
+    return;
+  }
+  facturarTodosConLimite(document.getElementById('btnFacturarMontoCargado'), monto);
+});
+
+/* ---------- Comparador de duplicados ---------- */
+const itemsDuplicados = Array.from(document.querySelectorAll('.item-duplicado'));
+let indiceDuplicadoActual = -1;
+let mostrandoDuplicadoActual = false;
+
+function renderVisorDuplicado() {
+  if (indiceDuplicadoActual < 0) return;
+  const item = itemsDuplicados[indiceDuplicadoActual];
+  const comprobanteId = item.dataset.comprobanteId;
+  const registroId = item.dataset.registroId;
+  const tieneIntento = item.dataset.tieneIntento === 'true';
+
+  const titulo = document.getElementById('visorDuplicadoTitulo');
+  const toggleBtn = document.getElementById('btnToggleDuplicado');
+  const contenedorImagen = document.getElementById('visorDuplicadoImagen');
+
+  contenedorImagen.innerHTML = '';
+  if (mostrandoDuplicadoActual) {
+    if (!tieneIntento) {
+      titulo.textContent = 'No hay imagen guardada de este intento';
+      contenedorImagen.innerHTML = '<span class="sin-seleccion">No se guardó la imagen de este intento.</span>';
+    } else {
+      titulo.textContent = 'Mostrando: imagen del intento duplicado';
+      const url = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
+      if (item.textContent.trim().toLowerCase().endsWith('.pdf')) {
+        renderizarPdfEnVisor(url, contenedorImagen);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        contenedorImagen.appendChild(img);
+      }
+    }
+  } else {
+    if (!comprobanteId) {
+      titulo.textContent = 'No encontré el comprobante original';
+      contenedorImagen.innerHTML = '<span class="sin-seleccion">No encontré el comprobante original.</span>';
+    } else {
+      titulo.textContent = 'Mostrando: comprobante ORIGINAL';
+      const url = `/empresas/${EMPRESA_ID}/comprobantes/${comprobanteId}/archivo`;
+      if (item.textContent.trim().toLowerCase().endsWith('.pdf')) {
+        renderizarPdfEnVisor(url, contenedorImagen);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        contenedorImagen.appendChild(img);
+      }
+    }
+  }
+
+  toggleBtn.style.display = 'inline-block';
+  toggleBtn.textContent = mostrandoDuplicadoActual ? 'Ver comprobante original' : 'Ver imagen duplicada';
+}
+
+function seleccionarDuplicado(indice) {
+  if (indice < 0 || indice >= itemsDuplicados.length) return;
+  indiceDuplicadoActual = indice;
+  mostrandoDuplicadoActual = true; // al cambiar de archivo, arranca mostrando SU PROPIA imagen (no la del original compartido)
+  itemsDuplicados.forEach(i => i.classList.remove('seleccionado'));
+  const item = itemsDuplicados[indice];
+  item.classList.add('seleccionado');
+  renderVisorDuplicado();
+  try {
+    item.scrollIntoView({ block: 'nearest' });
+  } catch (e) {
+    // El scroll automático es solo comodidad visual -- si falla por lo que sea,
+    // no debe impedir que la imagen ya se haya mostrado arriba.
+  }
+}
+
+itemsDuplicados.forEach((item, indice) => {
+  item.addEventListener('click', () => seleccionarDuplicado(indice));
+});
+
+const btnToggleDuplicado = document.getElementById('btnToggleDuplicado');
+if (btnToggleDuplicado) {
+  btnToggleDuplicado.addEventListener('click', () => {
+    mostrandoDuplicadoActual = !mostrandoDuplicadoActual;
+    renderVisorDuplicado();
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (indiceDuplicadoActual < 0) return; // todavía no se eligió ningún archivo, no interferir
+  if (document.getElementById('overlayRevision').style.display === 'flex') return; // el panel de Revisión Manual tiene su propio manejo de flechas
+  const tabEstadisticas = document.getElementById('tabEstadisticas');
+  if (!tabEstadisticas || !tabEstadisticas.classList.contains('activa')) return; // solo mientras esa pestaña está a la vista
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; // no interferir con la edición de campos
+
+  if (e.key === 'ArrowDown') { e.preventDefault(); seleccionarDuplicado(indiceDuplicadoActual + 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); seleccionarDuplicado(indiceDuplicadoActual - 1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); mostrandoDuplicadoActual = true; renderVisorDuplicado(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); mostrandoDuplicadoActual = false; renderVisorDuplicado(); }
+});
+
+/* ---------- Visor de archivos con error de lectura ---------- */
+const itemsErrores = Array.from(document.querySelectorAll('#listaErrores .item-duplicado'));
+let indiceErrorActual = -1;
+
+function renderVisorError() {
+  if (indiceErrorActual < 0) return;
+  const item = itemsErrores[indiceErrorActual];
+  const registroId = item.dataset.registroId;
+  const tieneImagen = item.dataset.tieneImagen === 'true';
+
+  const titulo = document.getElementById('visorErrorTitulo');
+  const btnAgregar = document.getElementById('btnAgregarManualError');
+  const contenedorImagen = document.getElementById('visorErrorImagen');
+  const msg = document.getElementById('emFormMsg');
+  msg.textContent = '';
+  msg.className = 'msg';
+
+  contenedorImagen.innerHTML = '';
+  if (!tieneImagen) {
+    titulo.textContent = 'No hay imagen guardada de este archivo';
+    contenedorImagen.innerHTML = '<span class="sin-seleccion">No se guardó la imagen (se subió antes de este arreglo).</span>';
+    btnAgregar.style.display = 'none';
+  } else {
+    titulo.textContent = 'Mostrando: archivo con error de lectura';
+    const url = `/empresas/${EMPRESA_ID}/registros/${registroId}/archivo`;
+    if (item.textContent.trim().toLowerCase().endsWith('.pdf')) {
+      renderizarPdfEnVisor(url, contenedorImagen);
+    } else {
+      const img = document.createElement('img');
+      img.src = url;
+      contenedorImagen.appendChild(img);
+    }
+    btnAgregar.style.display = 'inline-block';
+  }
+}
+
+function seleccionarError(indice) {
+  if (indice < 0 || indice >= itemsErrores.length) return;
+  indiceErrorActual = indice;
+  itemsErrores.forEach(i => i.classList.remove('seleccionado'));
+  const item = itemsErrores[indice];
+  item.classList.add('seleccionado');
+  renderVisorError();
+  try {
+    item.scrollIntoView({ block: 'nearest' });
+  } catch (e) {
+    // Comodidad visual nomás -- si falla, la imagen ya se mostró arriba igual.
+  }
+}
+
+itemsErrores.forEach((item, indice) => {
+  item.addEventListener('click', () => seleccionarError(indice));
+});
+
+const emFormMsg = document.getElementById('emFormMsg');
+
+const btnAgregarManualError = document.getElementById('btnAgregarManualError');
+if (btnAgregarManualError) {
+  btnAgregarManualError.addEventListener('click', async () => {
+    const item = itemsErrores[indiceErrorActual];
+    if (!item) return;
+    const registroId = item.dataset.registroId;
+
+    emFormMsg.textContent = '';
+    emFormMsg.className = 'msg';
+    btnAgregarManualError.disabled = true;
+    btnAgregarManualError.textContent = 'Agregando...';
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/registros/${registroId}/agregar-manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        // Se guarda para, apenas recargue la página, abrir Revisión Manual
+        // directo en este comprobante -- así se completa entero (monto,
+        // fecha, concepto, CUIT, todo) con el mismo editor de siempre, sin
+        // tener que ir a buscarlo entre los pendientes.
+        sessionStorage.setItem('abrirRevisionComprobanteId', String(data.comprobante_id));
+        recargarConservandoScroll();
+      } else {
+        emFormMsg.textContent = data.error || 'No se pudo agregar.';
+        emFormMsg.className = 'msg error';
+        btnAgregarManualError.disabled = false;
+        btnAgregarManualError.textContent = 'Agregar y editar';
+      }
+    } catch (err) {
+      emFormMsg.textContent = 'No se pudo conectar con el servidor.';
+      emFormMsg.className = 'msg error';
+      btnAgregarManualError.disabled = false;
+      btnAgregarManualError.textContent = 'Agregar y editar';
+    }
+  });
+}
+
+// Muestra el/los nombre(s) del archivo elegido junto a cada botón "Seleccionar..."
+// de las tarjetas de carga (comprobantes propios, Payway, Galicia, NAVE).
+[
+  ['archivos', 'archivosNombre'],
+  ['archivoPayway', 'archivoPaywayNombre'],
+  ['archivoGalicia', 'archivoGaliciaNombre'],
+  ['archivoNave', 'archivoNaveNombre'],
+].forEach(([inputId, nombreId]) => {
+  const input = document.getElementById(inputId);
+  const nombreSpan = document.getElementById(nombreId);
+  if (!input || !nombreSpan) return;
+  input.addEventListener('change', () => {
+    if (!input.files.length) {
+      nombreSpan.textContent = 'Ningún archivo seleccionado';
+    } else if (input.files.length === 1) {
+      nombreSpan.textContent = input.files[0].name;
+    } else {
+      nombreSpan.textContent = `${input.files.length} archivos seleccionados`;
+    }
+  });
+});
+
+document.getElementById('btnSubir').addEventListener('click', async () => {
+  const input = document.getElementById('archivos');
+  const btn = document.getElementById('btnSubir');
+  const resumen = document.getElementById('resumen');
+
+  if (!input.files.length) {
+    resumen.style.display = 'block';
+    resumen.textContent = 'Elegí al menos un archivo primero.';
+    return;
+  }
+
+  const formData = new FormData();
+  for (const f of input.files) formData.append('archivos', f);
+
+  btn.disabled = true;
+  btn.textContent = 'Leyendo...';
+  try {
+    const r = await fetch(`/api/empresas/${EMPRESA_ID}/subir`, { method: 'POST', body: formData });
+    const data = await r.json();
+    resumen.style.display = 'block';
+    if (data.ok) {
+      let texto = `Nuevos: ${data.resumen.nuevos} · Duplicados: ${data.resumen.duplicados} · Errores: ${data.resumen.errores}`;
+      if (data.resumen.limite_plan > 0) {
+        texto += ` · Bloqueados por límite del plan: ${data.resumen.limite_plan} (escribinos por soporte para subir de plan)`;
+      }
+      resumen.textContent = texto;
+      setTimeout(() => recargarConservandoScroll(), 1000);
+    } else {
+      resumen.textContent = 'Error: ' + data.error;
+    }
+  } catch (e) {
+    resumen.style.display = 'block';
+    resumen.textContent = 'No se pudo conectar con el servidor.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Subir y leer archivos';
+  }
+});
+
+const btnTraerMercadoPago = document.getElementById('btnTraerMercadoPago');
+if (btnTraerMercadoPago) {
+  btnTraerMercadoPago.addEventListener('click', async () => {
+    const dias = prompt('¿Cuántos días hacia atrás querés traer? (máximo 90)', '30');
+    if (dias === null) return; // canceló el cuadro
+    const diasNum = parseInt(dias, 10);
+    if (!diasNum || diasNum < 1) {
+      alert('Poné un número de días válido.');
+      return;
+    }
+
+    const msg = document.getElementById('mercadopagoMsg');
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Trayendo movimientos de Mercado Pago...';
+    btnTraerMercadoPago.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/mercadopago/traer-movimientos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dias: diasNum }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo traer los movimientos.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} pagos -- ${data.nuevos} nuevos agregados a la tabla como "pendiente".`;
+      setTimeout(() => recargarConservandoScroll(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnTraerMercadoPago.disabled = false;
+    }
+  });
+}
+
+const btnSubirPayway = document.getElementById('btnSubirPayway');
+if (btnSubirPayway) {
+  btnSubirPayway.addEventListener('click', async () => {
+    const input = document.getElementById('archivoPayway');
+    const msg = document.getElementById('paywayMsg');
+
+    if (!input.files.length) {
+      msg.style.display = 'block';
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Elegí primero el archivo .csv que descargaste de MyPayway (Historial > Movimientos).';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', input.files[0]);
+
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Leyendo el CSV de Payway...';
+    btnSubirPayway.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/payway/importar-csv`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo importar el archivo.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} ventas en el archivo -- ${data.nuevos} nuevas agregadas a la tabla como "pendiente".`;
+      input.value = '';
+      setTimeout(() => recargarConservandoScroll(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnSubirPayway.disabled = false;
+    }
+  });
+}
+
+const btnSubirGalicia = document.getElementById('btnSubirGalicia');
+if (btnSubirGalicia) {
+  btnSubirGalicia.addEventListener('click', async () => {
+    const input = document.getElementById('archivoGalicia');
+    const msg = document.getElementById('galiciaMsg');
+
+    if (!input.files.length) {
+      msg.style.display = 'block';
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Elegí primero el archivo .xlsx que descargaste del home banking de Banco Galicia (Cuentas > Movimientos).';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', input.files[0]);
+
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Leyendo el Excel de Banco Galicia...';
+    btnSubirGalicia.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/galicia/importar-excel`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo importar el archivo.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} transferencias en el archivo -- ${data.nuevos} nuevas agregadas a la tabla como "pendiente".`;
+      input.value = '';
+      setTimeout(() => recargarConservandoScroll(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnSubirGalicia.disabled = false;
+    }
+  });
+}
+
+const btnSubirNave = document.getElementById('btnSubirNave');
+if (btnSubirNave) {
+  btnSubirNave.addEventListener('click', async () => {
+    const input = document.getElementById('archivoNave');
+    const msg = document.getElementById('naveMsg');
+
+    if (!input.files.length) {
+      msg.style.display = 'block';
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Elegí primero el archivo .xlsx del "Informe de detalles - Cobros con QR" que descargaste del panel de NAVE.';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', input.files[0]);
+
+    msg.style.display = 'block';
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Leyendo el Excel de NAVE...';
+    btnSubirNave.disabled = true;
+
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/nave/importar-excel`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = data.error || 'No se pudo importar el archivo.';
+        return;
+      }
+      msg.style.color = 'var(--blue-deep)';
+      msg.textContent = `Se encontraron ${data.encontrados} cobros en el archivo -- ${data.nuevos} nuevos agregados a la tabla como "pendiente".`;
+      input.value = '';
+      setTimeout(() => recargarConservandoScroll(), 1500);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'No se pudo conectar con el servidor.';
+    } finally {
+      btnSubirNave.disabled = false;
+    }
+  });
+}
+
+/* ---------- Revisión manual: imagen a la derecha, datos editables a la izquierda ---------- */
+
+let indiceRevision = 0;
+let promesaGuardadoActual = null; // el fetch en curso del último campo editado, si hay uno
+
+function abrirRevision(comprobanteId) {
+  if (!DATOS_REVISION.length) {
+    alert('No hay comprobantes para revisar.');
+    return;
+  }
+  indiceRevision = comprobanteId ? DATOS_REVISION.findIndex(c => c.id === comprobanteId) : 0;
+  if (indiceRevision < 0) indiceRevision = 0;
+  document.getElementById('overlayRevision').style.display = 'flex';
+  renderRevision();
+}
+
+async function forzarGuardadoPendiente() {
+  // Si hay un campo de texto/número enfocado con un cambio sin confirmar, el
+  // blur dispara su guardado -- lo esperamos para no perder ese último cambio.
+  const activo = document.activeElement;
+  if (activo && ['INPUT', 'SELECT'].includes(activo.tagName)) {
+    activo.blur();
+  }
+  if (promesaGuardadoActual) {
+    try { await promesaGuardadoActual; } catch (e) { /* el error ya se avisó en guardarCampoRevision */ }
+    promesaGuardadoActual = null;
+  }
+}
+
+async function cerrarRevision() {
+  await forzarGuardadoPendiente();
+  // Recargar para que la tabla de atrás refleje todo lo editado en el panel.
+  recargarConservandoScroll();
+}
+
+async function irARevision(delta) {
+  const nuevo = indiceRevision + delta;
+  if (nuevo < 0 || nuevo >= DATOS_REVISION.length) return;
+  await forzarGuardadoPendiente();
+  indiceRevision = nuevo;
+  renderRevision();
+}
+
+async function renderizarPdfEnVisor(url, contenedor) {
+  // Dibuja cada página del PDF en su propio <canvas>, en vez de confiar en
+  // que el navegador lo sepa mostrar solo dentro de un <iframe> -- ver el
+  // comentario de arriba de todo, junto a la carga de pdf.js.
+  contenedor.dataset.cargando = url;
+  contenedor.innerHTML = '<p class="sin-archivo">Cargando PDF...</p>';
+
+  try {
+    const pdf = await pdfjsLib.getDocument(url).promise;
+    if (contenedor.dataset.cargando !== url) return; // se pasó a otro comprobante mientras cargaba
+
+    contenedor.innerHTML = '';
+    const anchoDisponible = contenedor.clientWidth || 600;
+    // En el celular (ver breakpoint de 820px en el CSS), el visor tiene una
+    // altura FIJA -- ahí hay que ajustar la página por ancho Y por alto a
+    // la vez (como "contain" en una imagen), para que se vea SIEMPRE
+    // completa sin cortarse ni necesitar scroll. En la PC, el visor no
+    // tiene una altura fija (ocupa lo que haga falta con scroll propio si
+    // hace falta) -- ahí se sigue ajustando solo por ancho, como siempre.
+    const esMobile = window.innerWidth <= 820;
+    const altoDisponible = contenedor.clientHeight || 800;
+
+    for (let numPagina = 1; numPagina <= pdf.numPages; numPagina++) {
+      const pagina = await pdf.getPage(numPagina);
+      if (contenedor.dataset.cargando !== url) return;
+
+      const viewportBase = pagina.getViewport({ scale: 1 });
+      // "escalaMostrar" es el tamaño real que ocupa en pantalla (en píxeles
+      // CSS); "factorNitidez" solo agranda la resolución INTERNA del canvas
+      // para que no se vea pixelado en pantallas de alta densidad -- sin
+      // tocar el tamaño visual. Si se mezclaran los dos en una sola escala,
+      // el navegador termina reacomodando el tamaño visual solo (por el
+      // max-width:100% del CSS) y se pierde el ajuste por alto que se
+      // calculó acá.
+      let escalaMostrar;
+      if (esMobile) {
+        const escalaAncho = anchoDisponible / viewportBase.width;
+        const escalaAlto = altoDisponible / viewportBase.height;
+        escalaMostrar = Math.min(escalaAncho, escalaAlto);
+      } else {
+        escalaMostrar = anchoDisponible / viewportBase.width;
+      }
+      const factorNitidez = Math.min(window.devicePixelRatio || 1, 2);
+      const viewportMostrar = pagina.getViewport({ scale: escalaMostrar });
+      const viewportBuffer = pagina.getViewport({ scale: escalaMostrar * factorNitidez });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewportBuffer.width;
+      canvas.height = viewportBuffer.height;
+      canvas.style.width = viewportMostrar.width + 'px';
+      canvas.style.height = viewportMostrar.height + 'px';
+      contenedor.appendChild(canvas);
+
+      await pagina.render({ canvasContext: canvas.getContext('2d'), viewport: viewportBuffer }).promise;
+    }
+  } catch (err) {
+    if (contenedor.dataset.cargando !== url) return;
+    console.error('Error mostrando PDF con pdf.js:', err);
+    contenedor.innerHTML = `
+      <p class="sin-archivo">No se pudo mostrar el PDF acá.<br><span style="opacity:0.7;">Detalle: ${(err && err.message) || err}</span></p>
+      <a href="${url}" target="_blank" rel="noopener" style="color:#7EC8E8;font-family:var(--sans);font-size:13px;">Abrir el PDF en otra pestaña</a>
+    `;
+  }
+}
+
+function renderRevision() {
+  const c = DATOS_REVISION[indiceRevision];
+
+  document.getElementById('revisionContador').textContent = `${indiceRevision + 1} / ${DATOS_REVISION.length}`;
+  const badgeEstado = document.getElementById('revisionEstado');
+  badgeEstado.textContent = c.estado;
+  badgeEstado.className = 'estado ' + c.estado;
+
+  // --- Panel derecho: imagen o PDF ---
+  const visor = document.getElementById('revisionVisor');
+  visor.innerHTML = '';
+  if (c.tiene_archivo) {
+    const url = `/empresas/${EMPRESA_ID}/comprobantes/${c.id}/archivo`;
+    if (c.extension === 'pdf') {
+      renderizarPdfEnVisor(url, visor);
+    } else {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Comprobante original';
+      visor.appendChild(img);
+    }
+  } else {
+    const aviso = document.createElement('div');
+    aviso.className = 'sin-archivo';
+    aviso.textContent = 'No se guardó una imagen para este comprobante (se subió antes de esta función).';
+    visor.appendChild(aviso);
+  }
+
+  // --- Panel izquierdo: campos editables ---
+  const cont = document.getElementById('revisionCampos');
+  cont.innerHTML = '';
+  const soloLectura = c.estado === 'facturado';
+  const widgetsPorCampo = {}; // para poder tocar otro campo desde el handler de uno (ver fecha_comprobante y cuit_receptor)
+
+  CAMPOS_REVISION.forEach(({ campo, etiqueta, tipo }) => {
+    const valor = c.campos[campo] ?? '';
+    const grupo = document.createElement('div');
+    grupo.className = 'campo-revision';
+
+    const label = document.createElement('label');
+    label.textContent = etiqueta;
+    grupo.appendChild(label);
+
+    if (campo === 'fecha_comprobante' && c.campos.fecha_no_detectada) {
+      const aviso = document.createElement('p');
+      aviso.className = 'aviso-fecha-no-detectada';
+      aviso.textContent = '⚠ No se encontró una fecha en el comprobante -- se usó la fecha de hoy por defecto. Revisala.';
+      grupo.appendChild(aviso);
+    }
+
+    let widget;
+    if (soloLectura) {
+      widget = document.createElement('div');
+      widget.className = 'valor-solo-lectura';
+      widget.textContent = (valor === '' || valor === null) ? '—' : valor;
+    } else if (campo === 'descripcion' && tipo === 'select') {
+      widget = crearWidgetDescripcion(valor, (nuevoValor) => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, nuevoValor).then(data => {
+          if (!data.ok || !data.alicuota_iva) return;
+          // Esta descripción tiene una alícuota propia cargada para la
+          // empresa -- el servidor ya la aplicó sola, se refleja acá.
+          const widgetAlicuota = widgetsPorCampo['alicuota_iva'];
+          if (widgetAlicuota) {
+            widgetAlicuota.value = data.alicuota_iva;
+            c.campos.alicuota_iva = data.alicuota_iva;
+          }
+        });
+      });
+    } else if (tipo === 'select') {
+      widget = document.createElement('select');
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widget.appendChild(vacio);
+      const opciones = campo === 'concepto'
+        ? Object.entries(CONCEPTOS)
+        : campo === 'condicion_iva'
+        ? opcionesCondicionIvaPara(widgetsPorCampo['tipo_comprobante'] ? widgetsPorCampo['tipo_comprobante'].value : '').map(v => [v, v])
+        : campo === 'descripcion'
+        ? opcionesDescripcionPara()
+        : campo === 'alicuota_iva'
+        ? opcionesAlicuotaPara()
+        : campo === 'tipo_pago'
+        ? opcionesTipoPagoPara(widgetsPorCampo['medio_pago_detectado'] ? widgetsPorCampo['medio_pago_detectado'].value : '')
+        : (LISTAS[campo] || []).map(v => [v, v]);
+      opciones.forEach(([v, t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === valor) opt.selected = true;
+        widget.appendChild(opt);
+      });
+      widget.addEventListener('change', () => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value).then(data => {
+          if (!data.ok || campo !== 'descripcion' || !data.alicuota_iva) return;
+          // Esta descripción tiene una alícuota propia cargada para la
+          // empresa -- el servidor ya la aplicó sola, se refleja acá.
+          const widgetAlicuota = widgetsPorCampo['alicuota_iva'];
+          if (widgetAlicuota) {
+            widgetAlicuota.value = data.alicuota_iva;
+            c.campos.alicuota_iva = data.alicuota_iva;
+          }
+        });
+      });
+    } else if (tipo === 'date') {
+      widget = document.createElement('input');
+      widget.type = 'date';
+      widget.value = ddmmyyyyAIso(valor);
+      widget.addEventListener('blur', () => {
+        if (!widget.value) return; // todavía no terminó de tipear una fecha válida
+        const valorDdmmyyyy = isoADdmmyyyy(widget.value);
+
+        promesaGuardadoActual = guardarCampoRevision(c, campo, valorDdmmyyyy).then(data => {
+          if (!data.ok || campo !== 'fecha_comprobante') return;
+
+          // El servidor ya recalculó Desde, Hasta y la fecha de facturación
+          // (mismo criterio de siempre: hoy-10 días salvo que el comprobante
+          // sea más reciente) a partir de esta fecha nueva -- acá solo se
+          // refleja lo que ya quedó guardado, sin repetir esa cuenta en JS.
+          ['fecha_desde', 'fecha_hasta'].forEach(campoDependiente => {
+            const widgetDependiente = widgetsPorCampo[campoDependiente];
+            if (widgetDependiente && data[campoDependiente]) {
+              widgetDependiente.value = ddmmyyyyAIso(data[campoDependiente]);
+              c.campos[campoDependiente] = data[campoDependiente];
+            }
+          });
+          const widgetFacturacion = widgetsPorCampo['fecha_facturacion_manual'];
+          if (widgetFacturacion && data.fecha_facturacion_manual) {
+            widgetFacturacion.value = ddmmyyyyAIso(data.fecha_facturacion_manual);
+            c.campos.fecha_facturacion_manual = data.fecha_facturacion_manual;
+          }
+          const widgetConcepto = widgetsPorCampo['concepto'];
+          if (widgetConcepto && data.concepto) {
+            widgetConcepto.value = data.concepto;
+            c.campos.concepto = data.concepto;
+          }
+        });
+      });
+    } else if (tipo === 'numero') {
+      widget = document.createElement('input');
+      widget.type = 'number'; widget.step = '0.01';
+      widget.value = valor;
+      widget.addEventListener('blur', () => { promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value); });
+    } else if (campo === 'tipo_pago_detalle') {
+      widget = crearWidgetDetalleTarjeta(valor, (nuevoValor) => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, nuevoValor);
+      });
+    } else {
+      widget = document.createElement('input');
+      widget.type = 'text';
+      widget.value = valor;
+      widget.addEventListener('blur', () => {
+        promesaGuardadoActual = guardarCampoRevision(c, campo, widget.value).then(data => {
+          if (!data.ok || campo !== 'descripcion' || !data.alicuota_iva) return;
+          // Esta descripción tiene una alícuota propia cargada para la
+          // empresa -- el servidor ya la aplicó sola, se refleja acá.
+          const widgetAlicuota = widgetsPorCampo['alicuota_iva'];
+          if (widgetAlicuota) {
+            widgetAlicuota.value = data.alicuota_iva;
+            c.campos.alicuota_iva = data.alicuota_iva;
+          }
+        });
+      });
+    }
+    widgetsPorCampo[campo] = widget;
+    grupo.appendChild(widget);
+
+    // Un comprobante con $0 (o un monto irrisorio) es señal de que el lector
+    // no pudo leer bien la imagen -- se avisa acá y el backend además
+    // rechaza facturarlo así hasta que se corrija.
+    if (campo === 'precio_unitario' && !soloLectura) {
+      const badgeMonto = document.createElement('span');
+      badgeMonto.className = 'badge-revisar badge-revisar-bloque';
+      badgeMonto.textContent = 'REVISAR: no se puede facturar con este monto';
+      grupo.appendChild(badgeMonto);
+      const actualizarBadgeMonto = () => {
+        badgeMonto.style.display = (parseFloat(widget.value) || 0) < 100 ? 'inline-block' : 'none';
+      };
+      actualizarBadgeMonto();
+      widget.addEventListener('input', actualizarBadgeMonto);
+    }
+
+    // El lector suele encontrar 2 CUIL/CUIT en el comprobante (emisor y
+    // receptor) y ya elige el que le parece correcto -- acá se ofrece
+    // cambiar al otro sin tener que tipearlo a mano, por si se equivocó.
+    if (campo === 'cuit_receptor' && !soloLectura && c.campos.cuit_alternativo) {
+      const botonOtroCuit = document.createElement('button');
+      botonOtroCuit.type = 'button';
+      botonOtroCuit.className = 'btn-usar-otro-cuit';
+      botonOtroCuit.textContent = `Usar el otro CUIT/CUIL detectado: ${c.campos.cuit_alternativo}`;
+      botonOtroCuit.addEventListener('click', () => {
+        const actual = widget.value;
+        const otro = c.campos.cuit_alternativo;
+        widget.value = otro;
+        promesaGuardadoActual = guardarCampoRevision(c, 'cuit_receptor', otro)
+          .then(() => guardarCampoRevision(c, 'cuit_alternativo', actual));
+        c.campos.cuit_alternativo = actual; // se guarda el que se sacó, para poder volver a cambiarlo
+        botonOtroCuit.textContent = `Usar el otro CUIT/CUIL detectado: ${actual}`;
+      });
+      grupo.appendChild(botonOtroCuit);
+    }
+
+    cont.appendChild(grupo);
+  });
+
+  // Factura A (y variantes) exige CUIT/CUIL siempre; cualquier otro tipo de
+  // comprobante también lo exige si el Tipo de documento elegido es CUIT o
+  // CUIL (con DNI puede quedar vacío). Se arma DESPUÉS del loop de arriba
+  // porque necesita el widget de "tipo_documento", que en CAMPOS_REVISION
+  // está declarado después de "cuit_receptor" -- todavía no existiría si
+  // se armara adentro del mismo loop.
+  const widgetCuit = widgetsPorCampo['cuit_receptor'];
+  if (widgetCuit && !soloLectura) {
+    const grupoCuit = widgetCuit.closest('.campo-revision');
+    const badgeCuitA = document.createElement('span');
+    badgeCuitA.className = 'badge-revisar badge-revisar-bloque';
+    badgeCuitA.textContent = 'REVISAR: falta el número de documento para este tipo de comprobante/documento';
+    grupoCuit.appendChild(badgeCuitA);
+
+    const actualizarBadgeCuitA = () => {
+      const widgetTipo = widgetsPorCampo['tipo_comprobante'];
+      const widgetTipoDoc = widgetsPorCampo['tipo_documento'];
+      const tipoComprobante = widgetTipo ? widgetTipo.value.trim() : '';
+      const tipoDocumento = widgetTipoDoc ? widgetTipoDoc.value.trim().toUpperCase() : '';
+      const exigeCuit = tipoComprobante.endsWith(' A') || tipoDocumento === 'CUIT' || tipoDocumento === 'CUIL';
+      badgeCuitA.style.display = (exigeCuit && !widgetCuit.value.trim()) ? 'inline-block' : 'none';
+    };
+    actualizarBadgeCuitA();
+    widgetCuit.addEventListener('input', actualizarBadgeCuitA);
+    if (widgetsPorCampo['tipo_comprobante']) widgetsPorCampo['tipo_comprobante'].addEventListener('change', actualizarBadgeCuitA);
+    if (widgetsPorCampo['tipo_documento']) widgetsPorCampo['tipo_documento'].addEventListener('change', actualizarBadgeCuitA);
+  }
+
+  // Si se cambia el Tipo de comprobante estando parado en el mismo
+  // comprobante (sin cerrar y reabrir Revisión Manual), las opciones de
+  // Condición de IVA disponibles se recalculan solas -- si no, quedarían
+  // mostrando la lista vieja hasta la próxima vez que se abra este panel.
+  const widgetTipoParaCondicionIva = widgetsPorCampo['tipo_comprobante'];
+  const widgetCondicionIva = widgetsPorCampo['condicion_iva'];
+  if (widgetTipoParaCondicionIva && widgetCondicionIva && widgetCondicionIva.tagName === 'SELECT') {
+    widgetTipoParaCondicionIva.addEventListener('change', () => {
+      const valorPrevio = widgetCondicionIva.value;
+      const nuevasOpciones = opcionesCondicionIvaPara(widgetTipoParaCondicionIva.value);
+      widgetCondicionIva.innerHTML = '';
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widgetCondicionIva.appendChild(vacio);
+      nuevasOpciones.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        if (v === valorPrevio) opt.selected = true;
+        widgetCondicionIva.appendChild(opt);
+      });
+      // Si la que ya estaba elegida no entra en la lista nueva, queda en
+      // blanco -- no se fuerza ningún valor a lo loco, que el usuario elija.
+    });
+  }
+
+  // Mismo mecanismo para Tipo de tarjeta: si se cambia el Medio de pago
+  // detectado (de Débito a Crédito o viceversa) estando en el mismo
+  // comprobante, las marcas ofrecidas se recalculan solas.
+  const widgetMedioPago = widgetsPorCampo['medio_pago_detectado'];
+  const widgetTipoPago = widgetsPorCampo['tipo_pago'];
+  if (widgetMedioPago && widgetTipoPago && widgetTipoPago.tagName === 'SELECT') {
+    widgetMedioPago.addEventListener('change', () => {
+      const valorPrevio = widgetTipoPago.value;
+      const nuevasOpciones = opcionesTipoPagoPara(widgetMedioPago.value);
+      widgetTipoPago.innerHTML = '';
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widgetTipoPago.appendChild(vacio);
+      nuevasOpciones.forEach(([v, t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === valorPrevio) opt.selected = true;
+        widgetTipoPago.appendChild(opt);
+      });
+    });
+  }
+
+  // La casilla de "Detalle" solo tiene sentido si el Tipo de tarjeta
+  // elegido es justamente "Otra..." (ej. el lector detectó "VISA" en
+  // Débito, que no es una opción real de ARCA -- ahí solo existe
+  // "Visa Electrón", un producto distinto). Se muestra/oculta sola según
+  // ese valor, sin tener que cerrar y reabrir Revisión Manual.
+  const widgetTipoPagoDetalle = widgetsPorCampo['tipo_pago_detalle'];
+  if (widgetTipoPago && widgetTipoPagoDetalle) {
+    const grupoDetalle = widgetTipoPagoDetalle.closest('.campo-revision');
+    const actualizarVisibilidadDetalleTarjeta = () => {
+      grupoDetalle.style.display = widgetTipoPago.value === 'Otra...' ? '' : 'none';
+    };
+    actualizarVisibilidadDetalleTarjeta();
+    widgetTipoPago.addEventListener('change', actualizarVisibilidadDetalleTarjeta);
+    if (widgetMedioPago) widgetMedioPago.addEventListener('change', actualizarVisibilidadDetalleTarjeta);
+  }
+
+  renderLineasExtra(c, cont, soloLectura);
+
+  document.getElementById('btnRevisionAnterior').disabled = indiceRevision === 0;
+  document.getElementById('btnRevisionSiguiente').disabled = indiceRevision === DATOS_REVISION.length - 1;
+}
+
+// "Líneas de producto/servicio extra" -- solo aplica a Responsable
+// Inscripto (Monotributo no tiene esta función en ARCA). La línea
+// principal sigue siendo los campos de siempre del comprobante; esto
+// solo agrega la 2ª en adelante, cada una con su propia descripción,
+// cantidad, unidad de medida, precio y alícuota.
+function renderLineasExtra(c, cont, soloLectura) {
+  if (!ES_RESPONSABLE_INSCRIPTO) return;
+
+  const seccion = document.createElement('div');
+  seccion.className = 'seccion-lineas-extra';
+  const titulo = document.createElement('h3');
+  titulo.textContent = 'Líneas de producto/servicio extra';
+  seccion.appendChild(titulo);
+
+  c.campos.lineas_extra = c.campos.lineas_extra || [];
+  c.campos.lineas_extra.forEach(linea => {
+    seccion.appendChild(renderUnaLineaExtra(c, linea, soloLectura));
+  });
+
+  if (!soloLectura) {
+    const btnAgregar = document.createElement('button');
+    btnAgregar.type = 'button';
+    btnAgregar.className = 'btn-agregar-linea';
+    btnAgregar.textContent = '+ Agregar línea de descripción';
+    btnAgregar.addEventListener('click', async () => {
+      btnAgregar.disabled = true;
+      btnAgregar.textContent = 'Agregando...';
+      try {
+        const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${c.id}/lineas`, { method: 'POST' });
+        const data = await r.json();
+        if (data.ok) {
+          c.campos.lineas_extra.push(data.linea);
+          renderRevision(); // re-arma el panel entero con la línea nueva ya adentro
+        } else {
+          alert('No se pudo agregar la línea: ' + data.error);
+          btnAgregar.disabled = false;
+          btnAgregar.textContent = '+ Agregar línea de descripción';
+        }
+      } catch (e) {
+        alert('No se pudo conectar con el servidor.');
+        btnAgregar.disabled = false;
+        btnAgregar.textContent = '+ Agregar línea de descripción';
+      }
+    });
+    seccion.appendChild(btnAgregar);
+  }
+
+  cont.appendChild(seccion);
+}
+
+function renderUnaLineaExtra(c, linea, soloLectura) {
+  const bloque = document.createElement('div');
+  bloque.className = 'linea-extra';
+
+  const encabezado = document.createElement('div');
+  encabezado.className = 'linea-extra-encabezado';
+  const numero = document.createElement('span');
+  numero.textContent = `Línea ${linea.id ? '' : ''}`.trim() || 'Línea extra';
+  encabezado.appendChild(numero);
+
+  if (!soloLectura) {
+    const btnEliminar = document.createElement('button');
+    btnEliminar.type = 'button';
+    btnEliminar.className = 'btn-eliminar-linea';
+    btnEliminar.textContent = '× Quitar';
+    btnEliminar.addEventListener('click', async () => {
+      const ok = confirm('¿Quitar esta línea del comprobante?');
+      if (!ok) return;
+      btnEliminar.disabled = true;
+      try {
+        const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${c.id}/lineas/${linea.id}/eliminar`, { method: 'POST' });
+        const data = await r.json();
+        if (data.ok) {
+          c.campos.lineas_extra = c.campos.lineas_extra.filter(l => l.id !== linea.id);
+          c.campos.importe_total = data.importe_total;
+          renderRevision();
+        } else {
+          alert('No se pudo quitar la línea: ' + data.error);
+          btnEliminar.disabled = false;
+        }
+      } catch (e) {
+        alert('No se pudo conectar con el servidor.');
+        btnEliminar.disabled = false;
+      }
+    });
+    encabezado.appendChild(btnEliminar);
+  }
+  bloque.appendChild(encabezado);
+
+  const guardarCampoLinea = async (campo, valor) => {
+    try {
+      const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${c.id}/lineas/${linea.id}/editar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campo, valor }),
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        alert('No se pudo guardar: ' + data.error);
+        return data;
+      }
+      linea[campo] = valor;
+      return data;
+    } catch (e) {
+      alert('No se pudo conectar con el servidor.');
+      return { ok: false };
+    }
+  };
+
+  // Descripción -- mismo widget con opción de escribir manualmente que el
+  // campo principal.
+  const grupoDesc = document.createElement('div');
+  grupoDesc.className = 'campo-revision';
+  const labelDesc = document.createElement('label');
+  labelDesc.textContent = 'Descripción';
+  grupoDesc.appendChild(labelDesc);
+  if (soloLectura) {
+    const solo = document.createElement('div');
+    solo.className = 'valor-solo-lectura';
+    solo.textContent = linea.descripcion || '—';
+    grupoDesc.appendChild(solo);
+  } else {
+    const widgetDesc = crearWidgetDescripcion(linea.descripcion || '', (nuevoValor) => {
+      guardarCampoLinea('descripcion', nuevoValor).then(data => {
+        if (data.ok && data.alicuota_iva) {
+          linea.alicuota_iva = data.alicuota_iva;
+          if (widgetAlicuotaLinea) widgetAlicuotaLinea.value = data.alicuota_iva;
+        }
+      });
+    });
+    grupoDesc.appendChild(widgetDesc);
+  }
+  bloque.appendChild(grupoDesc);
+
+  // Cantidad, Unidad de medida, Precio unitario, Alícuota -- campos
+  // simples, mismo patrón de guardado al perder foco / al cambiar.
+  let widgetAlicuotaLinea = null;
+
+  const camposSimples = [
+    { campo: 'cantidad', etiqueta: 'Cantidad', tipo: 'numero', valor: linea.cantidad ?? 1 },
+    { campo: 'unidad_medida', etiqueta: 'Unidad de medida', tipo: 'select', opciones: LISTAS.unidad_medida.map(v => [v, v]), valor: linea.unidad_medida || '' },
+    { campo: 'precio_unitario', etiqueta: 'Monto', tipo: 'numero', valor: linea.precio_unitario ?? 0 },
+    { campo: 'alicuota_iva', etiqueta: 'Alícuota de IVA', tipo: 'select', opciones: opcionesAlicuotaPara(), valor: linea.alicuota_iva || '' },
+  ];
+
+  camposSimples.forEach(({ campo, etiqueta, tipo, opciones, valor }) => {
+    const grupo = document.createElement('div');
+    grupo.className = 'campo-revision';
+    const label = document.createElement('label');
+    label.textContent = etiqueta;
+    grupo.appendChild(label);
+
+    if (soloLectura) {
+      const solo = document.createElement('div');
+      solo.className = 'valor-solo-lectura';
+      solo.textContent = campo === 'alicuota_iva' ? etiquetaAlicuota(valor) : (valor || '—');
+      grupo.appendChild(solo);
+      bloque.appendChild(grupo);
+      return;
+    }
+
+    let widget;
+    if (tipo === 'select') {
+      widget = document.createElement('select');
+      const vacio = document.createElement('option');
+      vacio.value = ''; vacio.textContent = 'seleccionar...';
+      widget.appendChild(vacio);
+      opciones.forEach(([v, t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === valor) opt.selected = true;
+        widget.appendChild(opt);
+      });
+      widget.addEventListener('change', () => guardarCampoLinea(campo, widget.value));
+    } else {
+      widget = document.createElement('input');
+      widget.type = 'number'; widget.step = '0.01';
+      widget.value = valor;
+      widget.addEventListener('blur', () => guardarCampoLinea(campo, widget.value));
+    }
+    if (campo === 'alicuota_iva') widgetAlicuotaLinea = widget;
+    grupo.appendChild(widget);
+    bloque.appendChild(grupo);
+  });
+
+  return bloque;
+}
+
+async function guardarCampoRevision(comprobante, campo, valor) {
+  try {
+    const r = await fetch(`/empresas/${EMPRESA_ID}/comprobantes/${comprobante.id}/editar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campo, valor }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      comprobante.campos[campo] = valor; // así si vuelve para atrás y adelante, ve lo que ya guardó
+    } else {
+      alert('No se pudo guardar: ' + data.error);
+    }
+    return data;
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    return { ok: false };
+  }
+}
+
+document.getElementById('btnRevisionManual').addEventListener('click', () => abrirRevision());
+
+async function eliminarEnLote(boton, url, mensajeConfirmacion) {
+  const ok = confirm(mensajeConfirmacion);
+  if (!ok) return;
+
+  boton.disabled = true;
+  boton.textContent = 'Eliminando...';
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      alert(`Listo, se eliminaron ${data.eliminados} comprobante(s).`);
+      recargarConservandoScroll();
+    } else {
+      alert('No se pudo eliminar: ' + data.error);
+      boton.disabled = false;
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+    boton.disabled = false;
+  }
+}
+
+document.getElementById('btnEliminarFacturados').addEventListener('click', () => {
+  const btn = document.getElementById('btnEliminarFacturados');
+  eliminarEnLote(
+    btn,
+    `/empresas/${EMPRESA_ID}/comprobantes/eliminar-facturados`,
+    'Esto borra de AutoFacturación TODOS los comprobantes ya facturados de esta empresa (no se puede deshacer). ' +
+    'Ojo: esto no anula ni borra las facturas reales que ya emitiste en ARCA, con su CAE -- ' +
+    'solo se borra el registro local acá. ¿Confirmás?'
+  );
+});
+
+document.getElementById('btnEliminarTodos').addEventListener('click', () => {
+  const btn = document.getElementById('btnEliminarTodos');
+  eliminarEnLote(
+    btn,
+    `/empresas/${EMPRESA_ID}/comprobantes/eliminar-todos`,
+    'Esto borra de AutoFacturación TODOS los comprobantes de esta empresa: pendientes, con error, Y también los ya facturados. ' +
+    'No se puede deshacer. Ojo: esto no anula ni borra las facturas reales que ya emitiste en ARCA, con su CAE -- ' +
+    'solo se borra el registro local acá. ¿Confirmás?'
+  );
+});
+document.getElementById('btnCerrarRevision').addEventListener('click', cerrarRevision);
+document.getElementById('btnRevisionAnterior').addEventListener('click', () => irARevision(-1));
+document.getElementById('btnRevisionSiguiente').addEventListener('click', () => irARevision(1));
+document.querySelectorAll('.btn-revisar').forEach(btn => {
+  btn.addEventListener('click', () => abrirRevision(parseInt(btn.dataset.id, 10)));
+});
+
+document.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('overlayRevision');
+  if (overlay.style.display !== 'flex') return; // el panel no está abierto, no hacer nada
+
+  if (e.key === 'Escape') { cerrarRevision(); return; }
+
+  // Si el foco está en un campo de edición, las flechas mueven el cursor/valor,
+  // no deben navegar entre comprobantes.
+  const enCampoDeEdicion = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
+  if (enCampoDeEdicion) return;
+
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); irARevision(1); }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); irARevision(-1); }
+});
+
+(function () {
+  const idPendiente = sessionStorage.getItem('abrirRevisionComprobanteId');
+  if (!idPendiente) return;
+  sessionStorage.removeItem('abrirRevisionComprobanteId');
+  abrirRevision(parseInt(idPendiente, 10));
+})();
+</script>
+<script src="/static/js/tracking.js" defer></script>
+</body>
+</html>
