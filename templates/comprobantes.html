@@ -181,6 +181,7 @@
   .config-slider-label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;gap:12px;}
   .config-slider-nombre{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);}
   .config-slider-valor{font-family:var(--sans);font-weight:800;font-size:14px;color:var(--blue-deep);white-space:nowrap;}
+  .config-slider-cantidad{font-weight:600;font-size:12.5px;color:var(--muted);margin-left:4px;}
 
   input[type="range"].slider-porcentaje{
     -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;
@@ -1001,7 +1002,7 @@
         {% if resumen_reparto.filas_reparto %}
         <table class="tabla-resumen-reparto">
           <thead>
-            <tr><th>Descripción</th><th>% configurado</th><th>Actuales</th><th>Corresponderían</th></tr>
+            <tr><th>Descripción</th><th>% configurado</th><th>Actuales</th><th>Corresponderían</th><th>Monto pendiente</th></tr>
           </thead>
           <tbody>
             {% for fila in resumen_reparto.filas_reparto %}
@@ -1010,8 +1011,18 @@
               <td>{{ fila.porcentaje|round|int }}%</td>
               <td>{{ fila.cantidad_actual }}</td>
               <td>{{ fila.cantidad_objetivo }}</td>
+              <td>$ {{ "%.2f"|format(fila.monto_pendiente) }}</td>
             </tr>
             {% endfor %}
+            {% if resumen_reparto.regla_monto_bajo_activa and resumen_reparto.calificantes_monto_bajo > 0 %}
+            <tr>
+              <td>{{ resumen_reparto.descripcion_especial }} <span class="hint">(monto bajo)</span></td>
+              <td>&mdash;</td>
+              <td>{{ resumen_reparto.calificantes_monto_bajo }}</td>
+              <td>{{ resumen_reparto.calificantes_monto_bajo }}</td>
+              <td>$ {{ "%.2f"|format(resumen_reparto.monto_pendiente_monto_bajo) }}</td>
+            </tr>
+            {% endif %}
           </tbody>
         </table>
         {% elif resumen_reparto.restantes > 0 %}
@@ -1030,13 +1041,16 @@
         {% if descripciones_config|length < 2 %}
         <p class="hint">Cargá al menos dos descripciones en "Editar empresa" para poder repartirles un %.</p>
         {% else %}
-        <div id="listaPorcentajesConfig">
+        <div id="listaPorcentajesConfig" data-total-restantes="{{ resumen_reparto.restantes }}">
           {% for d in descripciones_config %}
           {% set porcentaje_d = porcentajes_config_actuales[loop.index0] if loop.index0 < porcentajes_config_actuales|length and porcentajes_config_actuales[loop.index0].strip() else "" %}
           <div class="config-slider-item">
             <div class="config-slider-label">
               <span class="config-slider-nombre">{{ d }}</span>
-              <span class="config-slider-valor"><span class="valor-porcentaje-num">{{ porcentaje_d|float(0)|round|int }}</span>% asignado</span>
+              <span class="config-slider-valor">
+                <span class="valor-porcentaje-num">{{ porcentaje_d|float(0)|round|int }}</span>% asignado
+                <span class="config-slider-cantidad">(<span class="valor-cantidad-num">{{ ((porcentaje_d|float(0)) / 100 * resumen_reparto.restantes)|round|int }}</span> comprobante{{ "s" if resumen_reparto.restantes != 1 }})</span>
+              </span>
             </div>
             <input type="range" class="slider-porcentaje input-porcentaje-desc" data-desc="{{ d }}"
                    min="0" max="100" step="1" value="{{ porcentaje_d|float(0)|round|int }}">
@@ -1240,17 +1254,28 @@ if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadistic
   const inputs = () => Array.from(document.querySelectorAll('.input-porcentaje-desc'));
   const campoOculto = document.getElementById('descripcionesPorcentajesConfig');
   const totalTexto = document.getElementById('totalPorcentajeConfig');
+  const listaPorcentajes = document.getElementById('listaPorcentajesConfig');
+  const totalRestantes = listaPorcentajes ? (parseInt(listaPorcentajes.dataset.totalRestantes, 10) || 0) : 0;
   if (!campoOculto || inputs().length === 0) return;
 
   function guardarValoresAnteriores() {
     inputs().forEach(i => { i.dataset.valorAnterior = i.value || '0'; });
   }
 
+  // El numerito "(N comprobantes)" al lado de cada slider es una
+  // proyección en vivo -- calculado acá mismo con el total de "restantes"
+  // que ya vino calculado del servidor (resumen_reparto.restantes), sin
+  // pegarle otra vez al servidor por cada movimiento del control. Al
+  // guardar la configuración, esa proyección se hace realidad de verdad
+  // (ver aplicar_reparto_porcentual_retroactivo en procesador.py).
   function actualizarValoresVisibles() {
     inputs().forEach(i => {
       const item = i.closest('.config-slider-item');
-      const span = item && item.querySelector('.valor-porcentaje-num');
-      if (span) span.textContent = Math.round(parseFloat(i.value) || 0);
+      const porcentaje = Math.round(parseFloat(i.value) || 0);
+      const spanPorcentaje = item && item.querySelector('.valor-porcentaje-num');
+      if (spanPorcentaje) spanPorcentaje.textContent = porcentaje;
+      const spanCantidad = item && item.querySelector('.valor-cantidad-num');
+      if (spanCantidad) spanCantidad.textContent = Math.round((porcentaje / 100) * totalRestantes);
     });
   }
 
