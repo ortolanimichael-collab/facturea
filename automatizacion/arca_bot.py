@@ -525,11 +525,11 @@ def facturar_comprobante(comprobante, modo_prueba=False):
 
     Responsable Inscripto (Factura A y B, únicos tipos confirmados con
     grabación real por ahora): el Paso 4 de ARCA (revisión final y
-    confirmación) todavía no se grabó, así que para estas empresas SOLO se
-    permite modo_prueba=True -- llega completo hasta el final del Paso 3 y
-    se detiene ahí a propósito, sin arriesgarse a tocar un botón de
-    confirmación no confirmado. Facturar de verdad (modo_prueba=False)
-    tira un ValueError claro en vez de intentarlo a ciegas.
+    confirmación) resultó ser LA MISMA pantalla y los mismos botones que ya
+    estaban grabados para Monotributo (confirmado con una grabación real de
+    Factura B a Consumidor Final, con CAE emitido de verdad) -- por eso usa
+    la misma confirmar_y_facturar() de más abajo, sin distinción entre
+    regímenes en este paso.
 
     Devuelve un dict {"fecha_usada": "DD/MM/AAAA", "fecha_ajustada": bool}:
     fecha_usada es la fecha que REALMENTE se escribió en ARCA (puede no ser
@@ -625,17 +625,10 @@ def facturar_comprobante(comprobante, modo_prueba=False):
                     f"El comprobante #{comprobante.id} tiene una línea de producto extra sin completar "
                     "(descripción, unidad de medida o alícuota) -- completala antes de facturar."
                 )
-        # El Paso 4 de ARCA (revisión final y confirmación) para Responsable
-        # Inscripto todavía no se grabó con Playwright -- no sabemos cómo se
-        # ve esa pantalla ni con qué texto exacto confirma. Hasta grabar eso,
-        # se permite "Probar" (llega hasta el Paso 3 completo y se detiene
-        # ahí, sin arriesgar nada), pero no facturar de verdad.
-        if not modo_prueba:
-            raise ValueError(
-                f"El comprobante #{comprobante.id} es de una empresa Responsable Inscripto -- todavía no "
-                "se grabó el Paso 4 (confirmación final) de ARCA para ese régimen, así que por ahora solo "
-                "se puede usar \"Probar\", no facturar de verdad."
-            )
+        # El Paso 4 (revisión final y confirmación) ya está confirmado para
+        # este régimen -- ver el comentario de más arriba, en el docstring de
+        # esta función -- así que de acá para abajo Responsable Inscripto
+        # sigue el mismo camino que Monotributo en ese paso.
 
     # Un comprobante con $0 (o un monto irrisorio) es señal segura de que el
     # lector no pudo leer bien la imagen -- facturarlo así generaría una
@@ -701,12 +694,13 @@ def facturar_comprobante(comprobante, modo_prueba=False):
                         "alicuota_iva": linea_extra.alicuota_iva,
                     })
                 completar_lineas_productos_ri(ventana, lineas)
-                # Llegados acá, modo_prueba siempre es True (se valida más
-                # arriba) -- se queda un rato en el Paso 4 para poder
-                # revisarlo a ojo, pero no se toca nada más: todavía no está
-                # grabado cómo confirma esta pantalla para Responsable
+                # El Paso 4 (revisión final y confirmación) es la MISMA
+                # pantalla que en Monotributo -- confirmado con una
+                # grabación real de Factura B a Consumidor Final, CAE
+                # emitido de verdad -- así que reusa exactamente la misma
+                # función en vez de tener una copia aparte para Responsable
                 # Inscripto.
-                ventana.wait_for_timeout(30000)
+                confirmar_y_facturar(ventana, modo_prueba=modo_prueba)
             else:
                 completar_receptor(
                     ventana,
