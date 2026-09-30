@@ -107,9 +107,29 @@ def _elegir_descripcion(empresa):
     seguía siendo una opción más de la lista normal). Si sacarla deja la
     lista vacía, se la deja igual -- mejor que repartir entre nada.
     """
-    descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    if not empresa.config_descripcion_aleatoria or not descripciones:
+    if not empresa.config_descripcion_aleatoria:
         return empresa.config_producto_servicio
+
+    descripciones, pesos = descripciones_y_pesos_reparto(empresa)
+    if not descripciones:
+        return empresa.config_producto_servicio
+
+    return _elegir_por_reparto_deterministico(empresa, descripciones, pesos)
+
+
+def descripciones_y_pesos_reparto(empresa):
+    """
+    Arma la lista de descripciones que entran en el reparto por % (todas las
+    cargadas en la empresa, salvo la reservada para "monto bajo" si esa regla
+    está activa) junto con su peso (el % configurado, o 1.0 parejo para todas
+    si no se cargó ningún %). La usan tanto _elegir_descripcion (para un
+    comprobante nuevo) como el resumen en vivo de la pestaña Configuraciones
+    y la corrección retroactiva (app.py / aplicar_reparto_porcentual_retroactiva
+    más abajo), para que las tres siempre miren exactamente la misma lista.
+    """
+    descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
+    if not descripciones:
+        return [], []
 
     porcentajes_crudos = (empresa.descripciones_porcentajes or "").split(",")
     pesos = []
@@ -131,7 +151,7 @@ def _elegir_descripcion(empresa):
     if sum(pesos) <= 0:
         pesos = [1.0] * len(descripciones)  # sin % cargado -> reparto parejo entre todas
 
-    return _elegir_por_reparto_deterministico(empresa, descripciones, pesos)
+    return descripciones, pesos
 
 
 def _elegir_por_reparto_deterministico(empresa, descripciones, pesos):
@@ -281,6 +301,86 @@ def aplicar_regla_monto_bajo_retroactiva(empresa):
         if nueva_alicuota is None:
             nueva_alicuota = (empresa.config_alicuota_iva or "").split(",")[0] or None
         c.descripcion = nueva_descripcion
+        c.punto_venta = nuevo_punto_venta
+        c.tipo_comprobante = nuevo_tipo_comprobante
+        c.alicuota_iva = nueva_alicuota
+        cantidad_cambiada += 1
+
+    return cantidad_cambiada
+
+
+def aplicar_reparto_porcentual_retroactivo(empresa):
+    """
+    Igual que aplicar_regla_monto_bajo_retroactiva, pero para el reparto por
+    % (pestaña Configuraciones, "Reparto por % entre descripciones"): guardar
+    los % ahí solo regía los comprobantes cargados DE ACÁ EN ADELANTE -- los
+    que ya estaban pendientes en la tabla se quedaban con la descripción que
+    les había tocado en su momento, aunque ya no coincidiera con el % recién
+    configurado. Esta función reparte de nuevo, de cero, TODOS los
+    comprobantes pendientes que no estén reservados por la regla de "monto
+    bajo" (ver aplicar_regla_monto_bajo_retroactiva) para que el reparto real
+    quede clavado en el % configurado en este mismo momento -- mismo
+    algoritmo de "resto mayor" que _elegir_por_reparto_deterministico, pero
+    recalculando los conteos desde 0 en vez de mirar el historial, porque acá
+    el objetivo es que ESTE lote de pendientes quede exacto.
+
+    No hace nada si "elegir una descripción al azar" está desactivado (ahí no
+    hay reparto que aplicar), y nunca toca un comprobante ya facturado ni uno
+    que la regla de monto bajo se haya reservado para sí.
+
+    Devuelve la cantidad de comprobantes que cambiaron.
+    """
+    if not empresa.config_descripcion_aleatoria:
+        return 0
+
+    descripciones, pesos = descripciones_y_pesos_reparto(empresa)
+    if not descripciones:
+        return 0
+
+    umbral = empresa.config_umbral_precio_bajo
+    descripcion_especial = (empresa.config_descripcion_precio_bajo or "").strip()
+    regla_monto_bajo_activa = umbral is not None and bool(descripcion_especial)
+
+    pendientes = (
+        Comprobante.query.filter(
+            Comprobante.empresa_id == empresa.id,
+            Comprobante.estado.in_(("pendiente", "error")),
+        )
+        .order_by(Comprobante.id.asc())
+        .all()
+    )
+
+    restantes = [
+        c for c in pendientes
+        if not (regla_monto_bajo_activa and c.precio_unitario and 0 < c.precio_unitario < umbral)
+    ]
+    total = len(restantes)
+    if total == 0:
+        return 0
+
+    total_pesos = sum(pesos)
+    conteos = {d: 0 for d in descripciones}
+    cantidad_cambiada = 0
+
+    for c in restantes:
+        mejor_descripcion = descripciones[0]
+        mejor_deficit = None
+        for descripcion, peso in zip(descripciones, pesos):
+            objetivo = (peso / total_pesos) * total
+            deficit = objetivo - conteos[descripcion]
+            if mejor_deficit is None or deficit > mejor_deficit:
+                mejor_deficit = deficit
+                mejor_descripcion = descripcion
+        conteos[mejor_descripcion] += 1
+
+        if c.descripcion == mejor_descripcion:
+            continue  # ya estaba así -- no cuenta como cambio
+
+        nuevo_punto_venta, nuevo_tipo_comprobante = _punto_venta_y_tipo_comprobante_para(empresa, mejor_descripcion)
+        nueva_alicuota = empresa.alicuota_para_descripcion(mejor_descripcion)
+        if nueva_alicuota is None:
+            nueva_alicuota = (empresa.config_alicuota_iva or "").split(",")[0] or None
+        c.descripcion = mejor_descripcion
         c.punto_venta = nuevo_punto_venta
         c.tipo_comprobante = nuevo_tipo_comprobante
         c.alicuota_iva = nueva_alicuota

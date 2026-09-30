@@ -1845,30 +1845,23 @@ def _resumen_reparto_descripciones(empresa, comprobantes):
     ids_calificantes = {id(c) for c in calificantes}
     restantes = [c for c in pendientes if id(c) not in ids_calificantes]
 
-    descripciones = [d.strip() for d in (empresa.descripciones_disponibles or "").split(",") if d.strip()]
-    if regla_monto_bajo_activa and descripcion_especial in descripciones:
-        descripciones = [d for d in descripciones if d != descripcion_especial]
+    descripciones, pesos = procesador.descripciones_y_pesos_reparto(empresa)
+    # descripciones_y_pesos_reparto ya excluye la especial de monto bajo y
+    # devuelve el peso parejo (1.0 para todas) si no hay % cargado -- así el
+    # resumen mira exactamente la misma lista que usa _elegir_descripcion.
 
     filas_reparto = []
     if empresa.config_descripcion_aleatoria and descripciones:
-        porcentajes_crudos = (empresa.descripciones_porcentajes or "").split(",")
-        pesos = []
-        for i in range(len(descripciones)):
-            try:
-                peso = float(porcentajes_crudos[i]) if i < len(porcentajes_crudos) and porcentajes_crudos[i].strip() else 0.0
-            except ValueError:
-                peso = 0.0
-            pesos.append(max(peso, 0.0))
-        if sum(pesos) <= 0:
-            pesos = [1.0] * len(descripciones)  # sin % cargado -> objetivo parejo, para mostrar igual
         total_pesos = sum(pesos)
         total_restantes = len(restantes)
         for descripcion, peso in zip(descripciones, pesos):
+            comprobantes_de_esta = [c for c in restantes if c.descripcion == descripcion]
             filas_reparto.append({
                 "descripcion": descripcion,
                 "porcentaje": peso,
-                "cantidad_actual": sum(1 for c in restantes if c.descripcion == descripcion),
+                "cantidad_actual": len(comprobantes_de_esta),
                 "cantidad_objetivo": round((peso / total_pesos) * total_restantes) if total_pesos else 0,
+                "monto_pendiente": sum(c.precio_unitario or 0 for c in comprobantes_de_esta),
             })
 
     return {
@@ -1876,6 +1869,7 @@ def _resumen_reparto_descripciones(empresa, comprobantes):
         "regla_monto_bajo_activa": regla_monto_bajo_activa,
         "descripcion_especial": descripcion_especial,
         "calificantes_monto_bajo": len(calificantes),
+        "monto_pendiente_monto_bajo": sum(c.precio_unitario or 0 for c in calificantes),
         "restantes": len(restantes),
         "filas_reparto": filas_reparto,
     }
@@ -1990,6 +1984,12 @@ def empresa_configuraciones(empresa_id):
     # aplicar_regla_monto_bajo_retroactiva en procesador.py), para no tener
     # que revisarlos a mano uno por uno después de cargar el umbral.
     procesador.aplicar_regla_monto_bajo_retroactiva(empresa)
+
+    # Lo mismo para el reparto por %: que lo recién guardado se refleje ya
+    # mismo en los comprobantes que ya estaban pendientes en la tabla, no
+    # solo en los que se carguen de ahora en más (ver
+    # aplicar_reparto_porcentual_retroactivo en procesador.py).
+    procesador.aplicar_reparto_porcentual_retroactivo(empresa)
 
     db.session.commit()
     return redirect(url_for("comprobantes", empresa_id=empresa.id) + "#tabConfiguraciones")
