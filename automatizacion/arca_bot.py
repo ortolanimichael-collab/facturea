@@ -462,14 +462,24 @@ def confirmar_y_facturar(ventana, modo_prueba=False):
     ventana.get_by_role("button", name="Menú Principal").click()
 
 
-def descomponer_neto_iva(importe_total, alicuota_iva):
+def descomponer_neto_iva(importe_total, alicuota_iva, discrimina_iva):
     """
-    Un Responsable Inscripto declara el neto gravado y el IVA por
-    separado en ARCA, a diferencia de Monotributo que solo carga un
-    importe total. Como comprobante.precio_unitario/importe_total ya
-    viene calculado sobre el TOTAL cobrado (lo que efectivamente
-    transfirió el cliente), hay que descomponerlo hacia atrás para saber
-    cuánto de eso es neto y cuánto es IVA.
+    SOLO se descompone en neto + IVA cuando el comprobante DISCRIMINA el IVA
+    al receptor -- Factura A (y notas de débito/crédito A, si algún día se
+    suman): ahí el receptor es otro Responsable Inscripto que va a tomarse
+    ese IVA como crédito fiscal, así que ARCA pide el neto gravado por
+    separado y él mismo suma el IVA arriba para calcular el total.
+
+    Factura B (venta a Consumidor Final u otro sujeto que NO discrimina
+    IVA) es DISTINTO, y esto se confirmó con una factura real: ahí "Precio
+    Unit." en ARCA es directamente el precio FINAL que se cobró (con el IVA
+    ya adentro, como en cualquier góndola) -- ARCA no le suma IVA arriba,
+    solo calcula hacia atrás un "IVA Contenido" informativo (por la Ley de
+    Transparencia Fiscal al Consumidor). Si acá se llegaba a mandar el neto
+    en vez del total, la factura terminaba emitida por MENOS plata de la
+    que el cliente realmente pagó (pasó con un comprobante real: cobró
+    $7000, pero al descomponerlo con 21% se cargó $5785,12 como precio y la
+    factura salió por ese monto, no por los $7000 reales).
 
     alicuota_iva viene como uno de los 8 valores reales que tiene ARCA
     (confirmado con una captura real de "Alícuota IVA"):
@@ -479,12 +489,17 @@ def descomponer_neto_iva(importe_total, alicuota_iva):
     puntualmente exenta), pero para esta cuenta dan el mismo resultado que
     una alícuota de 0%: todo el importe es neto, el IVA da $0.
 
-    Devuelve (neto, iva) como floats, redondeados a 2 decimales -- ninguno
-    de los dos se ajusta para que la suma dé EXACTO el total centavo a
-    centavo (puede haber una diferencia de $0,01 por redondeo, común en
-    este tipo de cálculo y que ARCA tolera).
+    Devuelve (precio_a_cargar, iva) como floats, redondeados a 2 decimales.
+    Con discrimina_iva=False, precio_a_cargar es el total sin tocar y el IVA
+    devuelto es solo informativo (no se usa para completar nada en ARCA).
+    Con discrimina_iva=True, ninguno de los dos se ajusta para que la suma
+    dé EXACTO el total centavo a centavo (puede haber una diferencia de
+    $0,01 por redondeo, común en este tipo de cálculo y que ARCA tolera).
     """
     total = float(importe_total or 0)
+
+    if not discrimina_iva:
+        return round(total, 2), 0.0
 
     if alicuota_iva in ("NO_GRAVADO", "EXENTO"):
         return round(total, 2), 0.0
@@ -676,7 +691,7 @@ def facturar_comprobante(comprobante, modo_prueba=False):
                     tipo_pago_detalle=comprobante.tipo_pago_detalle,
                     numero_pago=comprobante.numero_pago,
                 )
-                neto, _iva = descomponer_neto_iva(comprobante.precio_unitario, comprobante.alicuota_iva)
+                neto, _iva = descomponer_neto_iva(comprobante.precio_unitario, comprobante.alicuota_iva, es_clase_a)
                 lineas = [{
                     "descripcion": comprobante.descripcion,
                     "cantidad": comprobante.cantidad,
@@ -685,7 +700,7 @@ def facturar_comprobante(comprobante, modo_prueba=False):
                     "alicuota_iva": comprobante.alicuota_iva,
                 }]
                 for linea_extra in comprobante.lineas_extra:
-                    neto_extra, _ = descomponer_neto_iva(linea_extra.precio_unitario, linea_extra.alicuota_iva)
+                    neto_extra, _ = descomponer_neto_iva(linea_extra.precio_unitario, linea_extra.alicuota_iva, es_clase_a)
                     lineas.append({
                         "descripcion": linea_extra.descripcion,
                         "cantidad": linea_extra.cantidad,
