@@ -552,6 +552,55 @@ class IdTransaccionFacturada(db.Model):
     )
 
 
+class FacturaHistorica(db.Model):
+    """
+    Copia PERMANENTE de los datos de cada comprobante en el momento exacto
+    en que se facturó con éxito (monto, fecha real usada en ARCA, tipo,
+    punto de venta, descripción, etc.) -- es la base del reporte de
+    facturación histórica por empresa (pestaña "Historial" en
+    Comprobantes), que tiene que seguir mostrando el detalle día a día, mes
+    a mes y año a año de todo lo facturado AUNQUE el usuario borre después
+    los Comprobantes de la tabla (ver comprobantes_eliminar_todos() en
+    app.py -- eso no afecta la factura real ya emitida en ARCA, y tampoco
+    tiene que borrar este historial).
+
+    `comprobante_id` es una referencia informativa, SIN ForeignKey de
+    verdad -- a propósito, igual que CuilAntiAbuso más abajo -- para que
+    este renglón sobreviva sin ningún problema aunque el Comprobante
+    original se borre más adelante (si tuviera una FK real, habría que
+    manejar con cuidado qué pasa con ella al borrar; así, directamente no
+    hay nada que manejar).
+
+    `fecha` es la misma fecha que `fecha_comprobante` pero ya convertida a
+    tipo Date (en vez de texto "DD/MM/AAAA") para poder agrupar y filtrar
+    por día/mes/año de forma rápida en la consulta a la base, sin tener que
+    parsear texto en Python fila por fila.
+
+    Se crea una sola vez por comprobante, desde _registrar_factura_historica
+    en app.py (se llama junto con _registrar_id_transaccion_facturada, en
+    los mismos 4 lugares donde un comprobante pasa a estado "facturado").
+    """
+    __tablename__ = "facturas_historicas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey("empresas.id"), nullable=False, index=True)
+    comprobante_id = db.Column(db.Integer, nullable=True, index=True)  # sin ForeignKey a propósito, ver docstring
+
+    fecha_comprobante = db.Column(db.String(20))  # "DD/MM/AAAA", la fecha real que quedó escrita en ARCA
+    fecha = db.Column(db.Date, index=True)  # la misma fecha, parseada, para agrupar por día/mes/año
+
+    tipo_comprobante = db.Column(db.String(80))
+    punto_venta = db.Column(db.String(10))
+    concepto = db.Column(db.String(10))
+    descripcion = db.Column(db.String(300))
+    importe_total = db.Column(db.Float, default=0.0)
+    cuit_receptor = db.Column(db.String(20))
+    nombre_razon_social = db.Column(db.String(200))
+    id_transaccion = db.Column(db.String(120), nullable=True, index=True)
+
+    facturado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class CuilAntiAbuso(db.Model):
     """
     Un renglón por cada CUIL que alguna vez se usó para facturar de verdad

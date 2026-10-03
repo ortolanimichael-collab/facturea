@@ -25,7 +25,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, IdTransaccionFacturada, LeadContacto, VisitaWeb, EventoWeb, RegistroActividadBot, DIAS_PRUEBA_GRATIS, PLANES
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, IdTransaccionFacturada, FacturaHistorica, LeadContacto, VisitaWeb, EventoWeb, RegistroActividadBot, DIAS_PRUEBA_GRATIS, PLANES
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -752,6 +752,63 @@ def _backfill_ids_transaccion_facturadas():
 
 
 _backfill_ids_transaccion_facturadas()
+
+
+def _backfill_facturas_historicas():
+    """
+    Completa FacturaHistorica (ver models.py) con los comprobantes que YA
+    están en estado "facturado" y todavía existen en la base -- para que el
+    reporte de Historial arranque mostrando también todo lo que se había
+    facturado ANTES de que existiera esta tabla, no solo lo que se facture
+    de acá en adelante (eso ya lo registra _registrar_factura_historica()
+    en el momento de facturar).
+
+    Corre una sola vez por arranque; no hace nada si ya está todo cargado
+    (se puede correr de nuevo sin problema -- solo agrega lo que falte).
+    """
+    # Nota: arma los registros a mano acá (en vez de llamar a
+    # _registrar_factura_historica) porque esa función se define más abajo
+    # en el archivo, y esto corre al arrancar el módulo -- misma razón por
+    # la que _backfill_ids_transaccion_facturadas(), arriba, tampoco llama
+    # a _registrar_id_transaccion_facturada().
+    with app.app_context():
+        facturados = Comprobante.query.filter(Comprobante.estado == "facturado").all()
+        if not facturados:
+            return
+        ya_registrados = {
+            r[0] for r in FacturaHistorica.query.with_entities(FacturaHistorica.comprobante_id).all()
+        }
+        nuevos = 0
+        for c in facturados:
+            if c.id in ya_registrados:
+                continue
+            fecha_parseada = None
+            try:
+                fecha_parseada = datetime.strptime((c.fecha_comprobante or "").strip(), "%d/%m/%Y").date()
+            except (TypeError, ValueError):
+                pass
+            db.session.add(FacturaHistorica(
+                empresa_id=c.empresa_id,
+                comprobante_id=c.id,
+                fecha_comprobante=c.fecha_comprobante,
+                fecha=fecha_parseada,
+                tipo_comprobante=c.tipo_comprobante,
+                punto_venta=c.punto_venta,
+                concepto=c.concepto,
+                descripcion=c.descripcion,
+                importe_total=c.importe_total or 0.0,
+                cuit_receptor=c.cuit_receptor,
+                nombre_razon_social=c.nombre_razon_social,
+                id_transaccion=c.id_transaccion,
+                facturado_en=c.facturado_en or datetime.utcnow(),
+            ))
+            nuevos += 1
+        if nuevos:
+            db.session.commit()
+            print(f"[info] Se registraron {nuevos} factura(s) ya facturadas en FacturaHistorica (reporte de Historial).")
+
+
+_backfill_facturas_historicas()
 
 
 crear_admin_inicial()
@@ -1895,6 +1952,7 @@ def comprobantes(empresa_id):
         "comprobantes.html", comprobantes=filas, usuario=current_user, empresa=empresa,
         datos_revision=datos_revision, stats=_calcular_estadisticas(empresa.id), conceptos=CONCEPTOS,
         support_whatsapp=SUPPORT_WHATSAPP, resumen_reparto=_resumen_reparto_descripciones(empresa, filas),
+        historial=_calcular_historial(empresa.id),
     )
 
 
@@ -1949,6 +2007,72 @@ def _resumen_reparto_descripciones(empresa, comprobantes):
         "monto_pendiente_monto_bajo": sum(c.precio_unitario or 0 for c in calificantes),
         "restantes": len(restantes),
         "filas_reparto": filas_reparto,
+    }
+
+
+def _calcular_historial(empresa_id):
+    """
+    Arma el reporte de la pestaña "Historial": cuánto se facturó por
+    día/mes/año, a partir de FacturaHistorica -- NO de Comprobante. Por
+    eso este total puede ser mayor a lo que hoy se ve en la pestaña
+    Comprobantes: FacturaHistorica guarda una copia permanente de cada
+    factura ya emitida que sobrevive aunque el usuario borre después los
+    comprobantes de la tabla (ver FacturaHistorica en models.py). Ese es
+    justamente el punto de este reporte.
+    """
+    registros = FacturaHistorica.query.filter_by(empresa_id=empresa_id).all()
+
+    total_cantidad = len(registros)
+    total_monto = sum(r.importe_total or 0.0 for r in registros)
+
+    MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+             "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+    por_anio_dict, por_mes_dict, por_dia_dict = {}, {}, {}
+    sin_fecha = 0
+
+    for r in registros:
+        if not r.fecha:
+            sin_fecha += 1
+            continue
+        monto = r.importe_total or 0.0
+
+        d = por_anio_dict.setdefault(r.fecha.year, {"cantidad": 0, "monto": 0.0})
+        d["cantidad"] += 1
+        d["monto"] += monto
+
+        d = por_mes_dict.setdefault((r.fecha.year, r.fecha.month), {"cantidad": 0, "monto": 0.0})
+        d["cantidad"] += 1
+        d["monto"] += monto
+
+        d = por_dia_dict.setdefault(r.fecha, {"cantidad": 0, "monto": 0.0})
+        d["cantidad"] += 1
+        d["monto"] += monto
+
+    por_anio = [
+        {"anio": anio, **datos}
+        for anio, datos in sorted(por_anio_dict.items(), key=lambda x: x[0], reverse=True)
+    ]
+    por_mes = [
+        {"anio": anio, "mes": mes, "mes_nombre": MESES[mes], **datos}
+        for (anio, mes), datos in sorted(por_mes_dict.items(), key=lambda x: x[0], reverse=True)
+    ]
+    por_dia = [
+        {"fecha": fecha, **datos}
+        for fecha, datos in sorted(por_dia_dict.items(), key=lambda x: x[0], reverse=True)
+    ]
+
+    cantidad_actual_en_tabla = Comprobante.query.filter_by(empresa_id=empresa_id, estado="facturado").count()
+
+    return {
+        "total_cantidad": total_cantidad,
+        "total_monto": total_monto,
+        "sin_fecha": sin_fecha,
+        "por_anio": por_anio,
+        "por_mes": por_mes,
+        "por_dia": por_dia,
+        "cantidad_actual_en_tabla": cantidad_actual_en_tabla,
+        "cantidad_eliminados": max(0, total_cantidad - cantidad_actual_en_tabla),
     }
 
 
@@ -2164,22 +2288,62 @@ def _registrar_id_transaccion_facturada(comprobante):
     de que este id_transaccion ya se facturó con éxito -- a diferencia del
     propio Comprobante, este registro sobrevive aunque el usuario borre el
     comprobante después (incluso con "Eliminar todos los archivos"). Se
-    llama justo después de poner comprobante.estado = "facturado" en los dos
-    lugares donde eso pasa. Si el comprobante no tiene id_transaccion (ej. se
-    cargó a mano o vino de una imagen sin dato de origen), no hay nada que
-    registrar.
+    llama justo después de poner comprobante.estado = "facturado" en los
+    4 lugares donde eso pasa (facturar uno, facturar en lote, marcar
+    facturado a mano, y marcar facturado a mano en lote). Si el comprobante
+    no tiene id_transaccion (ej. se cargó a mano o vino de una imagen sin
+    dato de origen), no hay id_transaccion que registrar -- pero el
+    historial (ver _registrar_factura_historica) se guarda siempre, tenga o
+    no id_transaccion.
     """
-    if not comprobante.id_transaccion:
+    if comprobante.id_transaccion:
+        ya_registrado = IdTransaccionFacturada.query.filter_by(
+            empresa_id=comprobante.empresa_id, id_transaccion=comprobante.id_transaccion,
+        ).first()
+        if not ya_registrado:
+            db.session.add(IdTransaccionFacturada(
+                empresa_id=comprobante.empresa_id,
+                id_transaccion=comprobante.id_transaccion,
+                facturado_en=comprobante.facturado_en or datetime.utcnow(),
+            ))
+    _registrar_factura_historica(comprobante)
+
+
+def _registrar_factura_historica(comprobante):
+    """
+    Guarda una copia PERMANENTE de los datos de este comprobante (ver
+    FacturaHistorica en models.py) -- a diferencia del Comprobante en sí,
+    este registro NUNCA se borra junto con él, así el reporte de
+    facturación histórica por empresa (pestaña "Historial" en
+    Comprobantes) sigue mostrando el detalle día/mes/año de todo lo
+    facturado aunque el usuario borre los comprobantes de la tabla después.
+
+    Se llama una sola vez por comprobante -- si se llama de nuevo para el
+    mismo (comprobante_id ya registrado), no duplica.
+    """
+    ya_existe = FacturaHistorica.query.filter_by(comprobante_id=comprobante.id).first()
+    if ya_existe:
         return
-    ya_registrado = IdTransaccionFacturada.query.filter_by(
-        empresa_id=comprobante.empresa_id, id_transaccion=comprobante.id_transaccion,
-    ).first()
-    if not ya_registrado:
-        db.session.add(IdTransaccionFacturada(
-            empresa_id=comprobante.empresa_id,
-            id_transaccion=comprobante.id_transaccion,
-            facturado_en=comprobante.facturado_en or datetime.utcnow(),
-        ))
+    fecha_parseada = None
+    try:
+        fecha_parseada = datetime.strptime((comprobante.fecha_comprobante or "").strip(), "%d/%m/%Y").date()
+    except (TypeError, ValueError):
+        pass
+    db.session.add(FacturaHistorica(
+        empresa_id=comprobante.empresa_id,
+        comprobante_id=comprobante.id,
+        fecha_comprobante=comprobante.fecha_comprobante,
+        fecha=fecha_parseada,
+        tipo_comprobante=comprobante.tipo_comprobante,
+        punto_venta=comprobante.punto_venta,
+        concepto=comprobante.concepto,
+        descripcion=comprobante.descripcion,
+        importe_total=comprobante.importe_total or 0.0,
+        cuit_receptor=comprobante.cuit_receptor,
+        nombre_razon_social=comprobante.nombre_razon_social,
+        id_transaccion=comprobante.id_transaccion,
+        facturado_en=comprobante.facturado_en or datetime.utcnow(),
+    ))
 
 
 def _chequear_cuil_no_abusado(empresa):
