@@ -574,6 +574,7 @@
   <div class="tabs-nav">
     <button type="button" class="tab-btn activa" data-tab="tabComprobantes" onclick="mostrarTabComprobantes('tabComprobantes')">Comprobantes</button>
     <button type="button" class="tab-btn" data-tab="tabEstadisticas" onclick="mostrarTabComprobantes('tabEstadisticas')">Proceso y estadísticas</button>
+    <button type="button" class="tab-btn" data-tab="tabHistorial" onclick="mostrarTabComprobantes('tabHistorial')">Historial</button>
     <button type="button" class="tab-btn" data-tab="tabConfiguraciones" onclick="mostrarTabComprobantes('tabConfiguraciones')">Configuraciones</button>
   </div>
 
@@ -939,6 +940,63 @@
   </div>
 </div>
 
+<div id="tabHistorial" class="tab-contenido">
+  <div class="panel-stats">
+    <p class="tip-edicion" style="margin-bottom:20px;">
+      Este detalle se arma a partir de una copia permanente de cada factura que se emitió con éxito --
+      sigue mostrando todo lo facturado aunque después borres comprobantes de la tabla de "Comprobantes"
+      (incluso con "Eliminar todos"). No afecta ni depende de lo que haya o no en esa tabla ahora mismo.
+    </p>
+
+    <ul class="lista-stats">
+      <li><span class="stat-label">Total de comprobantes facturados (histórico)</span><span class="stat-num-lista">{{ historial.total_cantidad }}</span></li>
+      <li><span class="stat-label">Monto total facturado (histórico)</span><span class="stat-num-lista">$ {{ "%.2f"|format(historial.total_monto) }}</span></li>
+      <li><span class="stat-label">Comprobantes todavía presentes en la tabla</span><span class="stat-num-lista">{{ historial.cantidad_actual_en_tabla }}</span></li>
+      <li><span class="stat-label">Comprobantes ya borrados de la tabla (solo quedan acá)</span><span class="stat-num-lista">{{ historial.cantidad_eliminados }}</span></li>
+    </ul>
+
+    {% if historial.total_cantidad %}
+    <h3>Por año</h3>
+    <table class="tabla-resumen-reparto">
+      <tr><th>Año</th><th>Comprobantes</th><th>Monto facturado</th></tr>
+      {% for fila in historial.por_anio %}
+      <tr><td>{{ fila.anio }}</td><td>{{ fila.cantidad }}</td><td>$ {{ "%.2f"|format(fila.monto) }}</td></tr>
+      {% endfor %}
+    </table>
+
+    <h3>Por mes</h3>
+    <details>
+      <summary>Ver el detalle mes a mes ({{ historial.por_mes|length }} mes(es))</summary>
+      <table class="tabla-resumen-reparto">
+        <tr><th>Mes</th><th>Comprobantes</th><th>Monto facturado</th></tr>
+        {% for fila in historial.por_mes %}
+        <tr><td>{{ fila.mes_nombre }} {{ fila.anio }}</td><td>{{ fila.cantidad }}</td><td>$ {{ "%.2f"|format(fila.monto) }}</td></tr>
+        {% endfor %}
+      </table>
+    </details>
+
+    <h3>Por día</h3>
+    <details>
+      <summary>Ver el detalle día por día ({{ historial.por_dia|length }} día(s) con facturación)</summary>
+      <table class="tabla-resumen-reparto">
+        <tr><th>Día</th><th>Comprobantes</th><th>Monto facturado</th></tr>
+        {% for fila in historial.por_dia %}
+        <tr><td>{{ fila.fecha.strftime('%d/%m/%Y') }}</td><td>{{ fila.cantidad }}</td><td>$ {{ "%.2f"|format(fila.monto) }}</td></tr>
+        {% endfor %}
+      </table>
+    </details>
+
+    {% if historial.sin_fecha %}
+    <p class="tip-edicion" style="margin-top:16px;">
+      {{ historial.sin_fecha }} comprobante(s) facturado(s) no tienen una fecha legible guardada y no entran en el detalle por día/mes/año de arriba (sí están incluidos en los totales).
+    </p>
+    {% endif %}
+    {% else %}
+    <p class="tip-edicion" style="margin-top:12px;">Todavía no hay nada facturado para mostrar acá.</p>
+    {% endif %}
+  </div>
+</div>
+
 {% set descripciones_config = ((empresa.descripciones_disponibles or "")).split(",") | select | list %}
 {% set porcentajes_config_actuales = ((empresa.descripciones_porcentajes or "")).split(",") %}
 <div id="tabConfiguraciones" class="tab-contenido">
@@ -1152,7 +1210,7 @@ function mostrarTabComprobantes(idPestaña) {
 // acá con #tabConfiguraciones en la URL), se reabre esa pestaña sola en vez
 // de volver siempre a "Comprobantes" -- mismo criterio para #tabEstadisticas
 // por si en algún momento se linkea directo a esa pestaña.
-if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadisticas') {
+if (location.hash === '#tabConfiguraciones' || location.hash === '#tabEstadisticas' || location.hash === '#tabHistorial') {
   mostrarTabComprobantes(location.hash.slice(1));
 }
 
