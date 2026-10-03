@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFacturación — Log del bot</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/logo-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0F1B3D;
+    --navy:#16265A;
+    --blue:#28A9E0;
+    --blue-deep:#1C87B8;
+    --blue-tint:#E9F5FC;
+    --paper:#F4F6F9;
+    --paper-2:#FFFFFF;
+    --ink:#131C33;
+    --muted:#5C6478;
+    --line: rgba(19,28,51,0.14);
+    --warn-tint:#FDF1D9; --warn-deep:#8A5A0A;
+    --danger:#D64545; --danger-tint:#FBE9E9;
+    --ok-tint:#E6F6EC; --ok-deep:#1E8A4C;
+    --sans: "Manrope", "Roboto", sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1280px;margin:0 auto;padding:0 24px 80px;}
+
+  header.app-header{background:var(--navy-deep);border-bottom:2px solid var(--blue);margin-bottom:32px;}
+  header.app-header .wrap{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;gap:14px;flex-wrap:wrap;}
+  .logo{font-family:var(--sans);font-weight:800;font-size:18px;display:flex;align-items:center;gap:9px;text-decoration:none;color:#FFFFFF;}
+  .logo .dot{width:9px;height:9px;background:var(--blue);border-radius:50%;}
+  .nav-links{display:flex;gap:18px;align-items:center;font-family:var(--sans);font-size:13.5px;font-weight:600;color:#D6E1F5;}
+  .nav-links a{color:#D6E1F5;text-decoration:none;}
+  .nav-links a:hover{color:#fff;}
+
+  h1{font-family:var(--sans);font-weight:800;font-size:24px;margin:0 0 4px;color:var(--ink);}
+  p.sub{color:var(--muted);font-size:14.5px;margin-bottom:24px;}
+
+  .filtros{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;}
+  .filtros select, .filtros input{font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--paper-2);color:var(--ink);}
+  .filtros select:focus, .filtros input:focus{outline:none;border-color:var(--blue);}
+  .filtros button{font-family:var(--sans);font-weight:700;font-size:12.5px;padding:8px 16px;border-radius:8px;border:none;background:var(--blue);color:#fff;cursor:pointer;}
+  .filtros button:hover{filter:brightness(1.06);}
+  .filtros a.limpiar{font-family:var(--sans);font-size:12.5px;color:var(--muted);text-decoration:underline;}
+
+  table{width:100%;border-collapse:collapse;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  thead th{font-family:var(--sans);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;color:var(--muted);text-align:left;padding:12px 14px;border-bottom:1.5px solid var(--line);background:var(--paper);}
+  tbody td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--blue-tint);}
+  .detalle{color:var(--ink);max-width:560px;}
+  .etiqueta{font-family:var(--sans);font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:20px;display:inline-block;white-space:nowrap;}
+  .etiqueta.aceptada{background:var(--ok-tint);color:var(--ok-deep);}
+  .etiqueta.rechazada{background:var(--warn-tint);color:var(--warn-deep);}
+  .etiqueta.sin_respuesta{background:var(--danger-tint);color:var(--danger);}
+  .etiqueta.nivel-error{background:var(--danger-tint);color:var(--danger);}
+  .etiqueta.nivel-info{background:var(--blue-tint);color:var(--blue-deep);}
+  .etiqueta.nivel-intento_fecha{background:var(--paper);color:var(--muted);}
+  .muted{color:var(--muted);font-size:12px;}
+  .vacio{padding:40px;text-align:center;color:var(--muted);font-size:14px;}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="wrap">
+    <a href="/" class="logo"><img src="/static/img/logo-icon.png" alt="AutoFacturación" style="width:26px;height:26px;">AutoFacturación</a>
+    <div class="nav-links">
+      <a href="/admin">Panel admin</a>
+      <a href="/admin/trafico-web">Tráfico web</a>
+      <span>{{ current_user.email }}</span>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <h1>Log de actividad del bot</h1>
+  <p class="sub">
+    Registro técnico interno (solo vos lo ves) de lo que hace el bot de facturación en ARCA:
+    cada fecha que probó, si fue aceptada o rechazada y cuánto tardó, y el inicio/fin/error de
+    cada comprobante. Pensado para diagnosticar un problema con evidencia concreta en vez de
+    tener que reconstruirlo todo de memoria. Se muestran los últimos 1000 registros.
+  </p>
+
+  <form class="filtros" method="get">
+    <select name="empresa_id">
+      <option value="">Todas las empresas</option>
+      {% for e in empresas %}
+        <option value="{{ e.id }}" {{ "selected" if filtro_empresa_id == e.id else "" }}>{{ e.nombre_interno }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="comprobante_id" placeholder="N° de comprobante" value="{{ filtro_comprobante_id or '' }}">
+    <select name="nivel">
+      <option value="">Todos los niveles</option>
+      <option value="info" {{ "selected" if filtro_nivel == "info" else "" }}>Info</option>
+      <option value="intento_fecha" {{ "selected" if filtro_nivel == "intento_fecha" else "" }}>Intento de fecha</option>
+      <option value="error" {{ "selected" if filtro_nivel == "error" else "" }}>Error</option>
+    </select>
+    <select name="resultado">
+      <option value="">Cualquier resultado</option>
+      <option value="aceptada" {{ "selected" if filtro_resultado == "aceptada" else "" }}>Fecha aceptada</option>
+      <option value="rechazada" {{ "selected" if filtro_resultado == "rechazada" else "" }}>Fecha rechazada</option>
+      <option value="sin_respuesta" {{ "selected" if filtro_resultado == "sin_respuesta" else "" }}>ARCA sin respuesta</option>
+    </select>
+    <button type="submit">Filtrar</button>
+    <a class="limpiar" href="/admin/log-bot">Limpiar filtros</a>
+  </form>
+
+  {% if registros %}
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha/hora (AR)</th>
+        <th>Empresa</th>
+        <th>Comprobante</th>
+        <th>Evento</th>
+        <th>Fecha probada</th>
+        <th>Resultado</th>
+        <th>Tardó</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in registros %}
+      <tr>
+        <td class="muted">{{ r.creado_en_ar.strftime("%d/%m/%Y %H:%M:%S") if r.creado_en_ar else "-" }}</td>
+        <td>{{ r.empresa.nombre_interno if r.empresa else "-" }}</td>
+        <td>{{ "#" ~ r.comprobante_id if r.comprobante_id else "-" }}</td>
+        <td><span class="etiqueta nivel-{{ r.nivel }}">{{ r.evento }}</span></td>
+        <td>{{ r.fecha_probada or "-" }}</td>
+        <td>{% if r.resultado %}<span class="etiqueta {{ r.resultado }}">{{ r.resultado }}</span>{% else %}-{% endif %}</td>
+        <td class="muted">{{ "%.1fs"|format(r.tiempo_respuesta_seg) if r.tiempo_respuesta_seg is not none else "-" }}</td>
+        <td class="detalle">{{ r.detalle or "-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="vacio">Todavía no hay registros (o ninguno coincide con el filtro elegido).</div>
+  {% endif %}
+</div>
+</body>
+</html>
