@@ -25,7 +25,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 
-from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, IdTransaccionFacturada, LeadContacto, VisitaWeb, EventoWeb, DIAS_PRUEBA_GRATIS, PLANES
+from models import db, init_db, Usuario, Empresa, Comprobante, ComprobanteLinea, RegistroSubida, CuilAntiAbuso, IdTransaccionFacturada, LeadContacto, VisitaWeb, EventoWeb, RegistroActividadBot, DIAS_PRUEBA_GRATIS, PLANES
 import drive_sync
 from procesador import procesar_archivo
 import procesador
@@ -3354,6 +3354,58 @@ def admin_trafico_web():
     )
 
 
+@app.route("/admin/log-bot")
+@login_required
+@admin_required
+def admin_log_bot():
+    """
+    Log técnico de todo lo que hizo el bot de facturación (ver
+    RegistroActividadBot en models.py y _registrar_actividad_bot en
+    automatizacion/arca_bot.py) -- pensado para diagnosticar un problema
+    (ej. fechas que terminan mal en un lote grande) con evidencia concreta
+    de cada intento, en vez de tener que reconstruirlo todo por inferencia
+    como pasó con el incidente de fechas de octubre 2026. Solo vos como
+    administrador lo ves -- no existe ningún link hacia acá desde ninguna
+    pantalla de cliente.
+
+    Filtros opcionales por query string: empresa_id, comprobante_id,
+    nivel (info|intento_fecha|error) y resultado (aceptada|rechazada|sin_respuesta).
+    """
+    empresa_id = request.args.get("empresa_id", type=int)
+    comprobante_id = request.args.get("comprobante_id", type=int)
+    nivel = request.args.get("nivel", "").strip()
+    resultado = request.args.get("resultado", "").strip()
+
+    query = RegistroActividadBot.query
+    if empresa_id:
+        query = query.filter(RegistroActividadBot.empresa_id == empresa_id)
+    if comprobante_id:
+        query = query.filter(RegistroActividadBot.comprobante_id == comprobante_id)
+    if nivel:
+        query = query.filter(RegistroActividadBot.nivel == nivel)
+    if resultado:
+        query = query.filter(RegistroActividadBot.resultado == resultado)
+
+    registros = query.order_by(RegistroActividadBot.creado_en.desc()).limit(1000).all()
+
+    # Mismo ajuste fijo de -3hs que se usa en todo el resto del panel admin
+    # (Argentina no tiene horario de verano).
+    for r in registros:
+        r.creado_en_ar = (r.creado_en - timedelta(hours=3)) if r.creado_en else None
+
+    empresas = Empresa.query.order_by(Empresa.nombre_interno).all()
+
+    return render_template(
+        "admin_log_bot.html",
+        registros=registros,
+        empresas=empresas,
+        filtro_empresa_id=empresa_id,
+        filtro_comprobante_id=comprobante_id,
+        filtro_nivel=nivel,
+        filtro_resultado=resultado,
+    )
+
+
 @app.route("/admin/renovar/<int:usuario_id>", methods=["POST"])
 @login_required
 @admin_required
@@ -3635,6 +3687,58 @@ def visitas_web_para_panel():
                 "duracion_seg": duracion_por_visita.get(v.id),
             }
             for v in ultimas
+        ],
+    })
+
+
+@csrf.exempt
+@app.route("/api/interno/logs-sistema", methods=["GET"])
+def logs_sistema_para_panel():
+    """
+    Panel de membresías llama ACÁ (misma clave compartida que los demás
+    endpoints /api/interno/...) para traer el log técnico del bot de
+    facturación (ver RegistroActividadBot en models.py) y mostrarlo en su
+    vista central de "Logs", junto con el de los demás productos del
+    ecosistema (Cadetería Centro, etc. cuando expongan este mismo
+    endpoint) -- así un solo lugar (el panel de membresías) alcanza para
+    diagnosticar un problema de cualquiera de tus sistemas, en vez de
+    tener que entrar a cada admin por separado.
+
+    Formato genérico (no específico de Facturea ni de "bot"), para que
+    cualquier otro producto del ecosistema pueda exponer el mismo
+    contrato: {"ok": true, "registros": [{"creado_en", "nivel", "evento",
+    "detalle", "cliente_email", "referencia"}, ...]}.
+
+    Devuelve los últimos 300 registros (el panel central los combina con
+    los de otros productos y los vuelve a ordenar, así que no hace falta
+    mandar más de golpe).
+    """
+    clave_recibida = request.headers.get("X-Webhook-Secret", "")
+    if not _clave_webhook_valida(clave_recibida):
+        return jsonify({"error": "no autorizado"}), 401
+
+    registros = (
+        RegistroActividadBot.query.order_by(RegistroActividadBot.creado_en.desc()).limit(300).all()
+    )
+
+    return jsonify({
+        "ok": True,
+        "registros": [
+            {
+                # Ya ajustada a hora de Argentina antes de mandarla -- mismo
+                # criterio que /api/interno/visitas-web, así el panel de
+                # membresías no tiene que saber en qué huso horario está
+                # guardado esto.
+                "creado_en": (r.creado_en - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S") if r.creado_en else None,
+                "nivel": r.nivel,
+                "evento": r.evento,
+                "detalle": r.detalle,
+                "cliente_email": r.empresa.usuario.email if (r.empresa and r.empresa.usuario) else None,
+                "referencia": f"Comprobante #{r.comprobante_id}" if r.comprobante_id else (
+                    r.empresa.nombre_interno if r.empresa else None
+                ),
+            }
+            for r in registros
         ],
     })
 

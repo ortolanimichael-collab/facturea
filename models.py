@@ -686,6 +686,48 @@ class EventoWeb(db.Model):
     visita = db.relationship("VisitaWeb")
 
 
+class RegistroActividadBot(db.Model):
+    """
+    Log técnico de todo lo que hace el bot de facturación (arca_bot.py) al
+    procesar cada comprobante -- pensado SOLO para vos como administrador,
+    para poder diagnosticar un problema (ej. fechas que terminan mal) con
+    evidencia concreta en vez de tener que reconstruir todo por inferencia.
+
+    No se muestra en ninguna pantalla de cliente -- solo en /admin/log-bot
+    (ver admin_required en app.py). No reemplaza a Comprobante.error_facturacion
+    (que es el resumen que SÍ ve el usuario); esto es el detalle interno,
+    paso a paso, de intentos de fecha, reintentos, y eventos clave durante
+    la automatización.
+
+    Se usa principalmente para:
+    - cada fecha que el bot probó en el Paso 1 de ARCA (completar_paso_uno),
+      si ARCA la aceptó o la rechazó, y cuánto tardó en responder.
+    - eventos generales del proceso de facturación (inicio, fin, error,
+      reintento) que ayudan a reconstruir la secuencia exacta de un lote.
+    """
+    __tablename__ = "registros_actividad_bot"
+
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey("empresas.id"), nullable=True, index=True)
+    empresa = db.relationship("Empresa")
+    comprobante_id = db.Column(db.Integer, db.ForeignKey("comprobantes.id"), nullable=True, index=True)
+    comprobante = db.relationship("Comprobante")
+
+    # "intento_fecha" | "info" | "advertencia" | "error" -- para poder
+    # filtrar rápido en el panel sin tener que leer todo.
+    nivel = db.Column(db.String(20), default="info")
+    evento = db.Column(db.String(60), nullable=False)  # ej: "intento_fecha", "inicio_comprobante", "fin_comprobante", "excepcion"
+    detalle = db.Column(db.Text)  # texto libre legible (ej. "Fecha probada: 01/10/2026 -> rechazada por ARCA (tardó 14.2s)")
+
+    # Campos específicos de "intento_fecha", para poder filtrar/graficar sin
+    # tener que parsear el texto de "detalle".
+    fecha_probada = db.Column(db.String(20), nullable=True)
+    resultado = db.Column(db.String(20), nullable=True)  # "aceptada" | "rechazada"
+    tiempo_respuesta_seg = db.Column(db.Float, nullable=True)  # cuánto tardó ARCA en responder ese intento (para detectar lentitud real)
+
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 def init_db(app):
     database_url = os.environ.get("DATABASE_URL", "sqlite:///facturea.db")
     if database_url.startswith("postgres://"):
