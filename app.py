@@ -487,6 +487,17 @@ def convertir_cuenta_existente_en_admin():
     resetea la contraseña a esa -- útil si tampoco te acordás la contraseña
     de esa cuenta de prueba.
 
+    Si EMAIL_ADMIN_NUEVO ya pertenece a OTRA cuenta (ej. una prueba vieja
+    registrada alguna vez con tu email real, con su período de prueba ya
+    vencido) -- por defecto no se toca nada, para no pisar datos sin que lo
+    pidas a propósito. Si además cargás LIBERAR_EMAIL_CONFLICTIVO=1, esa
+    otra cuenta NO se borra -- se le cambia el email a uno tipo
+    "<email>.liberado-<fecha>" para dejar el email real libre, y recién
+    ahí se hace la conversión de la cuenta de EMAIL_CUENTA_A_CONVERTIR como
+    siempre. Nada de lo que tenía cargado esa otra cuenta se pierde, pero
+    hasta que no renombres sus empresas/comprobantes a mano vas a tener que
+    buscarla por ese email modificado si alguna vez la necesitás.
+
     Conviene sacar estas variables de Render apenas te vuelvas a loguear,
     por la misma razón que RESETEAR_PASSWORD_ADMIN: no dejar una forma de
     reasignar cuentas disponible en cualquier redeploy futuro.
@@ -494,6 +505,7 @@ def convertir_cuenta_existente_en_admin():
     email_viejo = os.environ.get("EMAIL_CUENTA_A_CONVERTIR")
     email_nuevo = os.environ.get("EMAIL_ADMIN_NUEVO")
     password_nuevo = os.environ.get("PASSWORD_ADMIN_NUEVO")
+    liberar_conflicto = os.environ.get("LIBERAR_EMAIL_CONFLICTIVO") == "1"
     if not email_viejo or not email_nuevo:
         return
 
@@ -513,8 +525,16 @@ def convertir_cuenta_existente_en_admin():
             Usuario.email == email_nuevo, Usuario.id != cuenta.id
         ).first()
         if otra_cuenta_con_ese_email:
-            print(f"[aviso] ya existe otra cuenta distinta con el email {email_nuevo} -- no se hizo nada.")
-            return
+            if not liberar_conflicto:
+                print(
+                    f"[aviso] ya existe otra cuenta distinta con el email {email_nuevo} -- no se hizo nada "
+                    "(cargá LIBERAR_EMAIL_CONFLICTIVO=1 si querés liberarle el email a esa otra cuenta, sin borrar sus datos, y continuar)."
+                )
+                return
+            email_liberado = f"{email_nuevo}.liberado-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            otra_cuenta_con_ese_email.email = email_liberado
+            db.session.commit()
+            print(f"[info] la cuenta conflictiva con {email_nuevo} quedó renombrada a {email_liberado} (sus datos siguen intactos ahí).")
 
         cuenta.email = email_nuevo
         cuenta.es_admin = True
