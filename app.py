@@ -468,6 +468,62 @@ def crear_admin_inicial():
         db.session.commit()
 
 
+def convertir_cuenta_existente_en_admin():
+    """
+    Otra vía de recuperación sin necesitar acceso a Shell (mismo criterio
+    que crear_admin_inicial() de arriba), para el caso de ya tener una
+    cuenta de prueba cargada de verdad -- con sus empresas, sus
+    comprobantes, su configuración -- pero registrada con un email
+    "de prueba" en vez del email real de administrador.
+
+    Si se cargan las variables EMAIL_CUENTA_A_CONVERTIR y EMAIL_ADMIN_NUEVO,
+    busca la cuenta EXISTENTE que tiene el primer email, le cambia el email
+    al segundo y la marca es_admin=True. No crea ninguna cuenta nueva, no
+    toca ni borra ningún dato de esa cuenta (empresas, comprobantes,
+    configuración de ARCA, etc. quedan exactamente igual) -- solo cambia el
+    email con el que se loguea.
+
+    Opcionalmente, si además se carga PASSWORD_ADMIN_NUEVO, también le
+    resetea la contraseña a esa -- útil si tampoco te acordás la contraseña
+    de esa cuenta de prueba.
+
+    Conviene sacar estas variables de Render apenas te vuelvas a loguear,
+    por la misma razón que RESETEAR_PASSWORD_ADMIN: no dejar una forma de
+    reasignar cuentas disponible en cualquier redeploy futuro.
+    """
+    email_viejo = os.environ.get("EMAIL_CUENTA_A_CONVERTIR")
+    email_nuevo = os.environ.get("EMAIL_ADMIN_NUEVO")
+    password_nuevo = os.environ.get("PASSWORD_ADMIN_NUEVO")
+    if not email_viejo or not email_nuevo:
+        return
+
+    with app.app_context():
+        try:
+            cuenta = Usuario.query.filter_by(email=email_viejo.strip().lower()).first()
+        except Exception:
+            # Las tablas todavía no existen -- ver el mismo caso en crear_admin_inicial().
+            return
+
+        if not cuenta:
+            print(f"[aviso] EMAIL_CUENTA_A_CONVERTIR ({email_viejo}) no corresponde a ninguna cuenta -- no se hizo nada.")
+            return
+
+        email_nuevo = email_nuevo.strip().lower()
+        otra_cuenta_con_ese_email = Usuario.query.filter(
+            Usuario.email == email_nuevo, Usuario.id != cuenta.id
+        ).first()
+        if otra_cuenta_con_ese_email:
+            print(f"[aviso] ya existe otra cuenta distinta con el email {email_nuevo} -- no se hizo nada.")
+            return
+
+        cuenta.email = email_nuevo
+        cuenta.es_admin = True
+        if password_nuevo:
+            cuenta.set_password(password_nuevo)
+        db.session.commit()
+        print(f"[info] cuenta {email_viejo} convertida en administrador con email {email_nuevo}.")
+
+
 def _sync_missing_columns():
     """
     Agrega automáticamente, al arrancar, cualquier columna que exista en los
@@ -679,6 +735,7 @@ _backfill_ids_transaccion_facturadas()
 
 
 crear_admin_inicial()
+convertir_cuenta_existente_en_admin()
 
 
 @login_manager.user_loader
