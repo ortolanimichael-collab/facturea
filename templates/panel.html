@@ -118,6 +118,7 @@
         </div>
       </a>
       <div class="nav-auth">
+        {% if usuario.es_admin %}<a href="/admin">Panel admin</a>{% endif %}
         <span>{{ usuario.nombre_razon_social or usuario.email }}</span>
         <a href="/logout">Cerrar sesión</a>
       </div>
