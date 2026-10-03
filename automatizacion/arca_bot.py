@@ -17,7 +17,37 @@ falta mantener un mapa a mano de código-por-texto para cada campo.
 
 from datetime import datetime, timedelta
 import os
+import time
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+
+def _registrar_actividad_bot(empresa_id=None, comprobante_id=None, nivel="info", evento="info",
+                              detalle=None, fecha_probada=None, resultado=None, tiempo_respuesta_seg=None):
+    """
+    Guarda un renglón en RegistroActividadBot (log técnico solo para vos
+    como administrador, ver /admin/log-bot) -- import local para no crear
+    una dependencia circular entre este módulo y models.py/app.py, y
+    envuelto en try/except porque esto es solo diagnóstico: un problema acá
+    (ej. sin contexto de Flask disponible) NUNCA tiene que frenar ni romper
+    una facturación real.
+    """
+    try:
+        from models import db, RegistroActividadBot
+        registro = RegistroActividadBot(
+            empresa_id=empresa_id,
+            comprobante_id=comprobante_id,
+            nivel=nivel,
+            evento=evento,
+            detalle=detalle,
+            fecha_probada=fecha_probada,
+            resultado=resultado,
+            tiempo_respuesta_seg=tiempo_respuesta_seg,
+        )
+        db.session.add(registro)
+        db.session.commit()
+    except Exception:
+        # Diagnóstico best-effort -- nunca interrumpe la facturación real.
+        pass
 
 
 def _headless_por_defecto():
@@ -213,7 +243,8 @@ def _elegir_punto_de_venta(ventana, punto_venta, timeout_normal=6000):
     selector.select_option(valor_real, force=True)
 
 
-def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hasta):
+def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hasta,
+                        empresa_id=None, comprobante_id=None):
     """
     "Datos de Emisión, Paso 1 de 4" -- ARCA junta en UNA sola pantalla la
     "Fecha del Comprobante" (que es la fecha de EMISIÓN real de la factura,
@@ -244,6 +275,23 @@ def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hast
 
     Devuelve la fecha de emisión que finalmente quedó cargada (puede ser
     distinta a la pedida si tuvo que avanzar por este motivo).
+
+    IMPORTANTE (fix de un bug real de octubre 2026): antes, "¿aceptó o
+    rechazó ARCA esta fecha?" se decidía con un timeout fijo de 6
+    segundos -- si no aparecía el cartel de error en ese lapso, se asumía
+    que había avanzado de pantalla. Si ARCA estaba lenta (tráfico alto,
+    problemas de red) y tardaba más de 6s en MOSTRAR el error de verdad,
+    el bot interpretaba la fecha como aceptada sin que lo fuera. Como ARCA
+    nunca deja retroceder la fecha de un comprobante dentro de un mismo
+    punto de venta, ese error de lectura quedaba "pisado" para siempre: el
+    resto del lote completo terminaba facturándose con fechas cada vez más
+    adelantadas, hasta llegar a la fecha de hoy. Ahora se espera lo que
+    haga falta -- sin asumir nada por tiempo -- a que aparezca CUALQUIERA
+    de los dos resultados reales: el cartel de error, o el campo
+    "#idivareceptor" que solo existe en la pantalla siguiente ("Paso 2 de
+    4, Datos del Receptor") y por lo tanto es prueba real de haber
+    avanzado. El timeout de 2 minutos es solo una salvaguarda ante un
+    cuelgue real de ARCA, no el mecanismo de detección en sí.
     """
     fecha_dt = datetime.strptime(fecha_emision, "%d/%m/%Y")
     hoy_dt = datetime.now()
@@ -267,22 +315,58 @@ def completar_paso_uno(ventana, fecha_emision, concepto, fecha_desde, fecha_hast
             campo_hasta.fill(fecha_hasta)
 
         ventana.once("dialog", lambda dialog: dialog.dismiss())
+        inicio_espera = time.monotonic()
         ventana.get_by_role("button", name="Continuar >").click()
 
-        # Espera activa (no un sleep fijo): apenas aparece el cartel de error
-        # seguimos -- si no aparece en 6s, asumimos que ARCA avanzó de pantalla.
+        # Espera activa a cualquiera de los dos resultados reales -- nunca
+        # se asume nada por un timeout corto (ver docstring de arriba).
         error = ventana.get_by_text("La Fecha del Comprobante es inválida")
+        avanzo_a_paso_dos = ventana.locator("#idivareceptor")
         try:
-            error.wait_for(state="visible", timeout=6000)
+            error.or_(avanzo_a_paso_dos).first.wait_for(state="visible", timeout=120000)
         except PlaywrightTimeoutError:
-            return fecha_intento  # no apareció el error -> se avanzó de pantalla
+            tiempo_respuesta = time.monotonic() - inicio_espera
+            _registrar_actividad_bot(
+                empresa_id=empresa_id, comprobante_id=comprobante_id,
+                nivel="error", evento="intento_fecha",
+                detalle=(
+                    f"Fecha probada: {fecha_intento} -> ARCA no respondió ni con el error ni "
+                    f"con la pantalla siguiente en 2 minutos (tardó {tiempo_respuesta:.1f}s)."
+                ),
+                fecha_probada=fecha_intento, resultado="sin_respuesta",
+                tiempo_respuesta_seg=tiempo_respuesta,
+            )
+            raise ValueError(
+                f"ARCA no respondió (ni aceptó ni rechazó) la fecha {fecha_intento} en 2 minutos "
+                "-- probablemente esté caída o muy lenta en este momento. Reintentá más tarde."
+            )
+        tiempo_respuesta = time.monotonic() - inicio_espera
 
-        # Fecha rechazada -- ARCA ya tiene un comprobante con fecha posterior a esta.
-        # Volvemos a la pantalla anterior para probar con el día siguiente. El "<
-        # Volver" también puede disparar su propio diálogo de confirmación (visto
-        # en una grabación real), así que se registra el dismiss antes de tocarlo.
-        ventana.once("dialog", lambda dialog: dialog.dismiss())
-        ventana.get_by_role("button", name="< Volver").click()
+        if error.is_visible():
+            # Fecha rechazada -- ARCA ya tiene un comprobante con fecha posterior a esta.
+            _registrar_actividad_bot(
+                empresa_id=empresa_id, comprobante_id=comprobante_id,
+                nivel="intento_fecha", evento="intento_fecha",
+                detalle=f"Fecha probada: {fecha_intento} -> rechazada por ARCA (tardó {tiempo_respuesta:.1f}s).",
+                fecha_probada=fecha_intento, resultado="rechazada",
+                tiempo_respuesta_seg=tiempo_respuesta,
+            )
+            # Volvemos a la pantalla anterior para probar con el día siguiente. El "<
+            # Volver" también puede disparar su propio diálogo de confirmación (visto
+            # en una grabación real), así que se registra el dismiss antes de tocarlo.
+            ventana.once("dialog", lambda dialog: dialog.dismiss())
+            ventana.get_by_role("button", name="< Volver").click()
+            continue
+
+        # Avanzó de pantalla -- confirmado de verdad (apareció #idivareceptor), no por descarte.
+        _registrar_actividad_bot(
+            empresa_id=empresa_id, comprobante_id=comprobante_id,
+            nivel="intento_fecha", evento="intento_fecha",
+            detalle=f"Fecha probada: {fecha_intento} -> aceptada por ARCA (tardó {tiempo_respuesta:.1f}s).",
+            fecha_probada=fecha_intento, resultado="aceptada",
+            tiempo_respuesta_seg=tiempo_respuesta,
+        )
+        return fecha_intento
 
     raise ValueError(
         f"ARCA rechazó todas las fechas probadas entre {fecha_emision} y hoy "
@@ -660,6 +744,16 @@ def facturar_comprobante(comprobante, modo_prueba=False):
 
     cuil, password = obtener_credenciales(empresa)
 
+    _registrar_actividad_bot(
+        empresa_id=empresa.id, comprobante_id=comprobante.id,
+        nivel="info", evento="inicio_comprobante",
+        detalle=(
+            f"Arranca facturación del comprobante #{comprobante.id} ({empresa.nombre_interno}) -- "
+            f"fecha real: {comprobante.fecha_comprobante}, fecha a usar: {fecha_facturacion}, "
+            f"modo_prueba={modo_prueba}."
+        ),
+    )
+
     with sync_playwright() as p:
         navegador = p.chromium.launch(headless=_headless_por_defecto())
         contexto = navegador.new_context()
@@ -677,6 +771,7 @@ def facturar_comprobante(comprobante, modo_prueba=False):
             fecha_realmente_usada = completar_paso_uno(
                 ventana, fecha_facturacion, comprobante.concepto,
                 comprobante.fecha_desde, comprobante.fecha_hasta,
+                empresa_id=empresa.id, comprobante_id=comprobante.id,
             )
 
             if es_ri:
@@ -734,9 +829,27 @@ def facturar_comprobante(comprobante, modo_prueba=False):
                     importe=comprobante.precio_unitario,
                 )
                 confirmar_y_facturar(ventana, modo_prueba=modo_prueba)
+        except Exception as error:
+            _registrar_actividad_bot(
+                empresa_id=empresa.id, comprobante_id=comprobante.id,
+                nivel="error", evento="excepcion_comprobante",
+                detalle=f"Falló la facturación del comprobante #{comprobante.id}: {error}",
+            )
+            raise
         finally:
             contexto.close()
             navegador.close()
+
+    _registrar_actividad_bot(
+        empresa_id=empresa.id, comprobante_id=comprobante.id,
+        nivel="info", evento="fin_comprobante",
+        detalle=(
+            f"Comprobante #{comprobante.id} facturado OK -- fecha usada: {fecha_realmente_usada}"
+            + (" (AJUSTADA respecto de la fecha real del comprobante)"
+               if fecha_realmente_usada != comprobante.fecha_comprobante else "")
+            + f", modo_prueba={modo_prueba}."
+        ),
+    )
 
     return {
         "fecha_usada": fecha_realmente_usada,
